@@ -7,6 +7,7 @@
 	* Quiet ambience: ventilation, fluorescent buzz once power is on, rare distant impacts.
 	  Ambient one-shots are local only and never create gameplay noise.
 	* Chase / tension layers that fade in by distance and state. Silence is the default.
+	* Lobby music between runs, fading out as the elevator descends.
 	* WorldSound replication from the server (doors, drops, objective machinery).
 ]]
 
@@ -31,6 +32,7 @@ local stepState = {}
 local loops = {}
 local monsterStep = { accum = 0 }
 local chaseLevel, tensionLevel = 0, 0
+local lobbyLevel = 0
 
 local function loop(name, def, group)
 	local sound = AudioUtil.make(def, SoundService, group)
@@ -171,6 +173,7 @@ function AudioController.init()
 	loop("Chase", AudioAssets.ChaseLayer, "Music")
 	loop("Tension", AudioAssets.TensionLayer, "Music")
 	loop("Heartbeat", AudioAssets.Heartbeat, "Music")
+	loop("Lobby", AudioAssets.LobbyMusic, "Music")
 
 	ClientState.WorldSound:Connect(function(key, position, scale)
 		AudioController.playAt(key, position, scale)
@@ -204,6 +207,10 @@ function AudioController.init()
 		local inRun = ClientState.roundState == "Playing" and ClientState.inRun()
 		local facility = Workspace:FindFirstChild("Facility")
 		local powered = facility and facility:GetAttribute("Powered") == true
+		-- Lobby music: plays outside a run (lobby, spectating, results), fades out on descent.
+		local lobbyTarget = if inRun then 0 else 1
+		lobbyLevel += (lobbyTarget - lobbyLevel) * math.min(1, step * (if lobbyTarget > lobbyLevel then 0.5 else 1.5))
+		setLoop("Lobby", lobbyLevel)
 		setLoop("Vent", if inRun then 1 else 0)
 		setLoop("Buzz", if inRun and powered then 1 else 0)
 		setLoop("Hum", if inRun and powered then 1 else 0.4)

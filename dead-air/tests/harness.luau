@@ -406,7 +406,20 @@ check("scary sound cues build: layered jumpscare and single-asset screech", func
 	end
 	assert(distorted == 1, "expected one distorted layer")
 	jumpscare:Play()
-	for _, key in ipairs({ "MonsterScreech", "MonsterVocal", "MonsterAttack", "MonsterListen", "SpottedSting", "ChaseLayer", "Heartbeat", "TensionLayer" }) do
+	local breaker = AudioUtil.cue(AudioAssets.BreakerPull, holder, "SFX")
+	assert(breaker and #breaker.sounds == 2, "breaker should layer a switch and a boom")
+	-- Every configured sound is a real asset id or a built-in client file.
+	local function checkIds(t, path)
+		for k, v in pairs(t) do
+			if k == "Id" and v ~= "" then
+				assert(string.match(v, "^rbxassetid://%d+$") or string.match(v, "^rbxasset://sounds/"), path .. " has bad id " .. v)
+			elseif type(v) == "table" then
+				checkIds(v, path .. "." .. tostring(k))
+			end
+		end
+	end
+	checkIds(AudioAssets, "AudioAssets")
+	for _, key in ipairs({ "MonsterScreech", "MonsterVocal", "MonsterAttack", "MonsterListen", "SpottedSting", "ChaseLayer", "Heartbeat", "TensionLayer", "LobbyMusic", "MonsterBreath", "DoorSlam", "Locker", "GlassBreak" }) do
 		local cue = AudioUtil.cue(AudioAssets[key], holder, "SFX")
 		assert(cue and #cue.sounds == 1, key .. " cue missing")
 		cue:Play()

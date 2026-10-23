@@ -50,12 +50,12 @@ local AUDIO_FOR = {
 	GeneratorStart = "BreakerPull",
 	Terminal = "TerminalBeep",
 	PropKnock = "DistantImpact",
-	LockerEnter = "DoorClose",
-	LockerExit = "DoorOpen",
+	LockerEnter = "Locker",
+	LockerExit = "Locker",
 	LandHard = "Land",
 	Pickup = "Pickup",
-	KeycardSwipe = "TerminalBeep",
-	FuelPour = "PipeCreak",
+	KeycardSwipe = "CardSwipe",
+	FuelPour = "FuelPour",
 	ElevatorCall = "ElevatorArrive",
 }
 
