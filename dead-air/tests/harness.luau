@@ -391,6 +391,30 @@ check("flashlight model builds with a lens that switches on and off", function()
 	assert(lens.Material == roblox.Enum.Material.Glass)
 end)
 
+check("scary sound cues build: layered jumpscare and single-asset screech", function()
+	local AudioUtil = requireModule(Shared.AudioUtil)
+	local AudioAssets = requireModule(Shared.Config.AudioAssets)
+	local holder = roblox.Instance.new("Part")
+	local jumpscare = AudioUtil.cue(AudioAssets.Jumpscare, holder, "SFX")
+	assert(jumpscare and #jumpscare.sounds == 3, "jumpscare should have 3 layers")
+	local distorted = 0
+	for _, sound in ipairs(jumpscare.sounds) do
+		assert(string.match(sound.SoundId, "^rbxassetid://%d+$"), "bad id " .. sound.SoundId)
+		if sound:FindFirstChildOfClass("DistortionSoundEffect") then
+			distorted += 1
+		end
+	end
+	assert(distorted == 1, "expected one distorted layer")
+	jumpscare:Play()
+	for _, key in ipairs({ "MonsterScreech", "MonsterVocal", "MonsterAttack", "MonsterListen", "SpottedSting", "ChaseLayer", "Heartbeat", "TensionLayer" }) do
+		local cue = AudioUtil.cue(AudioAssets[key], holder, "SFX")
+		assert(cue and #cue.sounds == 1, key .. " cue missing")
+		cue:Play()
+		cue:SetVolume(0.5)
+		cue:Stop()
+	end
+end)
+
 check("The Listener model builds with a full Motor6D rig", function()
 	local model, root, humanoid, head = MonsterModel.build(roblox.CFrame.new(10, 0, 10))
 	assert(model.PrimaryPart == root and humanoid and head)
@@ -530,7 +554,7 @@ check("client controllers initialise and render sample state", function()
 
 	local controllersFolder = place:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts"):FindFirstChild("DeadAirClient"):FindFirstChild("Controllers")
 	local controllers = {}
-	for _, name in ipairs({ "ClientState", "Settings", "InputController", "CameraController", "HudController", "MenuController", "AudioController", "EffectsController", "HorrorController", "MonsterAnimator" }) do
+	for _, name in ipairs({ "ClientState", "Settings", "InputController", "CameraController", "HudController", "MenuController", "AudioController", "EffectsController", "HorrorController", "JumpscareController", "MonsterAnimator" }) do
 		controllers[name] = requireModule(controllersFolder[name])
 		controllers[name].init()
 	end

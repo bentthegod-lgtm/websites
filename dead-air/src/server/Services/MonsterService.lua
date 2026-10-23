@@ -438,10 +438,10 @@ end
 ---------------------------------------------------------------------------------------------
 
 local function playSound(name)
-	local sound = monster.sounds[name]
-	if sound then
-		sound.TimePosition = 0
-		sound:Play()
+	-- Cues restart from the top each time and fade out after their configured length.
+	local cue = monster.sounds[name]
+	if cue then
+		cue:Play()
 	end
 end
 
@@ -653,14 +653,14 @@ function MonsterService.spawn(map, mods, rng)
 	end)
 
 	local sounds = {
-		Breath = AudioUtil.make(AudioAssets.MonsterBreath, head, "SFX"),
-		Vocal = AudioUtil.make(AudioAssets.MonsterVocal, head, "SFX"),
-		Screech = AudioUtil.make(AudioAssets.MonsterScreech, head, "SFX"),
-		Listen = AudioUtil.make(AudioAssets.MonsterListen, head, "SFX"),
-		Attack = AudioUtil.make(AudioAssets.MonsterAttack, head, "SFX"),
+		Vocal = AudioUtil.cue(AudioAssets.MonsterVocal, head, "SFX"),
+		Screech = AudioUtil.cue(AudioAssets.MonsterScreech, head, "SFX"),
+		Listen = AudioUtil.cue(AudioAssets.MonsterListen, head, "SFX"),
+		Attack = AudioUtil.cue(AudioAssets.MonsterAttack, head, "SFX"),
 	}
-	if sounds.Breath then
-		sounds.Breath:Play()
+	local breath = AudioUtil.make(AudioAssets.MonsterBreath, head, "SFX")
+	if breath then
+		breath:Play()
 	end
 
 	local path = PathfindingService:CreatePath({

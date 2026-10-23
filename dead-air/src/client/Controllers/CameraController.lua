@@ -20,6 +20,7 @@ local InputController = require(script.Parent.InputController)
 
 local CameraController = {
 	spectating = nil,
+	locked = false, -- the jumpscare owns the camera while true
 	SpectateChanged = Signal.new(),
 }
 
@@ -77,6 +78,9 @@ function CameraController.cycleSpectate(direction)
 end
 
 local function refreshSpectate()
+	if CameraController.locked then
+		return
+	end
 	local status = ClientState.status()
 	local shouldSpectate = (status == "Dead" or status == "Escaped") and ClientState.roundState == "Playing"
 	if shouldSpectate then
@@ -106,13 +110,6 @@ function CameraController.init()
 			end
 		elseif cue == "AttackWindup" then
 			CameraController.impulse(0.6)
-		elseif cue == "Caught" then
-			local monster = ClientState.monster()
-			local head = monster and monster:FindFirstChild("Head")
-			if head then
-				CameraController.lookAt(head.Position, 1.1)
-			end
-			CameraController.impulse(1.2)
 		elseif cue == "DoorBurst" then
 			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 			if root and (root.Position - data.position).Magnitude < 40 then
@@ -130,7 +127,12 @@ function CameraController.init()
 		end
 	end)
 
+	CameraController.refresh = refreshSpectate
+
 	RunService:BindToRenderStep("DA_Camera", Enum.RenderPriority.Camera.Value + 1, function(dt)
+		if CameraController.locked then
+			return
+		end
 		local camera = Workspace.CurrentCamera
 		local h = humanoid()
 		local status = ClientState.status()

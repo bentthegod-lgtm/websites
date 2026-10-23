@@ -170,10 +170,7 @@ function EffectsController.init()
 	player.CharacterAdded:Connect(hideServerFlashlight)
 
 	ClientState.MonsterCue:Connect(function(cue)
-		if cue == "Caught" then
-			flash.BackgroundTransparency = 0.1
-			TweenService:Create(flash, TweenInfo.new(1.2), { BackgroundTransparency = 1 }):Play()
-		elseif cue == "Spotted" then
+		if cue == "Spotted" then
 			flash.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
 			flash.BackgroundTransparency = 0.6
 			TweenService:Create(flash, TweenInfo.new(0.6), { BackgroundTransparency = 1 }):Play()

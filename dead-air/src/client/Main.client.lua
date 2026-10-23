@@ -26,6 +26,7 @@ local order = {
 	"AudioController",
 	"EffectsController",
 	"HorrorController",
+	"JumpscareController",
 	"MonsterAnimator",
 }
 
