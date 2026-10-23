@@ -5,7 +5,8 @@
 	  early warning cue that it is close, even when you cannot see it). "Reduce flicker"
 	  replaces strobing with a gentle dim.
 	* Proximity vignette, downed blur/tint, caught flash, blackout dimming.
-	* The local flashlight follows the camera exactly (other players see the server light).
+	* The first-person flashlight viewmodel: held in view, beam from its lens, click on
+	  toggle, stutters when the battery is nearly dead (other players see the server one).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -20,6 +21,9 @@ local Shared = ReplicatedStorage:WaitForChild("DeadAir")
 local MonsterConfig = require(Shared.Config.MonsterConfig)
 local PlayerConfig = require(Shared.Config.PlayerConfig)
 local ProgressionConfig = require(Shared.Config.ProgressionConfig)
+local AudioAssets = require(Shared.Config.AudioAssets)
+local AudioUtil = require(Shared.AudioUtil)
+local FlashlightModel = require(Shared.FlashlightModel)
 
 local Ui = require(script.Parent.Ui)
 local ClientState = require(script.Parent.ClientState)
@@ -33,7 +37,8 @@ local flickerUntil = {}
 local vignette = {}
 local flash
 local blur, tint
-local localLight, lightAnchor
+local localLight, viewmodel, viewLens, viewGlow
+local swayPhase, raiseUntil, batteryDropUntil = 0, 0, 0
 
 local function trackLight(tube)
 	local light = tube:FindFirstChildOfClass("PointLight")
@@ -85,25 +90,25 @@ local function cosmeticColor()
 	return Color3.fromRGB(255, 244, 214)
 end
 
+-- The server mounts a flashlight on every character for other players to see. Locally we
+-- hide our own copy (light and model) and show the first-person viewmodel instead.
 local function hideServerFlashlight(character)
-	local head = character:WaitForChild("Head", 10)
-	if not head then
-		return
-	end
-	local function hook(light)
-		if light:IsA("SpotLight") and light.Name == "DA_Flashlight" then
-			light.Enabled = false
-			light:GetPropertyChangedSignal("Enabled"):Connect(function()
-				if light.Enabled then
-					light.Enabled = false
+	local function hook(d)
+		if d:IsA("SpotLight") and d.Name == "DA_Flashlight" then
+			d.Enabled = false
+			d:GetPropertyChangedSignal("Enabled"):Connect(function()
+				if d.Enabled then
+					d.Enabled = false
 				end
 			end)
+		elseif d:IsA("BasePart") and d:FindFirstAncestor("DA_FlashlightModel") then
+			d.Transparency = 1
 		end
 	end
-	for _, child in ipairs(head:GetChildren()) do
-		hook(child)
+	for _, d in ipairs(character:GetDescendants()) do
+		hook(d)
 	end
-	head.ChildAdded:Connect(hook)
+	character.DescendantAdded:Connect(hook)
 end
 
 function EffectsController.init()
@@ -119,15 +124,13 @@ function EffectsController.init()
 	tint.Name = "DA_LocalTint"
 	tint.Parent = Lighting
 
-	lightAnchor = Instance.new("Part")
-	lightAnchor.Name = "DA_LocalFlashlight"
-	lightAnchor.Anchored = true
-	lightAnchor.CanCollide = false
-	lightAnchor.CanQuery = false
-	lightAnchor.CanTouch = false
-	lightAnchor.Transparency = 1
-	lightAnchor.Size = Vector3.new(0.2, 0.2, 0.2)
-	lightAnchor.Parent = Workspace.CurrentCamera
+	-- First-person flashlight viewmodel; the beam comes from its lens.
+	viewmodel, viewLens = FlashlightModel.build("DA_Viewmodel")
+	for _, d in ipairs(viewmodel:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
 	localLight = Instance.new("SpotLight")
 	localLight.Face = Enum.NormalId.Front
 	localLight.Range = PlayerConfig.Flashlight.Range
@@ -135,7 +138,20 @@ function EffectsController.init()
 	localLight.Brightness = PlayerConfig.Flashlight.Brightness
 	localLight.Shadows = true
 	localLight.Enabled = false
-	localLight.Parent = lightAnchor
+	localLight.Parent = viewLens
+	-- A soft glow so the lens reads as lit even when pointed at open space.
+	local glow = Instance.new("PointLight")
+	glow.Range = 3
+	glow.Brightness = 0.4
+	glow.Enabled = false
+	glow.Parent = viewLens
+	viewGlow = glow
+	player:GetAttributeChangedSignal("DA_Flashlight"):Connect(function()
+		raiseUntil = os.clock() + 0.18
+		if ClientState.status() == "Alive" then
+			AudioUtil.play2D(AudioAssets.FlashlightClick, "SFX")
+		end
+	end)
 
 	for _, tube in ipairs(CollectionService:GetTagged("DA_Light")) do
 		trackLight(tube)
@@ -180,12 +196,45 @@ function EffectsController.init()
 	RunService.RenderStepped:Connect(function(dt)
 		local camera = Workspace.CurrentCamera
 		local status = ClientState.status()
-		-- Local flashlight follows the camera.
-		local on = player:GetAttribute("DA_Flashlight") == true and status == "Alive" and not player:GetAttribute("DA_Hidden")
+		-- First-person flashlight: held whenever you are alive in a run, lit when switched on.
+		local holding = status == "Alive" and ClientState.roundState == "Playing" and not player:GetAttribute("DA_Hidden")
+		local on = holding and player:GetAttribute("DA_Flashlight") == true
+		if holding then
+			if viewmodel.Parent ~= camera then
+				viewmodel.Parent = camera
+			end
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			local speed = if root then Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z).Magnitude else 0
+			swayPhase += dt * (1 + speed * 0.5)
+			local amp = if Settings.get("HeadBob") then math.clamp(speed / 20, 0.05, 1) else 0.05
+			local raise = if os.clock() < raiseUntil then 0.06 else 0
+			local offset = CFrame.new(0.85 + math.sin(swayPhase * 0.5) * 0.04 * amp, -0.8 + math.abs(math.cos(swayPhase * 0.5)) * 0.05 * amp + raise, -1.7)
+			viewmodel:PivotTo(camera.CFrame * offset * CFrame.Angles(math.rad(3), math.rad(4), 0))
+		elseif viewmodel.Parent then
+			viewmodel.Parent = nil
+		end
+
+		-- Dying battery: the beam stutters (a gentle dim with "Reduce flicker").
+		local battery = player:GetAttribute("DA_Battery") or 100
+		local level = 1
+		if on and battery < 15 then
+			if Settings.get("ReduceFlicker") then
+				level = 0.55
+			elseif os.clock() < batteryDropUntil then
+				level = 0.08
+			elseif math.random() < dt * (1.5 - battery / 15) then
+				batteryDropUntil = os.clock() + 0.05 + math.random() * 0.2
+			end
+		end
 		localLight.Enabled = on
+		viewGlow.Enabled = on
 		if on then
-			lightAnchor.CFrame = camera.CFrame * CFrame.new(0.6, -0.5, 0)
-			localLight.Color = cosmeticColor()
+			local color = cosmeticColor()
+			localLight.Color = color
+			localLight.Brightness = PlayerConfig.Flashlight.Brightness * level
+			FlashlightModel.setLens(viewLens, level > 0.3, color)
+		else
+			FlashlightModel.setLens(viewLens, false)
 		end
 
 		accumulator += dt

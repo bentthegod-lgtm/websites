@@ -373,6 +373,24 @@ check("lobby builds with ready pad, boards, specimen and practice locker", funct
 	end })
 end)
 
+check("flashlight model builds with a lens that switches on and off", function()
+	local FlashlightModel = requireModule(Shared.FlashlightModel)
+	local model, lens = FlashlightModel.build("Test")
+	assert(model.PrimaryPart and lens, "missing parts")
+	local parts = 0
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			parts += 1
+			assert(not d.CanCollide and d.Massless, "flashlight part would affect physics: " .. d.Name)
+		end
+	end
+	assert(parts >= 8, "too few parts")
+	FlashlightModel.setLens(lens, true)
+	assert(lens.Material == roblox.Enum.Material.Neon)
+	FlashlightModel.setLens(lens, false)
+	assert(lens.Material == roblox.Enum.Material.Glass)
+end)
+
 check("The Listener model builds with a full Motor6D rig", function()
 	local model, root, humanoid, head = MonsterModel.build(roblox.CFrame.new(10, 0, 10))
 	assert(model.PrimaryPart == root and humanoid and head)

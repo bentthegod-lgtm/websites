@@ -38,6 +38,15 @@ local STATUS_COLORS = {
 	Spectating = C.Dim,
 }
 
+local function flashlightKey()
+	if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+		return "Light button"
+	elseif UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled then
+		return "Y"
+	end
+	return "F"
+end
+
 local function build()
 	local playerGui = player:WaitForChild("PlayerGui")
 	gui = Ui.screen("DeadAirHUD", playerGui, 5)
@@ -126,7 +135,7 @@ local function build()
 		Name = "Vitals",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 16, 1, -20),
-		Size = UDim2.new(0, 220, 0, 70),
+		Size = UDim2.new(0, 280, 0, 70),
 		BackgroundTransparency = 1,
 		Parent = gui,
 	})
@@ -440,7 +449,14 @@ function HudController.init()
 	ClientState.NoiseFeedback:Connect(function(level)
 		noiseLevel = math.max(noiseLevel, math.clamp(level, 0, 1))
 	end)
-	ClientState.RoundChanged:Connect(refreshVisibility)
+	ClientState.RoundChanged:Connect(function(state)
+		refreshVisibility()
+		if state == "Playing" then
+			task.delay(4, function()
+				HudController.notify("Press " .. flashlightKey() .. " for your flashlight. Its light makes you easier to spot.", "info")
+			end)
+		end
+	end)
 	CameraController.SpectateChanged:Connect(function(target)
 		spectateLabel.Text = if target then "Watching " .. target.DisplayName else "No one left to watch"
 	end)
@@ -459,7 +475,7 @@ function HudController.init()
 		staminaFill.BackgroundColor3 = if player:GetAttribute("DA_Exhausted") then C.Danger else C.Text
 		local battery = player:GetAttribute("DA_Battery") or 100
 		local on = player:GetAttribute("DA_Flashlight") == true
-		batteryLabel.Text = string.format("LIGHT %d%%%s", battery, if on then "  ON" else "")
+		batteryLabel.Text = string.format("FLASHLIGHT %d%%  %s", battery, if on then "ON" else "OFF  [" .. flashlightKey() .. "]")
 		batteryLabel.TextColor3 = if battery < 20 then C.Danger elseif on then C.Accent else C.Dim
 		noiseLevel = math.max(0, noiseLevel - dt * 0.9)
 		noiseFill.Size = UDim2.new(noiseLevel, 0, 1, 0)

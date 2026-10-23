@@ -33,6 +33,9 @@ return {
 	Land = { Id = BUILTIN_LAND, Volume = 0.5, Pitch = 0.85 },
 	Jump = { Id = BUILTIN_JUMP, Volume = 0.25, Pitch = 0.9 },
 
+	-- Flashlight switch (built-in impact sound pitched up into a click).
+	FlashlightClick = { Id = BUILTIN_LAND, Volume = 0.3, Pitch = 3.2 },
+
 	-- Ambience (2D loops; quiet on purpose - silence matters)
 	VentilationLoop = { Id = BUILTIN_WIND, Volume = 0.06, Pitch = 0.32, Looped = true },
 	FluorescentBuzz = { Id = "", Volume = 0.08, Looped = true },

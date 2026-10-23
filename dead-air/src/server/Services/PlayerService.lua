@@ -21,6 +21,7 @@ local PlayerConfig = require(Shared.Config.PlayerConfig)
 local SoundConfig = require(Shared.Config.SoundConfig)
 local SoundMath = require(Shared.SoundMath)
 local Signal = require(Shared.Signal)
+local FlashlightModel = require(Shared.FlashlightModel)
 
 local PlayerService = {}
 PlayerService.StatusChanged = Signal.new() -- (player, status, previous)
@@ -151,7 +152,17 @@ local function setupCharacter(state, character)
 	humanoid.MaxHealth = 100
 	humanoid.Health = 100
 
-	if head then
+	-- A real flashlight held at the chest, pointing where the character faces. Other players
+	-- see this one; the owner sees a first-person viewmodel instead (EffectsController).
+	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or head
+	if torso then
+		local model, lens = FlashlightModel.build("DA_FlashlightModel")
+		model:PivotTo(torso.CFrame * CFrame.new(0.65, 0.25, -0.75))
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = torso
+		weld.Part1 = model.PrimaryPart
+		weld.Parent = model.PrimaryPart
+		model.Parent = character
 		local light = Instance.new("SpotLight")
 		light.Name = "DA_Flashlight"
 		light.Face = Enum.NormalId.Front
@@ -161,8 +172,9 @@ local function setupCharacter(state, character)
 		light.Shadows = true
 		light.Color = flashlightColor(state.player)
 		light.Enabled = false
-		light.Parent = head
+		light.Parent = lens
 		state.flashlight = light
+		state.flashlightLens = lens
 	end
 	humanoid.Died:Connect(function()
 		if state.character == character and state.status == "Alive" then
@@ -438,7 +450,11 @@ function PlayerService.pushAttributes(state, force)
 		player:SetAttribute("DA_BleedOut", nil)
 	end
 	if state.flashlight then
-		state.flashlight.Enabled = state.flashlightOn and state.status == "Alive" and state.hiddenIn == nil
+		local lit = state.flashlightOn and state.status == "Alive" and state.hiddenIn == nil
+		if state.flashlight.Enabled ~= lit then
+			state.flashlight.Enabled = lit
+			FlashlightModel.setLens(state.flashlightLens, lit, state.flashlight.Color)
+		end
 	end
 end
 
@@ -691,6 +707,9 @@ function PlayerService.setFlashlightColor(player, color)
 	local state = states[player]
 	if state and state.flashlight then
 		state.flashlight.Color = color
+		if state.flashlight.Enabled then
+			FlashlightModel.setLens(state.flashlightLens, true, color)
+		end
 	end
 end
 
