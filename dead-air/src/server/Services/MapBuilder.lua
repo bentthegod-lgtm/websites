@@ -1125,67 +1125,18 @@ end
 -- Lobby (built once, away from the facility)
 ---------------------------------------------------------------------------------------------
 
-function MapBuilder.buildLobby()
-	local existing = Workspace:FindFirstChild("Lobby")
-	if existing then
-		existing:Destroy()
-	end
-	local folder = Instance.new("Folder")
-	folder.Name = "Lobby"
-	local p = MapConfig.LobbyPosition
-	local origin = Vector3.new(p[1], p[2], p[3])
-	local size = 46
-	newPart(folder, { Name = "Floor", Size = Vector3.new(size, 1, size), Position = origin - Vector3.new(0, 0.5, 0), Color = FLOOR_COLORS.Carpet, Material = MAT.Carpet })
-	newPart(folder, { Name = "Ceiling", Size = Vector3.new(size, 1, size), Position = origin + Vector3.new(0, 14.5, 0), Color = CEILING_COLOR, Material = MAT.Plaster })
-	for _, d in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
-		local isX = d[1] ~= 0
-		newPart(folder, {
-			Name = "Wall",
-			Size = if isX then Vector3.new(1, 14, size) else Vector3.new(size, 14, 1),
-			Position = origin + Vector3.new(d[1] * size / 2, 7, d[2] * size / 2),
-			Color = WALL_COLORS.Hallway,
-			Material = MAT.Plaster,
-		})
-	end
-	for _, offset in ipairs({ Vector3.new(-10, 0, -10), Vector3.new(10, 0, -10), Vector3.new(-10, 0, 10), Vector3.new(10, 0, 10) }) do
-		local tube = newPart(folder, {
-			Name = "Tube",
-			Size = Vector3.new(6, 0.25, 1.2),
-			Position = origin + offset + Vector3.new(0, 13.85, 0),
-			Color = TUBE_ON,
-			Material = MAT.Neon,
-			CanCollide = false,
-		})
-		local light = Instance.new("PointLight")
-		light.Range = 30
-		light.Brightness = 1.1
-		light.Color = LIGHT_POWER
-		light.Parent = tube
-	end
-	local elevatorDoor = newPart(folder, {
-		Name = "ElevatorDoors",
-		Size = Vector3.new(10, 10, 0.4),
-		Position = origin + Vector3.new(0, 5, -size / 2 + 0.7),
-		Color = rgb(150, 154, 150),
-		Material = MAT.MetalPlain,
-	})
-	surfaceText(elevatorDoor, Enum.NormalId.Back, "DESCENT", rgb(230, 220, 180))
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "LobbySpawn"
-	spawn.Anchored = true
-	spawn.Size = Vector3.new(8, 1, 8)
-	spawn.Position = origin + Vector3.new(0, 0.05, 6)
-	spawn.Transparency = 1
-	spawn.CanCollide = false
-	spawn.Neutral = true
-	spawn.Duration = 0
-	spawn.Parent = folder
-	folder.Parent = Workspace
-	return {
-		folder = folder,
-		spawnCFrame = CFrame.new(origin + Vector3.new(0, 3.5, 6)),
-		origin = origin,
-	}
-end
+-- Shared building blocks for LobbyBuilder.
+MapBuilder.Props = Props
+MapBuilder.newPart = newPart
+MapBuilder.surfaceText = surfaceText
+MapBuilder.buildLocker = buildLocker
+MapBuilder.Palette = {
+	Materials = MAT,
+	WallColors = WALL_COLORS,
+	FloorColors = FLOOR_COLORS,
+	Ceiling = CEILING_COLOR,
+	LightPower = LIGHT_POWER,
+	TubeOn = TUBE_ON,
+}
 
 return MapBuilder

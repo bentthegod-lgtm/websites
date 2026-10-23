@@ -41,6 +41,23 @@ No Roblox asset IDs are invented. `src/shared/Config/AudioAssets.lua` uses eithe
 
 Gameplay detection never depends on audio files.
 
+## Lobby
+
+Players arrive in a surface-level staff reception between runs:
+
+* **Service elevator "DESCENT"** on the north wall, with a hazard-striped **ready pad** in front.
+  Standing on the pad readies you, and so does the READY button. When everyone is ready, a
+  5-second countdown starts the run.
+* **Status board** above the elevator showing the ready count, the countdown or "run in
+  progress", and a **record board** showing the last run's outcome and the escape streak.
+* **Specimen 01:** the real Listener rig, frozen in a glass cage under red light, so new
+  players learn its silhouette before they meet it.
+* **Footstep test floor:** carpet, tile and metal strips. Walk, sprint and crouch across them
+  to hear how loud each surface is.
+* **Briefing boards** covering sound, hiding and teamwork, plus a **practice locker** you can
+  climb into.
+* A **staff lounge** with couches, a vending machine and the spawn point.
+
 ## Controls
 
 | Action | Keyboard / mouse | Gamepad | Touch |
@@ -147,7 +164,7 @@ instance implementation, which checks every class and property name against the 
 reflection database. It:
 
 * builds 30 facilities using both objective chains;
-* builds the lobby and the Listener rig;
+* builds the lobby (ready pad, boards, caged specimen, practice locker) and the Listener rig;
 * wires up all services and sets up the objectives;
 * sends real NoiseService events into the Listener's brain: a crouched step 30 studs away
   goes unheard, while a dropped metal object is investigated at an approximate position;

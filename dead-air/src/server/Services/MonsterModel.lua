@@ -21,14 +21,15 @@ local function rgb(list)
 	return Color3.fromRGB(list[1], list[2], list[3])
 end
 
-function MonsterModel.build(spawnCFrame)
+-- floorY: height of the floor the creature stands on (defaults to the facility floor, 0).
+function MonsterModel.build(spawnCFrame, floorY)
 	local skin = rgb(MonsterConfig.SkinColor)
 	local finColor = rgb(MonsterConfig.FinColor)
 	local model = Instance.new("Model")
 	model.Name = "TheListener"
 
 	local hipHeight = 6 -- root centre above the floor
-	local base = spawnCFrame - spawnCFrame.Position + Vector3.new(spawnCFrame.X, 0, spawnCFrame.Z)
+	local base = spawnCFrame - spawnCFrame.Position + Vector3.new(spawnCFrame.X, floorY or 0, spawnCFrame.Z)
 	local rootCF = base * CFrame.new(0, hipHeight, 0)
 
 	local function part(name, size, cf, props)

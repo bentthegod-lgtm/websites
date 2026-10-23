@@ -357,9 +357,20 @@ check("MapBuilder builds 30 facilities (both chains) without errors", function()
 	end
 end)
 
-check("lobby builds", function()
-	local lobby = MapBuilder.buildLobby()
-	assert(lobby.spawnCFrame)
+check("lobby builds with ready pad, boards, specimen and practice locker", function()
+	local LobbyBuilder = requireModule(Services.LobbyBuilder)
+	local lobby = LobbyBuilder.build()
+	assert(lobby.spawnCFrame and lobby.padZone and lobby.statusLabel and lobby.recordLabel)
+	assert(lobby.folder:FindFirstChild("SpecimenExhibit"):FindFirstChild("Specimen"), "specimen missing")
+	local specimenRoot = lobby.folder.SpecimenExhibit.Specimen:FindFirstChild("HumanoidRootPart")
+	assert(specimenRoot.CFrame.Position.Y > lobby.origin.Y, "specimen is not standing in the lobby")
+	assert(lobby:isOnPad(lobby.padZone.CFrame.Position), "pad centre should count as on the pad")
+	assert(not lobby:isOnPad(lobby.spawnCFrame.Position), "spawn should not be on the pad")
+	lobby:setStatus("2 / 3 READY")
+	lobby:setRecord("LAST RUN: ESCAPED")
+	lobby:wirePracticeLocker({ get = function()
+		return nil
+	end })
 end)
 
 check("The Listener model builds with a full Motor6D rig", function()

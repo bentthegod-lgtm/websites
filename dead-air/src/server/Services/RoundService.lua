@@ -20,6 +20,7 @@ local MazeGen = require(Shared.MazeGen)
 local ObjectiveChain = require(Shared.ObjectiveChain)
 local Rng = require(Shared.Rng)
 local MapBuilder = require(script.Parent.MapBuilder)
+local LobbyBuilder = require(script.Parent.LobbyBuilder)
 
 local RoundService = {}
 
@@ -27,6 +28,8 @@ local services
 local lobby
 local state = "Lobby"
 local ready = {}
+local padReady = {} -- players currently standing on the lobby ready pad
+local lastRecord = "No descents yet."
 local difficultyName = DifficultyConfig.Default
 local hostUserId
 local streak = 0
@@ -93,12 +96,13 @@ function RoundService.broadcastParty()
 		table.insert(members, {
 			userId = player.UserId,
 			name = player.DisplayName,
-			ready = ready[player] == true,
+			ready = ready[player] == true or padReady[player] == true,
 			status = player:GetAttribute("DA_Status") or "Lobby",
 			level = profile and services.DataService.levelFor(profile.Xp) or 1,
 			host = player.UserId == hostUserId,
 		})
 	end
+	RoundService.updateLobbyBoards(members)
 	services.Remotes.Party:FireAllClients({
 		members = members,
 		difficulty = difficultyName,
@@ -106,6 +110,51 @@ function RoundService.broadcastParty()
 		countdown = countdownEndsAt and math.max(0, countdownEndsAt - os.clock()) or nil,
 		state = state,
 	})
+end
+
+-- Physical boards in the lobby mirror the party state.
+function RoundService.updateLobbyBoards(members)
+	if not lobby then
+		return
+	end
+	local readyCount = 0
+	for _, m in ipairs(members) do
+		if m.ready then
+			readyCount += 1
+		end
+	end
+	local text
+	if state == "Lobby" and countdownEndsAt then
+		text = string.format("DESCENDING IN %d\nAll %d staff ready.", math.ceil(math.max(0, countdownEndsAt - os.clock())), #members)
+	elseif state == "Lobby" then
+		text = string.format("%d / %d READY\nStand on the pad or press READY.\nDifficulty: %s", readyCount, #members, difficultyName)
+	elseif state == "Results" then
+		text = "Run complete.\nDebriefing..."
+	else
+		text = "RUN IN PROGRESS\nNew arrivals join the next descent."
+	end
+	lobby:setStatus(text)
+	lobby:setRecord(lastRecord)
+	lobby.beacon.Color = if state == "Lobby" and not countdownEndsAt then Color3.fromRGB(80, 20, 16) else Color3.fromRGB(255, 70, 40)
+end
+
+-- Tracks who is standing on the ready pad. Returns true when that changed.
+local function updatePad()
+	if not lobby then
+		return false
+	end
+	local changed = false
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local s = services.PlayerService.get(player)
+		local on = root ~= nil and s ~= nil and not s.inRound and lobby:isOnPad(root.Position)
+		if (padReady[player] == true) ~= on then
+			padReady[player] = on or nil
+			changed = true
+		end
+	end
+	return changed
 end
 
 local function setState(newState, data)
@@ -217,11 +266,15 @@ local function startRun()
 		local spawn = map.startSpawns[((i - 1) % #map.startSpawns) + 1]
 		pending += 1
 		task.spawn(function()
+			if lobby.releasePractice then
+				lobby.releasePractice(player)
+			end
 			pcall(services.PlayerService.prepareForRound, player, spawn)
 			pending -= 1
 		end)
 	end
 	table.clear(ready)
+	table.clear(padReady)
 	local waitStarted = os.clock()
 	while pending > 0 and os.clock() - waitStarted < 15 do
 		task.wait(0.1)
@@ -297,6 +350,23 @@ local function finishRun()
 		streak = 0
 	end
 	results.pressureNext = math.min(streak, DifficultyConfig.Pressure.MaxStacks)
+	local escapedCount = 0
+	for _, p in ipairs(results.players) do
+		if p.status == "Escaped" then
+			escapedCount += 1
+		end
+	end
+	lastRecord = string.format(
+		"LAST RUN: %s\n%s - %s\n%d of %d escaped - objectives %d/%d\nEscape streak: %d",
+		if escapedAny then "ESCAPED" else "SIGNAL LOST",
+		run.chainDef.Title,
+		run.difficulty.Name,
+		escapedCount,
+		#results.players,
+		math.min(teamSteps, #run.chainDef.Steps),
+		#run.chainDef.Steps,
+		streak
+	)
 
 	setState("Results", { outcome = results.outcome })
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -322,7 +392,7 @@ local function allReady()
 		return false
 	end
 	for _, player in ipairs(players) do
-		if not ready[player] then
+		if not ready[player] and not padReady[player] then
 			return false
 		end
 	end
@@ -332,12 +402,19 @@ end
 local function loop()
 	while true do
 		if state == "Lobby" then
+			if updatePad() then
+				RoundService.broadcastParty()
+			end
 			if allReady() then
 				countdownEndsAt = os.clock() + 5
 				RoundService.broadcastParty()
 				local cancelled = false
 				while os.clock() < countdownEndsAt do
 					task.wait(0.25)
+					if updatePad() then
+						RoundService.broadcastParty()
+					end
+					RoundService.updateLobbyBoards({})
 					if not allReady() then
 						cancelled = true
 						break
@@ -369,7 +446,8 @@ local function loop()
 end
 
 function RoundService.start()
-	lobby = MapBuilder.buildLobby()
+	lobby = LobbyBuilder.build()
+	lobby:wirePracticeLocker(services.PlayerService)
 	local remotes = services.Remotes
 
 	remotes.SetReady.OnServerEvent:Connect(function(player, value)
@@ -437,6 +515,10 @@ function RoundService.start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		ready[player] = nil
+		padReady[player] = nil
+		if lobby and lobby.releasePractice then
+			lobby.releasePractice(player)
+		end
 		lastRequest[player] = nil
 		if player.UserId == hostUserId then
 			hostUserId = nil
