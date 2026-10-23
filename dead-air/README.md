@@ -62,8 +62,8 @@ Players arrive in a surface-level staff reception between runs:
 
 | Action | Keyboard / mouse | Gamepad | Touch |
 |---|---|---|---|
-| Sprint | Hold Shift | L3 (toggle) | Run button (toggle) |
-| Crouch | C / Ctrl (toggle) | B | Crouch button |
+| Sprint (crouch-run while crouched) | Hold Shift | L3 (toggle) | Run button (toggle) |
+| Crouch (creeping is silent) | C / Ctrl (toggle) | B | Crouch button |
 | Interact / hide / revive | E (hold where prompted) | X | Tap prompt |
 | Flashlight | F | Y | Light button |
 | Throw bottle | G | R1 | Throw button |

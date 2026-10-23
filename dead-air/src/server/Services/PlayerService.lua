@@ -545,7 +545,8 @@ local function tickPlayer(state, dt, now)
 	end
 	local targetSpeed = PlayerConfig.WalkSpeed
 	if state.crouch then
-		targetSpeed = PlayerConfig.CrouchSpeed
+		-- Crouch alone = silent creep; crouch + sprint key = quicker, audible crouch-run.
+		targetSpeed = if state.sprintHeld then PlayerConfig.CrouchRunSpeed else PlayerConfig.CrouchSpeed
 	elseif state.sprinting or (canSprint and state.sprintHeld) then
 		targetSpeed = PlayerConfig.SprintSpeed
 	end
@@ -576,7 +577,7 @@ local function tickPlayer(state, dt, now)
 	end
 
 	-- Footsteps.
-	local gait = SoundMath.gait(speed, PlayerConfig)
+	local gait = SoundMath.gait(speed, PlayerConfig, state.crouch)
 	if gait and not airborne then
 		state.stepAccum = (state.stepAccum or 0) + horizontal
 		local stride = SoundConfig.Stride[gait]

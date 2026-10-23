@@ -20,6 +20,8 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("DeadAir")
 local AudioAssets = require(Shared.Config.AudioAssets)
 local AudioUtil = require(Shared.AudioUtil)
+local PlayerConfig = require(Shared.Config.PlayerConfig)
+local SoundMath = require(Shared.SoundMath)
 
 local ClientState = require(script.Parent.ClientState)
 
@@ -80,14 +82,17 @@ local function characterFootsteps(dt)
 			stepState[other] = s
 			local v = root.AssemblyLinearVelocity
 			local speed = Vector3.new(v.X, 0, v.Z).Magnitude
-			if speed > 1 and math.abs(v.Y) < 3 and not root.Anchored then
+			-- Crouched players creeping at crouch speed are silent; crouch-running is soft.
+			local crouched = other:GetAttribute("DA_Crouch") == true
+			local creeping = crouched and speed <= SoundMath.creepLimit(PlayerConfig)
+			if speed > 1 and math.abs(v.Y) < 3 and not root.Anchored and not creeping then
 				s.accum += speed * dt
 				local stride = if speed > 15 then 5.8 elseif speed > 7 then 4.4 else 3.2
 				if s.accum >= stride then
 					s.accum = 0
 					local surface = surfaceAt(root.Position, { character })
 					local def = AudioAssets.Footstep[surface] or AudioAssets.Footstep.Default
-					local loudness = if speed > 15 then 1.4 elseif speed > 7 then 1 else 0.45
+					local loudness = if crouched then 0.35 elseif speed > 15 then 1.4 elseif speed > 7 then 1 else 0.45
 					AudioUtil.playAt(def, root.Position - Vector3.new(0, 2.5, 0), "SFX", {
 						Volume = def.Volume * loudness * (if other == player then 0.7 else 1),
 						Pitch = def.Pitch * (0.92 + math.random() * 0.16),

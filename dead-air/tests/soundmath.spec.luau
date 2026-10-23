@@ -50,4 +50,16 @@ test("gait classification", function()
 	assert(SoundMath.gait(19, PlayerConfig) == "Sprint")
 end)
 
+test("creeping while crouched is silent; crouch-running is quiet but heard nearby", function()
+	assert(SoundMath.gait(PlayerConfig.CrouchSpeed, PlayerConfig, true) == nil, "creep should be silent")
+	-- a bit of network jitter on a creeping player stays silent
+	assert(SoundMath.gait(PlayerConfig.CrouchSpeed + 1.4, PlayerConfig, true) == nil, "jitter made noise")
+	assert(SoundMath.gait(PlayerConfig.CrouchRunSpeed, PlayerConfig, true) == "CrouchRun")
+	local cats = SoundConfig.Categories
+	local near = SoundMath.perceived(cats.FootstepCrouchRun.Loudness, cats.FootstepCrouchRun.Radius, 6, 1, 1)
+	local far = SoundMath.perceived(cats.FootstepCrouchRun.Loudness, cats.FootstepCrouchRun.Radius, 20, 1, 1)
+	assert(near > 0.06, "crouch-run should be audible up close: " .. near)
+	assert(far == 0, "crouch-run should not carry 20 studs")
+end)
+
 return cases

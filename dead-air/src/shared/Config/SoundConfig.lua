@@ -10,7 +10,9 @@
 return {
 	Categories = {
 		-- Movement
-		FootstepCrouch = { Loudness = 0.10, Radius = 9 },
+		-- Creeping while crouched makes no footstep noise at all (see SoundMath.gait).
+		FootstepCrouch = { Loudness = 0.10, Radius = 9 }, -- slow walking while standing
+		FootstepCrouchRun = { Loudness = 0.2, Radius = 16 },
 		FootstepWalk = { Loudness = 0.28, Radius = 24 },
 		FootstepSprint = { Loudness = 0.72, Radius = 56 },
 		Jump = { Loudness = 0.30, Radius = 24 },
@@ -59,7 +61,7 @@ return {
 	CrouchInteractionMultiplier = 0.45,
 
 	-- Distance moved per footstep (studs) for each gait.
-	Stride = { Crouch = 3.2, Walk = 4.4, Sprint = 5.8 },
+	Stride = { Crouch = 3.2, CrouchRun = 3.8, Walk = 4.4, Sprint = 5.8 },
 
 	-- Falls shorter than SoftLandHeight are silent; longer than HardLandHeight are hard landings.
 	SoftLandHeight = 3.5,

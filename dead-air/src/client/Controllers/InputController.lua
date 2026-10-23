@@ -3,7 +3,7 @@
 	(touch buttons are created automatically on mobile). Sends intent to the server; the
 	server decides actual speed, stamina and noise.
 
-	Keyboard: Shift sprint (hold) | C / Ctrl crouch (toggle) | F flashlight | G throw bottle
+	Keyboard: Shift sprint (hold; crouch-run while crouched) | C / Ctrl crouch (toggle) | F flashlight | G throw bottle
 	          Q drop selected item | 1-5 select slot | E interact (prompts) | Tab settings
 	Gamepad:  L3 sprint (toggle) | B crouch | Y flashlight | R1 throw | DPad down drop
 	          DPad left/right select slot | X interact | Select settings
@@ -50,11 +50,8 @@ end
 local function onSprint(_, inputState, inputObject)
 	if isTouchOrPad(inputObject) then
 		if inputState == Enum.UserInputState.Begin then
+			-- While crouched this toggles crouch-running instead of standing up.
 			InputController.sprint = not InputController.sprint
-			if InputController.sprint then
-				InputController.crouch = false
-				InputController.CrouchChanged:Fire(false)
-			end
 		end
 	else
 		InputController.sprint = inputState == Enum.UserInputState.Begin
@@ -66,9 +63,6 @@ end
 local function onCrouch(_, inputState)
 	if inputState == Enum.UserInputState.Begin and alive() then
 		InputController.crouch = not InputController.crouch
-		if InputController.crouch then
-			InputController.sprint = false
-		end
 		InputController.CrouchChanged:Fire(InputController.crouch)
 		send()
 	end

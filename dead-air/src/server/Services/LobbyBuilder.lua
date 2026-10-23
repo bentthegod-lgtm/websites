@@ -274,7 +274,7 @@ function LobbyBuilder.build()
 	-- East: briefing boards -----------------------------------------------------------------
 	local eastX = WIDTH / 2 - 0.7
 	board(folder, facing(eastX, 6.5, -12, 0, -12), Vector2.new(11, 6.5), "1. SOUND",
-		"Sprinting and metal floors carry far.\nCrouch to open doors and set items down quietly.\nThrown bottles break loudly - use them to lure it away.")
+		"Crouch and creep: totally silent.\nCrouch + Shift: faster, but it hears you up close.\nSprinting and metal floors carry far. Thrown bottles lure it away.")
 	board(folder, facing(eastX, 6.5, 0, 0, 0), Vector2.new(11, 6.5), "2. HIDING",
 		"Lockers hide you, they do not save you.\nIf it saw you get in, it will check.\nCatch your breath first - it hears panting.")
 	board(folder, facing(eastX, 6.5, 12, 0, 12), Vector2.new(11, 6.5), "3. TEAMWORK",

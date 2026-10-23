@@ -5,7 +5,8 @@
 return {
 	WalkSpeed = 10,
 	SprintSpeed = 19,
-	CrouchSpeed = 5,
+	CrouchSpeed = 5, -- creeping: completely silent
+	CrouchRunSpeed = 8, -- crouch + sprint key: faster, quiet but audible
 	DownedSpeed = 1.5,
 	CrouchCameraOffset = -1.8,
 
