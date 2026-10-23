@@ -1,0 +1,61 @@
+{
+  "name": "DeadAir",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "DeadAir": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "DeadAirServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 10,
+        "CharacterJumpPower": 34,
+        "CameraMaxZoomDistance": 12,
+        "CameraMinZoomDistance": 0.5,
+        "EnableMouseLockOption": false
+      },
+      "StarterPlayerScripts": {
+        "DeadAirClient": {
+          "$path": "src/client"
+        },
+        "RbxCharacterSounds": {
+          "$path": "src/overrides/RbxCharacterSounds.client.lua"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": false
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 0,
+        "ClockTime": 0,
+        "EnvironmentDiffuseScale": 0,
+        "EnvironmentSpecularScale": 0.15
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}

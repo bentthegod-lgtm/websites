@@ -1,0 +1,3 @@
+-- Replaces Roblox's default RbxCharacterSounds script.
+-- DEAD AIR plays its own surface-aware footsteps (see client/Controllers/AudioController),
+-- so the stock running/jumping sounds are intentionally disabled here.
