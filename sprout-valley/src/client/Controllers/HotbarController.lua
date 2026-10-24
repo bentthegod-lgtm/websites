@@ -129,12 +129,31 @@ local function iconBlock(button, color, text)
 	return icon
 end
 
+local lastKey
+local function inventoryKey(profile)
+	local parts = {}
+	for cropId, n in pairs(profile.seeds or {}) do
+		table.insert(parts, cropId .. "=" .. tostring(n))
+	end
+	for gearId, n in pairs(profile.gear or {}) do
+		table.insert(parts, gearId .. "=" .. tostring(n))
+	end
+	table.sort(parts)
+	return table.concat(parts, ",") .. "|" .. tostring((profile.tokens or {}).GrowthSkip)
+end
+
 local function render(profile)
-	Ui.clear(bar)
-	slots = {}
 	if not profile then
 		return
 	end
+	-- Only rebuild when the inventory actually changed (profiles arrive on every harvest).
+	local key = inventoryKey(profile)
+	if key == lastKey then
+		return
+	end
+	lastKey = key
+	Ui.clear(bar)
+	slots = {}
 	local order = 0
 	local function add(tool, button)
 		table.insert(slots, { tool = tool, button = button })
@@ -269,6 +288,8 @@ function HotbarController.init()
 			HotbarController.cycle(1)
 		elseif input.KeyCode == Enum.KeyCode.ButtonL1 then
 			HotbarController.cycle(-1)
+		elseif input.KeyCode == Enum.KeyCode.ButtonB then
+			Ui.closeAll()
 		end
 	end)
 end

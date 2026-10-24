@@ -50,7 +50,7 @@ local Crops = {
 	{ Id = "Mango", Name = "Mango Tree", Rarity = "Epic", SeedPrice = 4000, Value = 700, BaseKg = 0.6, GrowTime = 840, Regrow = 170, StockChance = 0.12, StockQty = { 1, 2 },
 		Model = { Type = "Tree", Leaf = { 50, 140, 70 }, Fruit = { 255, 160, 40 }, Accent = { 230, 80, 50 }, Trunk = { 110, 75, 50 }, FruitSize = 0.65, Oval = true } },
 	{ Id = "Pineapple", Name = "Pineapple", Rarity = "Epic", SeedPrice = 3000, Value = 4800, BaseKg = 2, GrowTime = 900, StockChance = 0.14, StockQty = { 1, 2 },
-		Model = { Type = "Rosette", Leaf = { 70, 150, 80 }, Fruit = { 240, 180, 50 }, FruitSize = 1.2 } },
+		Model = { Type = "Rosette", Leaf = { 70, 150, 80 }, Fruit = { 240, 180, 50 }, FruitSize = 1.45 } },
 
 	-- Legendary
 	{ Id = "DragonFruit", Name = "Dragon Fruit", Rarity = "Legendary", SeedPrice = 12000, Value = 2100, BaseKg = 0.5, GrowTime = 1200, Regrow = 200, StockChance = 0.07, StockQty = { 1, 2 },
@@ -66,7 +66,7 @@ local Crops = {
 	{ Id = "StarFruit", Name = "Star Fruit", Rarity = "Mythic", SeedPrice = 60000, Value = 9000, BaseKg = 0.35, GrowTime = 2100, Regrow = 300, StockChance = 0.025, StockQty = { 1, 1 },
 		Model = { Type = "Tree", Leaf = { 60, 120, 120 }, Fruit = { 255, 235, 90 }, Trunk = { 90, 70, 100 }, FruitSize = 0.6, Star = true, Glow = { 255, 240, 140 } } },
 	{ Id = "EmberPepper", Name = "Ember Pepper", Rarity = "Mythic", SeedPrice = 75000, Value = 11000, BaseKg = 0.15, GrowTime = 2160, Regrow = 320, StockChance = 0.02, StockQty = { 1, 1 },
-		Model = { Type = "Stake", Leaf = { 120, 60, 40 }, Fruit = { 255, 90, 30 }, FruitSize = 0.5, Glow = { 255, 120, 40 }, Ember = true } },
+		Model = { Type = "Stake", Leaf = { 80, 120, 45 }, Fruit = { 255, 90, 30 }, FruitSize = 0.5, Glow = { 255, 120, 40 }, Ember = true } },
 
 	-- Divine
 	{ Id = "Cloudberry", Name = "Cloudberry", Rarity = "Divine", SeedPrice = 200000, Value = 30000, BaseKg = 0.08, GrowTime = 3000, Regrow = 360, StockChance = 0.01, StockQty = { 1, 1 },

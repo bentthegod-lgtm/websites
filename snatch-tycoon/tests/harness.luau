@@ -188,8 +188,8 @@ local stubServices = {
 		end,
 		GetTagged = function(_, tag)
 			local out = {}
-			for _, inst in ipairs(tagged[tag] or {}) do
-				if inst.Parent then
+			for _, inst in ipairs(place:GetService("Workspace"):GetDescendants()) do
+				if inst:HasTag(tag) then
 					table.insert(out, inst)
 				end
 			end
@@ -685,14 +685,16 @@ check("buy a Blobby on the carpet: price, distance, full checks; it walks home",
 	moveTo(A, walker.built.root.CFrame.Position + V3.new(3, 2, 0))
 	walker.prompt.Triggered:Fire(A)
 	assert(walker.sold, "purchase failed")
-	assert(profileA.Cash == 100000 - walker.price, "price not charged")
+	-- (the "buy a Blobby" session goal pays its minimum reward on top)
+	local goalReward = requireModule(Shared.Config.RewardConfig).Goals[1].Reward.Minimum
+	assert(profileA.Cash == 100000 - walker.price + goalReward, "price not charged: " .. profileA.Cash)
 	assert(walker.price == walker.species.Price * 2, "gold price multiplier")
 	local uid, entry = next(profileA.Blobbies)
 	assert(uid and entry.Species == walker.species.Id and entry.Mutation == "Gold" and entry.Slot == 1, "profile entry")
 	bought = S.BlobbyService.get(uid)
 	assert(bought.state == "Walking" and Mover.isMoving(bought.built.root), "should walk home")
-	walker.prompt.Triggered:Fire(A)
-	assert(profileA.Cash == 100000 - walker.price, "double buy")
+	assert(not S.CarpetService.buy(A, walker), "bought the same Blobby twice")
+	assert(profileA.Cash == 100000 - walker.price + goalReward, "double buy")
 	for _ = 1, 200 do
 		Mover.step(0.25)
 	end
@@ -712,7 +714,8 @@ check("income ticks onto the pedestal and the pad collects it", function()
 	world.plots[1].pedestals[1].pad.Touched:Fire(B.Character.HumanoidRootPart)
 	assert(profileA.Cash == before, "Bob collected Alice's cash")
 	world.plots[1].pedestals[1].pad.Touched:Fire(A.Character.HumanoidRootPart)
-	assert(profileA.Cash == before + math.floor(expected), "collect amount")
+	-- (+ the "collect $250" session goal reward, which scales with income)
+	assert(profileA.Cash >= before + math.floor(expected), string.format("collect amount: %d -> %d (pending %.1f)", before, profileA.Cash, expected))
 	assert(sentTo(A, "Popup", "Cash") and sentTo(A, "Tick"))
 	assert(A.leaderstats["Per Sec"].Value ~= "$0/s")
 end)
@@ -829,6 +832,10 @@ check("receipts: granted once, rollback on failed save, crate, server luck, lock
 	end
 	assert(count2 == count + 1 and crateRec, "crate Blobby missing")
 	assert(sentTo(A, "Popup", "Reveal"))
+	for _ = 1, 200 do
+		Mover.step(0.25)
+	end
+	assert(crateRec.state == "Placed", "crate Blobby did not walk in")
 	-- Server luck for everyone
 	local luckBefore = S.EventService.luck()
 	assert(receipt("r5", 1004) == Granted)
@@ -1111,13 +1118,16 @@ check("client controllers initialise and render real server snapshots", function
 	-- click through the shop tabs
 	local shopFrame = playerGui.SnatchMenus.Shop
 	local clicked = 0
-	for _, d in ipairs(shopFrame:GetDescendants()) do
-		if d:IsA("TextButton") and (d.Text == "BOOSTS" or d.Text == "PASSES") then
-			d.Activated:Fire()
-			clicked += 1
+	for _, tabName in ipairs({ "BOOSTS", "PASSES", "CASH" }) do
+		for _, d in ipairs(shopFrame:GetDescendants()) do
+			if d:IsA("TextButton") and d.Text == tabName then
+				d.Activated:Fire()
+				clicked += 1
+				break
+			end
 		end
 	end
-	assert(clicked >= 1, "no shop tabs")
+	assert(clicked == 3, "shop tabs missing")
 	Menu.close()
 	-- world presentation
 	local World = controllers.WorldController

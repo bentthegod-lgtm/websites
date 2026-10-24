@@ -388,7 +388,7 @@ function Archetypes.Palm(ctx)
 	local top = L(x, y, 0)
 	for i = 1, 7 do
 		local a = i * math.pi * 2 / 7
-		ctx.block(Vector3.new(0.55 * s, 0.08, 2.3 * s), top * A(0, a, 0) * A(rad(22), 0, 0) * L(0, 0, 1.05 * s), ctx.leafColor, ctx.leafMaterial, "Frond")
+		ctx.block(Vector3.new(0.55 * s, 0.08, 2.3 * s), top * A(0, a, 0) * A(rad(-28), 0, 0) * L(0, 0, 1.05 * s), ctx.leafColor, ctx.leafMaterial, "Frond")
 	end
 	ctx.ball(0.6 * s, top, ctx.leafColor:Lerp(Color3.new(0, 0, 0), 0.2), nil, "Crown")
 	if ctx.ripe then
@@ -457,10 +457,10 @@ function Archetypes.Lotus(ctx)
 		for i = 1, n do
 			local a = i * math.pi * 2 / n + ring * 0.3
 			local petalColor = if ring == 1 then ctx.fruitColor else ctx.fruitColor:Lerp(Color3.new(1, 1, 1), 0.5)
-			ctx.fruit(ctx.ell(Vector3.new(0.4, 0.12, 1.0 - ring * 0.2), L(0, 0.35 + ring * 0.08, 0) * A(0, a, 0) * L(0, 0, 0.35) * A(rad(-25 - ring * 15), 0, 0), petalColor, nil, "Petal"))
+			ctx.fruit(ctx.ell(Vector3.new(0.6, 0.15, 1.5 - ring * 0.3), L(0, 0.35 + ring * 0.1, 0) * A(0, a, 0) * L(0, 0, 0.5) * A(rad(-25 - ring * 15), 0, 0), petalColor, nil, "Petal"))
 		end
 	end
-	ctx.fruit(ctx.ball(0.45, L(0, 0.6, 0), rgb(spec.Accent or { 255, 240, 150 }), Enum.Material.Neon, "Heart"))
+	ctx.fruit(ctx.ball(0.6, L(0, 0.7, 0), rgb(spec.Accent or { 255, 240, 150 }), Enum.Material.Neon, "Heart"))
 end
 
 ---------------------------------------------------------------------------------------------

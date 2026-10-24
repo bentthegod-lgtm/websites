@@ -98,7 +98,15 @@ local function export(root)
 end
 
 local Shared = place:GetService("ReplicatedStorage"):FindFirstChild("SproutValley")
-if mode == "crops" then
+if mode == "ripe" then
+	-- Every crop, ripe, in a 7-wide grid (Golden / Frozen+Shocked on a few for the auras).
+	local CropConfig = requireModule(Shared.Config.CropConfig)
+	local CropModels = requireModule(Shared.CropModels)
+	for i, crop in ipairs(CropConfig.List) do
+		local cf = roblox.CFrame.new(((i - 1) % 7) * 7, 0, ((i - 1) // 7) * 8)
+		export(CropModels.build(crop, 4, cf, { seed = i }))
+	end
+elseif mode == "crops" then
 	local CropConfig = requireModule(Shared.Config.CropConfig)
 	local CropModels = requireModule(Shared.CropModels)
 	for i, crop in ipairs(CropConfig.List) do

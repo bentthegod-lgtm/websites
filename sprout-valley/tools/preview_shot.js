@@ -1,0 +1,2 @@
+// Screenshots a preview page: NODE_PATH=$(npm root -g) node tools/preview_shot.js /abs/page.html /abs/out.png (uses Playwright + SwiftShader)
+const {chromium}=require('playwright');(async()=>{const b=await chromium.launch({args:['--use-gl=swiftshader','--enable-unsafe-swiftshader']});const p=await b.newPage({viewport:{width:1600,height:900}});await p.goto('file://'+process.argv[2]);await p.waitForFunction(()=>document.title==='done',null,{timeout:60000});await p.screenshot({path:process.argv[3]});await b.close();})();

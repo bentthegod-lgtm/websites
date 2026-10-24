@@ -187,9 +187,11 @@ end)
 roblox.implementMethod("Sound", "Play", function() end)
 roblox.implementMethod("Sound", "Stop", function() end)
 roblox.implementMethod("ParticleEmitter", "Emit", function() end)
-roblox.implementMethod("Camera", "ViewportPointToRay", function()
-	return { Origin = roblox.Vector3.zero, Direction = roblox.Vector3.new(0, -1, 0) }
-end)
+for _, method in ipairs({ "ViewportPointToRay", "ScreenPointToRay" }) do
+	roblox.implementMethod("Camera", method, function()
+		return { Origin = roblox.Vector3.zero, Direction = roblox.Vector3.new(0, -1, 0) }
+	end)
+end
 
 local eventStore = setmetatable({}, { __mode = "k" })
 local function fakeEvent(className, eventName)

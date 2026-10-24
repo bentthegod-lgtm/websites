@@ -83,12 +83,14 @@ local function tileAndModel(plotId, index)
 	return tile, model
 end
 
-local function screenRay(position)
+-- `inset` = true for InputObject positions (GUI space, below the top bar inset);
+-- false for GetMouseLocation / viewport-centre positions.
+local function screenRay(position, inset)
 	local camera = workspace.CurrentCamera
 	if not camera then
 		return nil
 	end
-	local ray = camera:ViewportPointToRay(position.X, position.Y)
+	local ray = if inset then camera:ScreenPointToRay(position.X, position.Y) else camera:ViewportPointToRay(position.X, position.Y)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { player.Character }
@@ -104,11 +106,11 @@ local function pointerPosition()
 	return UserInputService:GetMouseLocation()
 end
 
-local function targetAt(position)
+local function targetAt(position, inset)
 	if not position then
 		return nil
 	end
-	local result = screenRay(position)
+	local result = screenRay(position, inset)
 	if not result then
 		return nil
 	end
@@ -289,7 +291,7 @@ function PlotController.init()
 			return
 		end
 		if isPointer(input) then
-			local target = targetAt(Vector2.new(input.Position.X, input.Position.Y))
+			local target = targetAt(Vector2.new(input.Position.X, input.Position.Y), true)
 			hovered = target
 			PlotController.act(target, false)
 			dragging = true
@@ -303,7 +305,7 @@ function PlotController.init()
 	end)
 	UserInputService.InputChanged:Connect(function(input)
 		if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-			local target = targetAt(Vector2.new(input.Position.X, input.Position.Y))
+			local target = targetAt(Vector2.new(input.Position.X, input.Position.Y), true)
 			if target and target.index ~= lastDragIndex then
 				lastDragIndex = target.index
 				PlotController.act(target, true)

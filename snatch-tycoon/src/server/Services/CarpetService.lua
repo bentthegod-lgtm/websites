@@ -121,7 +121,9 @@ function CarpetService.spawn(opts)
 
 	if tier.Announce or mutation then
 		local label = (if mutation then string.upper(mutation) .. " " else "") .. string.upper(rarity) .. " " .. species.Name
-		services.FeedService.announce("A " .. label .. " just walked out of the portal!", if mutationDef then mutationDef.Color else tier.Color, true)
+		-- Everything rare goes to the HUD feed; only the really rare ones also go to chat.
+		local toChat = rarityIndex(rarity) >= 6 or (mutation ~= nil and mutation ~= "Gold")
+		services.FeedService.announce("A " .. label .. " just walked out of the portal!", if mutationDef then mutationDef.Color else tier.Color, toChat)
 		services.Remotes.Sfx:FireAllClients("RareSpawn")
 	end
 	return walker

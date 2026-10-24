@@ -308,7 +308,9 @@ function Hats.Crown(ctx, T)
 	cyl(ctx, "CrownRing", 0.6, 1.8, T(0, 0.2, 0), GOLD, { material = Enum.Material.Metal, reflectance = 0.2 })
 	for i = 0, 4 do
 		local a = i * 2 * math.pi / 5
-		block(ctx, "CrownPoint", ctx.hv(0.42, 0.62, 0.42), T(math.sin(a) * 0.72, 0.62, math.cos(a) * 0.72) * CFrame.Angles(0, a + math.pi / 4, 0) * CFrame.Angles(math.pi / 4, 0, 0), GOLD, { material = Enum.Material.Metal })
+		local x, z = math.sin(a) * 0.76, math.cos(a) * 0.76
+		block(ctx, "CrownPoint", ctx.hv(0.34, 0.6, 0.34), T(x, 0.72, z) * CFrame.Angles(0, a + math.pi / 4, 0), GOLD, { material = Enum.Material.Metal })
+		ell(ctx, "CrownBall", ctx.hv(0.3, 0.3, 0.3), T(x, 1.08, z), GOLD, { material = Enum.Material.Metal })
 	end
 	ell(ctx, "Jewel", ctx.hv(0.32, 0.32, 0.2), T(0, 0.22, -0.9), Color3.fromRGB(255, 40, 80), { material = Enum.Material.Neon })
 end
@@ -354,7 +356,7 @@ function Hats.Halo(ctx, T)
 	local n = 10
 	for i = 0, n - 1 do
 		local a = i * 2 * math.pi / n
-		block(ctx, "Halo", ctx.hv(0.62, 0.14, 0.2), T(math.sin(a) * 0.95, 0.9, math.cos(a) * 0.95) * CFrame.Angles(0, a + math.pi / 2, 0), Color3.fromRGB(255, 240, 150), { material = Enum.Material.Neon, weldTo = hub, shadow = false })
+		block(ctx, "Halo", ctx.hv(0.66, 0.16, 0.22), T(math.sin(a) * 1.0, 0.9, math.cos(a) * 1.0) * CFrame.Angles(0, a, 0), Color3.fromRGB(255, 240, 150), { material = Enum.Material.Neon, weldTo = hub, shadow = false })
 	end
 end
 

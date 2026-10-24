@@ -558,13 +558,14 @@ function VillageBuilder.build()
 
 	local decor = folder("Decor", root)
 	fountain(decor, PLAZA)
-	for x = -54, 54, 18 do
+	-- Lamps and flowers line the street between the garden gates (gates at x = -36, 0, 36).
+	for _, x in ipairs({ -54, -18, 18, 54 }) do
 		lamp(decor, Vector3.new(x, 0, 18.5))
 		lamp(decor, Vector3.new(x, 0, -18.5))
 	end
-	for x = -60, 60, 12 do
-		flowerPatch(decor, Vector3.new(x + 6, 0, 16.5), rng)
-		flowerPatch(decor, Vector3.new(x + 6, 0, -16.5), rng)
+	for _, x in ipairs({ -64, -48, -26, -10, 10, 26, 48, 64 }) do
+		flowerPatch(decor, Vector3.new(x, 0, 16.5), rng)
+		flowerPatch(decor, Vector3.new(x, 0, -16.5), rng)
 	end
 	for _ = 1, 26 do
 		local side = if rng:NextNumber() < 0.5 then 1 else -1
