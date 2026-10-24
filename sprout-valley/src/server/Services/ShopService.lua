@@ -205,6 +205,11 @@ function ShopService.processReceipt(receipt)
 	if profile.Receipts[id] then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
+	-- Live game without a saved profile (DataStore down / load failed / lock lost): a grant
+	-- would vanish on leave and the PurchaseId would never be recorded. Let Roblox retry.
+	if not services.DataService.isPersistent(player) and not RunService:IsStudio() then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	local undo, after = prepareGrant(player, profile, product)
 	profile.Receipts[id] = os.time()
 	trimReceipts(profile)

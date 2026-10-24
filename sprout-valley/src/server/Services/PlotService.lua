@@ -324,6 +324,15 @@ function PlotService.release(player)
 	end
 	setSign(plot, "Empty Plot")
 	plot.owner = nil
+	-- More players than plots: the freed plot goes to someone who is still waiting for one.
+	for _, other in ipairs(services.DataService.loadedPlayers()) do
+		if other ~= player and not ownerPlot[other] then
+			if PlotService.assign(other) then
+				services.Remotes.Notify:FireClient(other, "A garden plot opened up and it's yours! Press GARDEN to go there.", "good")
+			end
+			break
+		end
+	end
 end
 
 function PlotService.onProfileLoaded(player)

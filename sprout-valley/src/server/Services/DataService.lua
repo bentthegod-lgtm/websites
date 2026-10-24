@@ -339,6 +339,12 @@ function DataService.load(player)
 		end
 	end
 	if not player.Parent then
+		if persistent then
+			-- Left while loading: give the lock back so their next join isn't delayed.
+			profiles[player] = { data = reconcile(data), persistent = true, dirty = false, session = session, leaving = true }
+			DataService.save(player)
+			DataService.release(player)
+		end
 		return
 	end
 	profiles[player] = { data = reconcile(data), persistent = persistent, dirty = false, session = session }
@@ -374,7 +380,8 @@ function DataService.save(player)
 	local data = entry.data
 	local ok, err, lost
 	-- The leave / shutdown save is the last chance to persist, so it retries.
-	for attempt = 1, if entry.leaving then 3 else 1 do
+	local attempts = if entry.leaving then 3 else 1
+	for attempt = 1, attempts do
 		lost = false
 		ok, err = pcall(function()
 			store:UpdateAsync(key(player), function(old)
@@ -392,7 +399,7 @@ function DataService.save(player)
 			break
 		end
 		warn("[SproutValley] Profile save failed for " .. player.Name .. ": " .. tostring(err))
-		if attempt < 3 then
+		if attempt < attempts then
 			task.wait(1)
 		end
 	end

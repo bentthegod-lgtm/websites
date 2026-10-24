@@ -914,6 +914,120 @@ check("stall prompts open panels; travel teleports; leaderboard falls back to th
 	assert(PS.unlockedRows(bob) == GameConfig.Plot.StartRows + GameConfig.Plot.VipBonusRows)
 end)
 
+local function leave(player)
+	local i = table.find(playerList, player)
+	if i then
+		table.remove(playerList, i)
+	end
+	fakePlayers.PlayerRemoving:Fire(player)
+	player.Parent = nil
+end
+
+check("more players than plots: a freed plot goes to the player who is waiting", function()
+	local extra = {}
+	for i = 1, GameConfig.Plot.Count - 1 do
+		table.insert(extra, (makePlayer("Extra" .. i)))
+	end
+	local waiting = extra[#extra]
+	assert(PS.plotOf(waiting) == nil, "7th player got a plot")
+	assert(count("Notify", "Every plot is taken") >= 1)
+	local leaver = extra[1]
+	local freed = PS.plotOf(leaver)
+	assert(freed, "no plot for player " .. leaver.Name)
+	leave(leaver)
+	assert(PS.plotOf(waiting) == freed and freed.owner == waiting, "freed plot not handed to the waiting player")
+	assert(freed.signLabels[1].Text == waiting.DisplayName .. "'s Garden")
+	assert(DS.getProfile(leaver) == nil and PS.plotOf(leaver) == nil)
+	for i = 2, #extra do
+		leave(extra[i])
+	end
+	for _, p in ipairs(PS.plots()) do
+		assert(p.owner == nil or p.owner == alice or p.owner == bob, "plot never freed")
+	end
+end)
+
+check("live game: a receipt for a profile that can't be saved is NotProcessedYet", function()
+	local profile = DS.getProfile(alice)
+	local before = profile.Coins
+	stubServices.RunService.IsStudio = function()
+		return false
+	end
+	local decision = receipt(alice, "Coins1", "receipt-live-1")
+	stubServices.RunService.IsStudio = function()
+		return true
+	end
+	assert(decision == roblox.Enum.ProductPurchaseDecision.NotProcessedYet, "granted without persistence")
+	assert(profile.Coins == before and profile.Receipts["receipt-live-1"] == nil)
+end)
+
+check("session lock: load locks, a taken-over profile stops saving, leaving unlocks", function()
+	local stored = {}
+	local function copy(v)
+		if type(v) ~= "table" then
+			return v
+		end
+		local t = {}
+		for k, x in pairs(v) do
+			t[k] = copy(x)
+		end
+		return t
+	end
+	local fakeStore = {
+		UpdateAsync = function(_, k, fn)
+			local new = fn(copy(stored[k]))
+			if new ~= nil then
+				stored[k] = copy(new)
+			end
+			return copy(new)
+		end,
+	}
+	stubServices.DataStoreService.GetDataStore = function()
+		return fakeStore
+	end
+	DS.init(registry)
+	local ok, err = pcall(function()
+		-- Existing unlocked save loads, persistent, and gets locked to this session.
+		stored["player_" .. (nextUserId + 1)] = { Coins = 777 }
+		local carol = makePlayer("Carol")
+		local key = "player_" .. carol.UserId
+		assert(DS.isPersistent(carol) and DS.getProfile(carol).Coins == 777, "saved profile not loaded")
+		assert(type(stored[key].Lock) == "table", "profile not locked on load")
+		DS.getProfile(carol).Coins = 800
+		assert(DS.save(carol) and stored[key].Coins == 800 and stored[key].Lock, "autosave failed")
+		-- Another server took the profile over: this server must not overwrite it.
+		stored[key].Lock = { Session = "other-server", At = os.time() }
+		DS.getProfile(carol).Coins = 1
+		assert(not DS.save(carol), "saved over another server's lock")
+		assert(stored[key].Coins == 800 and not DS.isPersistent(carol))
+		stubServices.RunService.IsStudio = function()
+			return false
+		end
+		local decision = receipt(carol, "Coins1", "receipt-lock-1")
+		stubServices.RunService.IsStudio = function()
+			return true
+		end
+		assert(decision == roblox.Enum.ProductPurchaseDecision.NotProcessedYet, "granted after losing the lock")
+		leave(carol)
+		assert(stored[key].Coins == 800, "left player overwrote the new owner")
+		-- A crashed server's stale lock is taken over; leaving saves and unlocks.
+		stored["player_" .. (nextUserId + 1)] = { Coins = 55, Lock = { Session = "crashed", At = os.time() - 100000 } }
+		local dave = makePlayer("Dave")
+		local daveKey = "player_" .. dave.UserId
+		assert(DS.isPersistent(dave) and DS.getProfile(dave).Coins == 55, "stale lock blocked the load")
+		DS.getProfile(dave).Coins = 99
+		leave(dave)
+		assert(stored[daveKey].Coins == 99 and stored[daveKey].Lock == nil, "leave save did not persist and unlock")
+	end)
+	stubServices.RunService.IsStudio = function()
+		return true
+	end
+	stubServices.DataStoreService.GetDataStore = function()
+		error("DataStores are not available in the harness")
+	end
+	DS.init(registry)
+	assert(ok, err)
+end)
+
 ---------------------------------------------------------------------------------------------
 -- Client
 ---------------------------------------------------------------------------------------------

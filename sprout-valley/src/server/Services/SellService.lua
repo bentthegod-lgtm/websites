@@ -69,6 +69,9 @@ function SellService.sell(player, mode, itemId)
 		services.Remotes.Notify:FireClient(player, "Bring your produce to the Sell Stand.", "info")
 		return 0
 	end
+	-- Before touching the backpack: the pass check can yield (UserOwnsGamePassAsync), and
+	-- the player leaving mid-yield would save a backpack with the fruit gone but no coins.
+	local multiplier = SellService.multiplier(player)
 	local sold = {}
 	if mode == "All" then
 		local kept = {}
@@ -92,7 +95,7 @@ function SellService.sell(player, mode, itemId)
 		return 0
 	end
 	local base = Economy.itemsValue(sold, CropConfig.ById, MutationConfig)
-	local total = math.floor(base * SellService.multiplier(player) + 0.5)
+	local total = math.floor(base * multiplier + 0.5)
 	services.DataService.addCoins(player, total, true)
 	profile.Stats.Sold += #sold
 	services.Remotes.Effect:FireClient(player, "Sell", { amount = total, count = #sold })
