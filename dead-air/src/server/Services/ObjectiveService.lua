@@ -156,11 +156,17 @@ function ObjectiveService.begin(map, chainDef, rng, difficulty, overrides)
 		end
 	end
 
-	-- Supplies (bottles to throw, batteries)
+	-- Batteries, then throwables spread across the facility (a separate pass so the
+	-- lures are spaced out on their own rather than squeezed between objective items).
 	local supplyUsed = {}
 	for _ = 1, difficulty.Supplies do
 		local kind = rng:weighted(ObjectiveConfig.Supplies)
 		placeItems(map, rng, kind, 1, supplyUsed)
+	end
+	local throwUsed = {}
+	for _ = 1, difficulty.Throwables do
+		local kind = rng:weighted(ObjectiveConfig.Throwables)
+		placeItems(map, rng, kind, 1, throwUsed)
 	end
 
 	-- Lore notes, preferring rooms with signs of a struggle.

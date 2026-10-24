@@ -309,6 +309,24 @@ local function tryGenerate(config, rng)
 	end
 	rng:shuffle(lockerCells)
 	local lockersPlaced = 0
+	-- Objective rooms are loud places: always leave a hiding spot right outside each one.
+	for _, roomName in ipairs(config.SpecialRooms) do
+		local entrance = layout.cells[layout.cells[layout.specials[roomName]].entrance]
+		if entrance.kind ~= "Start" then
+			local free = {}
+			for _, q in ipairs(QUADRANTS) do
+				if entrance.quadrants[q] == nil then
+					table.insert(free, q)
+				end
+			end
+			local q = rng:pick(free)
+			if q then
+				entrance.quadrants[q] = "Locker"
+				lockersPlaced += 1
+				table.insert(layout.lockers, { cell = entrance.index, quadrant = q, nearObjective = roomName })
+			end
+		end
+	end
 	local pass = 0
 	while lockersPlaced < config.LockerCount and pass < config.MaxLockersPerCell and #lockerCells > 0 do
 		pass += 1

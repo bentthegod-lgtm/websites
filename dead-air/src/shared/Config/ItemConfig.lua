@@ -35,7 +35,29 @@ return {
 		Glow = nil,
 		DropNoise = "GlassBreak",
 		Throwable = true,
+		ImpactNoise = "GlassBreak", -- loudest lure, but it shatters (single use)
+		Breaks = true,
 		Transparency = 0.25,
+	},
+	Can = {
+		DisplayName = "Tin Can",
+		Color = { 150, 152, 144 },
+		Size = { 0.5, 0.8, 0.5 },
+		Glow = nil,
+		DropNoise = "CanClatter",
+		Throwable = true,
+		ImpactNoise = "CanClatter", -- clatters where it lands; pick it up and throw it again
+	},
+	AlarmClock = {
+		DisplayName = "Alarm Clock",
+		Color = { 168, 42, 36 },
+		Size = { 0.8, 0.8, 0.45 },
+		Glow = { 255, 120, 90 },
+		DropNoise = "ItemDrop",
+		Throwable = true,
+		ImpactNoise = "ItemDrop",
+		-- Keeps ringing after it lands, holding the Listener's attention (until picked up).
+		Ring = { Category = "AlarmClock", Interval = 1.3, Count = 6 },
 	},
 	BlackBox = {
 		DisplayName = "Black Box Recorder",

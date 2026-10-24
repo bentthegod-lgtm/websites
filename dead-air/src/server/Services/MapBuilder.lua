@@ -151,8 +151,8 @@ local function applyLight(entry, on, powered)
 	entry.tube.Material = if on then MAT.Neon else MAT.Smooth
 	if on then
 		entry.light.Color = if powered then LIGHT_POWER else LIGHT_EMERGENCY
-		entry.light.Brightness = if powered then 1.15 else 0.65
-		entry.light.Range = if powered then 26 else 19
+		entry.light.Brightness = if powered then 1.3 else 0.9
+		entry.light.Range = if powered then 28 else 23
 	end
 	entry.tube:SetAttribute("On", on)
 	-- Clients flicker lights locally relative to this value.
@@ -424,14 +424,17 @@ end
 local lockerCounter = 0
 
 -- cf: floor-level CFrame whose LookVector is the locker's front.
-local function buildLocker(parent, cf)
+-- style "Cabinet" builds a wooden office supply cabinet that works the same way.
+local function buildLocker(parent, cf, style)
 	lockerCounter += 1
-	local id = "Locker" .. lockerCounter
+	local cabinet = style == "Cabinet"
+	local id = (if cabinet then "Cabinet" else "Locker") .. lockerCounter
 	local m = model(parent, id)
-	local color = rgb(104, 116, 108)
+	local color = if cabinet then rgb(122, 92, 62) else rgb(104, 116, 108)
+	local shellMaterial = if cabinet then MAT.Wood else MAT.MetalPlain
 	local w, d, h = 3, 2.4, 7.6
 	local function lp(name, size, offset)
-		return occluder(newPart(m, { Name = name, Size = size, CFrame = cf * offset, Color = color, Material = MAT.MetalPlain }), "Prop")
+		return occluder(newPart(m, { Name = name, Size = size, CFrame = cf * offset, Color = color, Material = shellMaterial }), "Prop")
 	end
 	lp("Back", Vector3.new(w, h, 0.2), CFrame.new(0, h / 2, d / 2 - 0.1))
 	lp("Left", Vector3.new(0.2, h, d), CFrame.new(-w / 2 + 0.1, h / 2, 0))
@@ -442,7 +445,7 @@ local function buildLocker(parent, cf)
 	-- Door: built as a hinged assembly with eye-level slits to peek through.
 	local hinge = cf * CFrame.new(-w / 2, 0, -d / 2)
 	local door = model(m, "Door")
-	local doorColor = rgb(96, 108, 100)
+	local doorColor = if cabinet then rgb(138, 104, 70) else rgb(96, 108, 100)
 	local pieces = {
 		{ y0 = 0.2, y1 = 4.55 },
 		{ y0 = 4.8, y1 = 5.0 },
@@ -457,7 +460,7 @@ local function buildLocker(parent, cf)
 			Size = Vector3.new(w - 0.1, ph, 0.15),
 			CFrame = hinge * CFrame.new(w / 2, piece.y0 + ph / 2, -0.05),
 			Color = doorColor,
-			Material = MAT.MetalPlain,
+			Material = shellMaterial,
 		})
 		occluder(p, "Door")
 		table.insert(parts, p)
@@ -476,6 +479,7 @@ local function buildLocker(parent, cf)
 	CollectionService:AddTag(m, "DA_HidingSpot")
 	return {
 		id = id,
+		label = if cabinet then "Supply Cabinet" else "Locker",
 		model = m,
 		door = door,
 		doorParts = parts,
@@ -617,6 +621,28 @@ function MapBuilder.build(layout, chainDef, rng, options)
 		local entry = { tube = tube, light = light, on = false, baseOn = cell.lit, overridden = false }
 		self.lights[index] = entry
 		applyLight(entry, cell.lit, false)
+
+		-- Rooms whose ceiling light is dead still get a dim amber emergency lamp high on the
+		-- north wall, so nowhere is pitch black (it stays on after the power returns).
+		if not cell.lit and cell.kind ~= "Start" then
+			local lampPos = center + Vector3.new(-9, h - 3, -CS / 2 + WT / 2 + 0.35)
+			local lamp = newPart(geometry, {
+				Name = "EmergencyLamp",
+				Size = Vector3.new(1.6, 0.6, 0.5),
+				Position = lampPos,
+				Color = rgb(255, 170, 70),
+				Material = MAT.Neon,
+				CanCollide = false,
+				CanQuery = false,
+				CastShadow = false,
+			})
+			local glow = Instance.new("PointLight")
+			glow.Color = rgb(255, 170, 90)
+			glow.Range = 16
+			glow.Brightness = 0.45
+			glow.Shadows = false
+			glow.Parent = lamp
+		end
 
 		if not cell.special and cell.kind ~= "Start" then
 			table.insert(self.patrolPoints, center + Vector3.new(0, 3, 0))
@@ -788,7 +814,7 @@ function MapBuilder.build(layout, chainDef, rng, options)
 					-- around the wall centre, and the locker sits at +-8.5, so it never blocks one.
 					local pos = Vector3.new(center.X + sx * (CS / 2 - WT / 2 - 1.3), 0, qCenter.Z)
 					local lockerCf = CFrame.lookAt(pos, pos + Vector3.new(-sx, 0, 0))
-					local locker = buildLocker(lockersFolder, lockerCf)
+					local locker = buildLocker(lockersFolder, lockerCf, if MapConfig.CabinetKinds[cell.kind] then "Cabinet" else "Locker")
 					locker.cell = index
 					table.insert(self.lockers, locker)
 				elseif content == "Prop" then

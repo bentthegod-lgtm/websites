@@ -325,7 +325,7 @@ check("MapBuilder builds 30 facilities (both chains) without errors", function()
 		local chainName = if seed % 2 == 0 then "PowerGrid" else "Generator"
 		local map = MapBuilder.build(layout, ObjectiveConfig.Chains[chainName], rng, { fuseCount = 3 + seed % 2, runLabel = "TEST" })
 		assert(#map.doors > 0, "no doors")
-		assert(#map.lockers > 5, "too few lockers: " .. #map.lockers)
+		assert(#map.lockers >= 18, "too few hiding spots: " .. #map.lockers)
 		assert(map.elevator and map.elevator.zone, "no elevator")
 		assert(#map.startSpawns == 6, "spawns")
 		for _, stationName in ipairs({ "Terminal", "ExitPanel" }) do
@@ -482,6 +482,18 @@ check("services initialise and objectives set up on a built map", function()
 		assert(fuses >= needed + difficulty.ItemSpares, "not enough objective items spawned: " .. fuses)
 		assert(registry.ItemService.countWorld("Keycard") == 1, "keycard count")
 		assert(registry.ItemService.countWorld("Note") == ObjectiveConfig.LoreNotesPerRun, "notes")
+		local throwables = registry.ItemService.countWorld("Bottle") + registry.ItemService.countWorld("Can") + registry.ItemService.countWorld("AlarmClock")
+		assert(throwables == difficulty.Throwables, "expected " .. difficulty.Throwables .. " throwables, got " .. throwables)
+		assert(registry.ItemService.countWorld("Battery") == difficulty.Supplies, "battery count")
+		local cabinets, lockersCount = 0, 0
+		for _, locker in ipairs(map.lockers) do
+			if locker.label == "Supply Cabinet" then
+				cabinets += 1
+			else
+				lockersCount += 1
+			end
+		end
+		assert(cabinets + lockersCount >= 18, "too few hiding spots: " .. (cabinets + lockersCount))
 		registry.ObjectiveService.stop()
 		registry.ItemService.clear()
 	end

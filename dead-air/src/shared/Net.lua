@@ -14,7 +14,7 @@ Net.Names = {
 	-- client -> server
 	"SetMovement", -- (sprintHeld: boolean, crouchOn: boolean)
 	"ToggleFlashlight", -- ()
-	"ThrowItem", -- (lookDirection: Vector3)
+	"ThrowItem", -- (lookDirection: Vector3, slot: number?)
 	"DropItem", -- (slot: number)
 	"ExitHide", -- ()
 	"SetReady", -- (ready: boolean)

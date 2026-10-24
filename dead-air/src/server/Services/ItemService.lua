@@ -3,8 +3,9 @@
 
 	* Items exist only on the server; clients receive their own inventory list.
 	* Dropping an item makes noise (metal objects are loud). Crouch to set it down gently.
-	* Bottles can be thrown: the server simulates the arc and the shatter becomes a noise
-	  event at the impact point - a distraction that pulls the Listener away.
+	* Throwables (bottles, tin cans, alarm clocks): the server simulates the arc and the
+	  impact becomes a noise event there - a distraction that pulls the Listener away.
+	  Bottles shatter; cans can be reused; alarm clocks keep ringing until picked up.
 	* Dead/disconnected players drop everything where they fell, so the run stays completable.
 ]]
 
@@ -116,13 +117,13 @@ local function buildVisual(kind)
 	part.Color = color(def.Color)
 	part.Material = Enum.Material.SmoothPlastic
 	part.Transparency = def.Transparency or 0
-	if kind == "Fuse" or kind == "Bottle" or kind == "Battery" then
+	if kind == "Fuse" or kind == "Bottle" or kind == "Battery" or kind == "Can" then
 		part.Shape = Enum.PartType.Cylinder
 		part.Size = Vector3.new(def.Size[2], def.Size[1], def.Size[3])
 	end
 	if kind == "Bottle" then
 		part.Material = Enum.Material.Glass
-	elseif kind == "FuelCan" or kind == "BlackBox" or kind == "Fuse" then
+	elseif kind == "FuelCan" or kind == "BlackBox" or kind == "Fuse" or kind == "Can" then
 		part.Material = Enum.Material.Metal
 	end
 	if def.Glow then
@@ -307,10 +308,10 @@ function ItemService.drop(player, slot)
 	-- Crouching sets it down gently; otherwise it is dropped (and glass shatters).
 	local gentle = state.crouch
 	local category = def.DropNoise or "ItemDrop"
-	if kind == "Bottle" and gentle then
+	if def.Breaks and gentle then
 		category = "ItemDrop"
 	end
-	if not (kind == "Bottle" and not gentle) then
+	if not (def.Breaks and not gentle) then
 		ItemService.spawn(kind, position)
 	end
 	services.NoiseService:emit(category, position, { source = player, multiplier = if gentle then 0.3 else 1 })
@@ -319,7 +320,9 @@ end
 local projectileParams = RaycastParams.new()
 projectileParams.FilterType = Enum.RaycastFilterType.Exclude
 
-function ItemService.throw(player, direction)
+-- Throws the selected throwable (or the first one carried). Bottles shatter, cans land
+-- and can be picked up again, alarm clocks keep ringing where they land.
+function ItemService.throw(player, direction, slot)
 	local state = services.PlayerService.get(player)
 	if not state or state.status ~= "Alive" or state.hiddenIn or not state.root then
 		return
@@ -331,10 +334,29 @@ function ItemService.throw(player, direction)
 	if lastThrow[player] and now - lastThrow[player] < PlayerConfig.Throw.Cooldown then
 		return
 	end
-	if not ItemService.take(player, "Bottle", 1) then
+	local inv = ItemService.inventory(player)
+	local index
+	if type(slot) == "number" and slot == slot then
+		local k = inv[math.floor(slot)]
+		if k and ItemConfig[k].Throwable then
+			index = math.floor(slot)
+		end
+	end
+	if not index then
+		for i, k in ipairs(inv) do
+			if ItemConfig[k].Throwable then
+				index = i
+				break
+			end
+		end
+	end
+	if not index then
 		services.Remotes.Notify:FireClient(player, "Nothing to throw", "warn")
 		return
 	end
+	local kind = table.remove(inv, index)
+	ItemService.sendInventory(player)
+	local def = ItemConfig[kind]
 	lastThrow[player] = now
 	direction = direction.Unit
 	local head = state.character:FindFirstChild("Head")
@@ -342,10 +364,13 @@ function ItemService.throw(player, direction)
 	local velocity = direction * PlayerConfig.Throw.Speed + Vector3.new(0, PlayerConfig.Throw.UpBoost, 0)
 	local gravity = Vector3.new(0, -Workspace.Gravity * 0.5, 0)
 
-	local bottle = buildVisual("Bottle")
-	bottle.CFrame = CFrame.new(origin)
-	bottle.Parent = folder or Workspace
-	local ignore = { state.character, bottle }
+	local projectile = buildVisual(kind)
+	projectile.CFrame = CFrame.new(origin)
+	projectile.Parent = folder or Workspace
+	local ignore = { state.character, projectile }
+	if folder then
+		table.insert(ignore, folder)
+	end
 	if services.MonsterService.model() then
 		table.insert(ignore, services.MonsterService.model())
 	end
@@ -361,18 +386,32 @@ function ItemService.throw(player, direction)
 			local move = (velocity + nextVelocity) * 0.5 * step
 			local result = Workspace:Raycast(position, move, projectileParams)
 			if result then
-				impact = result.Position
+				-- Stop just short of the surface so the item does not end up inside a wall.
+				impact = result.Position + result.Normal * 0.4
 				break
 			end
 			position += move
 			velocity = nextVelocity
-			bottle.CFrame = CFrame.new(position) * CFrame.Angles(elapsed * 9, elapsed * 5, 0)
+			projectile.CFrame = CFrame.new(position) * CFrame.Angles(elapsed * 9, elapsed * 5, 0)
 			elapsed += step
 			task.wait(step)
 		end
 		impact = impact or position
-		bottle:Destroy()
-		services.NoiseService:emit("GlassBreak", impact, { source = player })
+		projectile:Destroy()
+		services.NoiseService:emit(def.ImpactNoise or "ItemDrop", impact, { source = player })
+		if def.Breaks then
+			return
+		end
+		local pickup = ItemService.spawn(kind, groundBelow(impact, ignore))
+		if pickup and def.Ring then
+			for _ = 1, def.Ring.Count do
+				task.wait(def.Ring.Interval)
+				if not pickup.model then
+					break -- someone picked it up
+				end
+				services.NoiseService:emit(def.Ring.Category, pickup.position, {})
+			end
+		end
 	end)
 end
 

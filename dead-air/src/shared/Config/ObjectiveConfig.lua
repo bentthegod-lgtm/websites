@@ -101,7 +101,11 @@ return {
 	},
 
 	-- Optional pickups per run.
-	Supplies = { Bottle = 0.55, Battery = 0.45 }, -- weights; total count comes from difficulty
+	-- Batteries per run come from difficulty (Supplies); throwables are spread separately
+	-- (count from difficulty Throwables) and every player starts with one bottle.
+	Supplies = { Battery = 1 },
+	Throwables = { Bottle = 0.45, Can = 0.4, AlarmClock = 0.15 },
+	StartingItem = "Bottle",
 	LoreNotesPerRun = 3,
 	BlackBoxChance = 0.75, -- chance the optional black box spawns
 

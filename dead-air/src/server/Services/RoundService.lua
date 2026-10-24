@@ -269,7 +269,11 @@ local function startRun()
 			if lobby.releasePractice then
 				lobby.releasePractice(player)
 			end
-			pcall(services.PlayerService.prepareForRound, player, spawn)
+			local ok, spawned = pcall(services.PlayerService.prepareForRound, player, spawn)
+			if ok and spawned then
+				-- Everyone starts with one lure, so nobody is defenceless.
+				services.ItemService.give(player, ObjectiveConfig.StartingItem)
+			end
 			pending -= 1
 		end)
 	end

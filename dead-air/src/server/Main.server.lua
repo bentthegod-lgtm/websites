@@ -10,13 +10,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 Players.CharacterAutoLoads = false
 
 -- Underground lighting: no sky, almost no ambient light, faint yellow haze.
-Lighting.Ambient = Color3.fromRGB(12, 11, 8)
+Lighting.Ambient = Color3.fromRGB(24, 22, 16)
 Lighting.OutdoorAmbient = Color3.fromRGB(0, 0, 0)
 Lighting.Brightness = 0
 Lighting.ClockTime = 0
 Lighting.FogColor = Color3.fromRGB(20, 18, 12)
 Lighting.FogStart = 40
-Lighting.FogEnd = 260
+Lighting.FogEnd = 330
 Lighting.EnvironmentDiffuseScale = 0
 Lighting.EnvironmentSpecularScale = 0.15
 local function lightingEffect(className, name, props)
@@ -28,7 +28,7 @@ local function lightingEffect(className, name, props)
 	effect.Parent = Lighting
 end
 lightingEffect("Atmosphere", "DA_Atmosphere", {
-	Density = 0.32,
+	Density = 0.27,
 	Offset = 0,
 	Color = Color3.fromRGB(196, 182, 140),
 	Decay = Color3.fromRGB(60, 54, 40),

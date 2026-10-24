@@ -88,6 +88,8 @@ return {
 	GeneratorLoop = { Id = "rbxassetid://9119386548", Volume = 0.5, Looped = true, MaxDistance = 90 },
 	TerminalBeep = { Id = "rbxassetid://9113880475", Volume = 0.5 },
 	Alarm = { Id = "rbxassetid://9119661709", Volume = 0.8, Looped = true, MaxDistance = 220 },
+	CanClatter = { Id = "rbxassetid://9116612715", Volume = 0.8, MaxDistance = 120 },
+	AlarmClockRing = { Id = "rbxassetid://9113087803", Volume = 0.7, MaxDistance = 120 },
 	Locker = { Id = "rbxassetid://9119633070", Volume = 0.6 },
 	CardSwipe = { Id = "rbxassetid://9113722650", Volume = 0.6 },
 	FuelPour = { Id = "rbxassetid://9117864897", Volume = 0.6, Duration = 3, Fade = 0.8 },

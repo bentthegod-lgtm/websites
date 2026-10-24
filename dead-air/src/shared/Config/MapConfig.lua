@@ -29,9 +29,9 @@ return {
 	DoorChance = 0.4, -- fraction of ordinary connections that get a door instead of an open arch
 	MinSpecialDistance = 3, -- special rooms are at least this many steps from the start room
 	PropChance = 0.65,
-	LockerCount = 14,
+	LockerCount = 22,
 	MaxLockersPerCell = 2,
-	LitChanceBeforePower = 0.55,
+	LitChanceBeforePower = 0.75,
 	FlickerChance = 0.22,
 	AnomalyCount = 1,
 	StruggleCount = 2,
@@ -50,7 +50,9 @@ return {
 	},
 
 	-- Room kinds that can hold lockers.
-	LockerKinds = { Office = true, Hallway = true, Storage = true, Maintenance = true, BreakRoom = true },
+	LockerKinds = { Office = true, Hallway = true, Storage = true, Maintenance = true, BreakRoom = true, Restroom = true },
+	-- Hiding spots in these room kinds are wooden supply cabinets instead of metal lockers.
+	CabinetKinds = { Office = true, BreakRoom = true },
 
 	AnomalyVariants = { "TallRoom", "ChairRoom", "InvertedRoom", "FalseDoor" },
 

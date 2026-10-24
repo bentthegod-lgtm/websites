@@ -24,6 +24,8 @@ return {
 		ItemDrop = { Loudness = 0.45, Radius = 36 },
 		MetalDrop = { Loudness = 0.95, Radius = 78 },
 		GlassBreak = { Loudness = 1.0, Radius = 80 },
+		CanClatter = { Loudness = 0.75, Radius = 60 },
+		AlarmClock = { Loudness = 0.8, Radius = 75 },
 		DoorOpen = { Loudness = 0.32, Radius = 28 },
 		DoorClose = { Loudness = 0.42, Radius = 34 },
 		DoorSlam = { Loudness = 0.85, Radius = 70 },

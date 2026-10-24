@@ -79,7 +79,7 @@ end
 local function onThrow(_, inputState)
 	if inputState == Enum.UserInputState.Begin and alive() then
 		local camera = Workspace.CurrentCamera
-		Net.event("ThrowItem"):FireServer(camera.CFrame.LookVector)
+		Net.event("ThrowItem"):FireServer(camera.CFrame.LookVector, ClientState.selectedSlot)
 	end
 	return Enum.ContextActionResult.Sink
 end

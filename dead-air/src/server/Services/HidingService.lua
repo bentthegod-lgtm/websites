@@ -48,7 +48,7 @@ end
 local function updatePrompt(locker)
 	local occupant = occupantOf[locker.id]
 	locker.prompt.ActionText = if occupant then "Leave" else "Hide"
-	locker.prompt.ObjectText = "Locker"
+	locker.prompt.ObjectText = locker.label or "Locker"
 end
 
 function HidingService.createFromMap(map)

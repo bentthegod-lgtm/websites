@@ -68,6 +68,22 @@ test("lockers and monster spawn are placed sensibly", function()
 	end
 end)
 
+test("every objective room has a hiding spot right outside its door", function()
+	for seed = 1, 200 do
+		local layout = MazeGen.generate(MapConfig, Rng.new(seed))
+		for _, name in ipairs(MapConfig.SpecialRooms) do
+			local entrance = layout.cells[layout.specials[name]].entrance
+			local found = layout.cells[entrance].kind == "Start"
+			for _, locker in ipairs(layout.lockers) do
+				if locker.cell == entrance then
+					found = true
+				end
+			end
+			assert(found, "seed " .. seed .. ": no hiding spot outside " .. name)
+		end
+	end
+end)
+
 test("item cells avoid special rooms and the start room", function()
 	for seed = 1, 100 do
 		local rng = Rng.new(seed)
