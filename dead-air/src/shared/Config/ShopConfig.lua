@@ -48,16 +48,16 @@ return {
 	BoostOrder = { "XRay", "QuietShoes", "SecondWind", "LithiumCell", "LureKit", "Adrenaline" },
 
 	Products = {
-		{ Key = "QuietShoes1", Name = "Padded Soles", Robux = 25, ProductId = 0, Grants = { QuietShoes = 1 } },
-		{ Key = "SecondWind1", Name = "Second Wind", Robux = 25, ProductId = 0, Grants = { SecondWind = 1 } },
-		{ Key = "LithiumCell1", Name = "Lithium Cell", Robux = 15, ProductId = 0, Grants = { LithiumCell = 1 } },
-		{ Key = "LureKit1", Name = "Lure Kit", Robux = 20, ProductId = 0, Grants = { LureKit = 1 } },
-		{ Key = "Adrenaline1", Name = "Adrenaline Shot", Robux = 40, ProductId = 0, Grants = { Adrenaline = 1 } },
-		{ Key = "XRay1", Name = "X-Ray Goggles", Robux = 50, ProductId = 0, Grants = { XRay = 1 } },
+		{ Key = "QuietShoes1", Name = "Padded Soles", Robux = 10, ProductId = 0, Grants = { QuietShoes = 1 } },
+		{ Key = "SecondWind1", Name = "Second Wind", Robux = 10, ProductId = 0, Grants = { SecondWind = 1 } },
+		{ Key = "LithiumCell1", Name = "Lithium Cell", Robux = 5, ProductId = 0, Grants = { LithiumCell = 1 } },
+		{ Key = "LureKit1", Name = "Lure Kit", Robux = 8, ProductId = 0, Grants = { LureKit = 1 } },
+		{ Key = "Adrenaline1", Name = "Adrenaline Shot", Robux = 15, ProductId = 0, Grants = { Adrenaline = 1 } },
+		{ Key = "XRay1", Name = "X-Ray Goggles", Robux = 20, ProductId = 0, Grants = { XRay = 1 } },
 		{
 			Key = "SurvivorPack",
 			Name = "Survivor Pack (3 of every boost)",
-			Robux = 199,
+			Robux = 99,
 			ProductId = 0,
 			Grants = { QuietShoes = 3, SecondWind = 3, LithiumCell = 3, LureKit = 3, Adrenaline = 3, XRay = 3 },
 		},
