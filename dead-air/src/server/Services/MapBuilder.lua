@@ -321,8 +321,7 @@ local function pullHandle(m, cf, base)
 	end
 end
 
--- Low vintage chest with four drawers (2 x 2). Opening slides all four out; the item rides
--- out in one of them.
+-- Low vintage chest with four drawers (2 x 2), each opened and closed on its own.
 function Props.storageCabinet(parent, cf, rng)
 	local m = model(parent, "DrawerChest")
 	local w, d = 5.2, 2.6
@@ -345,8 +344,6 @@ function Props.storageCabinet(parent, cf, rng)
 
 	local dw, dh, dd = w / 2 - 0.25, bodyH / 2 - 0.22, d - 0.5
 	local slide = 1.5
-	local parts = {}
-	local drawers = {}
 	for row = 0, 1 do
 		for col = -1, 1, 2 do
 			local y = legH + 0.25 + dh / 2 + row * (dh + 0.2)
@@ -363,25 +360,25 @@ function Props.storageCabinet(parent, cf, rng)
 			end
 			pullHandle(m, frontCF * CFrame.new(0, 0.05, 0), front)
 			weather(m, frontCF * CFrame.new(0, 0, -0.09), dw, dh, rng, front)
-			table.insert(parts, { part = front, closedCFrame = frontCF, openCFrame = frontCF * CFrame.new(0, 0, -slide) })
-			table.insert(drawers, boxCF)
+			-- Every drawer is its own container: its own prompt (shown for whichever drawer
+			-- you are looking at), its own contents, opened and closed on its own.
+			local promptPart = newPart(m, { Name = "PromptAnchor", Size = Vector3.new(0.5, 0.5, 0.5), CFrame = frontCF * CFrame.new(0, 0, -0.4), Transparency = 1, CanCollide = false, CanQuery = false })
+			registerContainer({
+				label = if row == 1 then "Top Drawer" else "Bottom Drawer",
+				openNoise = "DrawerOpen",
+				closeNoise = "DrawerClose",
+				actionOpen = "Open",
+				actionClose = "Close",
+				parts = { { part = front, closedCFrame = frontCF, openCFrame = frontCF * CFrame.new(0, 0, -slide) } },
+				promptPart = promptPart,
+				promptDistance = 5,
+				itemSpot = (boxCF * CFrame.new(0, 0.05, 0)).Position,
+				-- The item rides out with its drawer and lies flat to fit.
+				itemShift = (cf * CFrame.new(0, 0, -slide)).Position - cf.Position,
+				layFlat = true,
+			})
 		end
 	end
-	local promptPart = newPart(m, { Name = "PromptAnchor", Size = Vector3.new(1, 1, 1), CFrame = cf * CFrame.new(0, legH + bodyH / 2, -d / 2 - 0.5), Transparency = 1, CanCollide = false, CanQuery = false })
-	local chosen = rng:pick(drawers)
-	registerContainer({
-		label = "Drawer Chest",
-		openNoise = "DrawerOpen",
-		closeNoise = "DrawerClose",
-		actionOpen = "Open drawers",
-		actionClose = "Close drawers",
-		parts = parts,
-		promptPart = promptPart,
-		itemSpot = (chosen * CFrame.new(0, 0.05, 0)).Position,
-		-- The item rides out with its drawer and lies flat to fit.
-		itemShift = (cf * CFrame.new(0, 0, -slide)).Position - cf.Position,
-		layFlat = true,
-	})
 	return (cf * CFrame.new(1.4, top + 0.22, 0)).Position
 end
 

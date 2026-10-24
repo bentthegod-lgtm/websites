@@ -97,6 +97,8 @@ Players arrive in a surface-level staff reception between runs:
   * Noises that repeat close together are merged, and each player is rate-limited.
   * The monster receives only an *approximate* position, jittered more for distant or muffled
     sounds, and never the player's live position.
+* **No eyes:** the Listener only senses players who are moving (or within ~4 studs). Standing
+  still makes you invisible to it; noise still gives you away.
 * **The Listener:** `MonsterBrain` is a pure state machine with these states: Patrol, Suspicion,
   Investigate, Search, CheckHiding, Chase, Attack, Lost (search after a chase) and Recover.
   `MonsterService` runs it in the world:

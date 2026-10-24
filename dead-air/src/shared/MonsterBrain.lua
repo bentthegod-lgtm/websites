@@ -43,6 +43,12 @@ local function flatDistance(a, b)
 end
 MonsterBrain.flatDistance = flatDistance
 
+-- The Listener has no eyes: it senses movement. A still player is only noticed when it is
+-- close enough to brush against them.
+function MonsterBrain.sensesMotion(speed, distance, sightConfig)
+	return speed >= sightConfig.MotionThreshold or distance <= sightConfig.StillDetectRange
+end
+
 local DEFAULT_MODS = { speed = 1, hearing = 1, sight = 1, searchTime = 1, recoverTime = 1 }
 
 --[[

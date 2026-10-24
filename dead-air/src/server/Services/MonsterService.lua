@@ -75,6 +75,13 @@ local function visibility(state)
 		return false, math.huge
 	end
 	local sight = MonsterConfig.Sight
+	-- It has no eyes: it senses movement. A player standing still is invisible to it unless
+	-- it is close enough to brush against them.
+	local speed = flat(state.root.AssemblyLinearVelocity).Magnitude
+	local near = (flat(state.root.Position) - flat(monster.root.Position)).Magnitude
+	if not MonsterBrain.sensesMotion(speed, near, sight) then
+		return false, (state.root.Position - monster.head.Position).Magnitude
+	end
 	local eye = monster.head.Position
 	local targetHead = state.character:FindFirstChild("Head")
 	local targetPos = state.root.Position
@@ -136,14 +143,11 @@ local function sightGain(state, distance, lit)
 	local range = sight.Range * monster.mods.sight
 	local closeness = math.clamp(1 - distance / range, 0.05, 1) ^ 0.8
 	local gain = sight.GainPerSecond * closeness * monster.mods.sight
-	local speed = flat(state.root.AssemblyLinearVelocity).Magnitude
 	if state.crouch then
 		gain *= sight.CrouchMultiplier
 	end
 	if state.sprinting then
 		gain *= sight.SprintMultiplier
-	elseif speed < 1 then
-		gain *= sight.StillMultiplier
 	end
 	if state.flashlightOn then
 		gain *= sight.FlashlightMultiplier

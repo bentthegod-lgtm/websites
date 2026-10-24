@@ -451,8 +451,10 @@ function ItemService.setupContainers(map)
 		prompt.ObjectText = container.label
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
 		prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
-		prompt.MaxActivationDistance = 7
+		prompt.MaxActivationDistance = container.promptDistance or 7
 		prompt.RequiresLineOfSight = false
+		-- One prompt per key on screen: Roblox shows the drawer you are facing.
+		prompt.Exclusivity = Enum.ProximityPromptExclusivity.OnePerButton
 		prompt.Parent = container.promptPart
 		container.prompt = prompt
 		prompt.Triggered:Connect(function(player)

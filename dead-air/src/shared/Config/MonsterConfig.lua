@@ -46,7 +46,10 @@ return {
 		ChaseAt = 1.0,
 		CrouchMultiplier = 0.55,
 		SprintMultiplier = 1.4,
-		StillMultiplier = 0.45,
+		-- No eyes: players moving slower than this (standing still) are not sensed at all,
+		-- unless closer than StillDetectRange (it bumps into you).
+		MotionThreshold = 1.0,
+		StillDetectRange = 4,
 		FlashlightMultiplier = 1.7,
 		FlashlightRangeBonus = 26,
 	},

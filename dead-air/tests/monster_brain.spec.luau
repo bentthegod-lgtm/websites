@@ -36,6 +36,14 @@ end
 
 local origin = Vector3.new(0, 0, 0)
 
+test("it cannot sense a player standing still unless it is right on top of them", function()
+	local sight = MonsterConfig.Sight
+	assert(not MonsterBrain.sensesMotion(0, 20, sight), "a still player 20 studs away was sensed")
+	assert(not MonsterBrain.sensesMotion(0.5, 8, sight), "a nearly still player was sensed")
+	assert(MonsterBrain.sensesMotion(0, 3, sight), "should bump into a still player at 3 studs")
+	assert(MonsterBrain.sensesMotion(5, 40, sight), "a moving (even creeping) player should be sensed")
+end)
+
 test("starts patrolling and moves to a patrol point", function()
 	local brain = newBrain()
 	local intent = brain:update(0, { position = origin })
