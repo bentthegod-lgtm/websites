@@ -119,9 +119,16 @@ local function fakeStore()
 		end,
 		UpdateAsync = function(_, key, fn)
 			if storeFailSaves then
+				if type(storeFailSaves) == "function" then
+					storeFailSaves() -- something that happens while the request is in flight
+				end
 				error("simulated DataStore outage")
 			end
-			storeData[key] = fn(storeData[key])
+			-- Like Roblox: a transform that returns nil cancels the write.
+			local result = fn(storeData[key])
+			if result ~= nil then
+				storeData[key] = result
+			end
 		end,
 	}
 end
@@ -275,18 +282,35 @@ roblox.implementMethod("Model", "PivotTo", function(self, cf)
 end)
 roblox.implementMethod("BasePart", "SetNetworkOwner", function() end)
 roblox.implementMethod("Humanoid", "ChangeState", function() end)
+local kicked = {}
+roblox.implementMethod("Player", "Kick", function(self, message)
+	kicked[self] = message or true
+end)
 roblox.implementMethod("Sound", "Play", function() end)
 roblox.implementMethod("Sound", "Stop", function() end)
 roblox.implementMethod("Player", "IsFriendsWith", function(self, otherId)
 	-- Players 1 and 2 are friends in the harness.
 	return (self.UserId == 1 and otherId == 2) or (self.UserId == 2 and otherId == 1)
 end)
-local eventStore = setmetatable({}, { __mode = "k" })
+-- Lune can hand out a different userdata for the same instance (e.g. from FindFirstChild),
+-- so fake events are keyed by an id attribute stored on the instance itself.
+local eventStore = {}
+local nextHarnessId = 0
+local function harnessId(inst)
+	local id = inst:GetAttribute("HarnessId")
+	if not id then
+		nextHarnessId += 1
+		id = nextHarnessId
+		inst:SetAttribute("HarnessId", id)
+	end
+	return id
+end
 local function fakeEvent(className, eventName)
 	roblox.implementProperty(className, eventName, function(self)
-		eventStore[self] = eventStore[self] or {}
-		eventStore[self][eventName] = eventStore[self][eventName] or signal()
-		return eventStore[self][eventName]
+		local id = harnessId(self)
+		eventStore[id] = eventStore[id] or {}
+		eventStore[id][eventName] = eventStore[id][eventName] or signal()
+		return eventStore[id][eventName]
 	end)
 end
 for _, e in ipairs({ "Triggered", "PromptButtonHoldBegan", "PromptButtonHoldEnded" }) do
@@ -304,11 +328,12 @@ for _, e in ipairs({ "MouseEnter", "MouseLeave" }) do
 	fakeEvent("GuiObject", e)
 end
 roblox.implementMethod("RemoteEvent", "FireServer", function() end)
-local attributeSignals = setmetatable({}, { __mode = "k" })
+local attributeSignals = {}
 roblox.implementMethod("Instance", "GetAttributeChangedSignal", function(self, name)
-	attributeSignals[self] = attributeSignals[self] or {}
-	attributeSignals[self][name] = attributeSignals[self][name] or signal()
-	return attributeSignals[self][name]
+	local id = harnessId(self)
+	attributeSignals[id] = attributeSignals[id] or {}
+	attributeSignals[id][name] = attributeSignals[id][name] or signal()
+	return attributeSignals[id][name]
 end)
 roblox.implementMethod("Instance", "GetPropertyChangedSignal", function()
 	return signal()
@@ -668,6 +693,8 @@ check("two players join: plots, leaderstats, welcome, friends boost", function()
 	assert(S.PlotService.plotIndexOf(A) == 1 and S.PlotService.plotIndexOf(B) == 2, "plot assignment")
 	assert(A:FindFirstChild("leaderstats") and A.leaderstats.Cash.Value == "$100", "leaderstats")
 	assert(S.DataService.isPersistent(A), "fake DataStore should make profiles persistent")
+	local lock = storeData["player_1"] and storeData["player_1"].Lock
+	assert(lock and lock.JobId == S.DataService.SERVER_ID and lock.Time > 0, "session lock not taken on load")
 	assert(sentTo(A, "Popup", "Welcome"), "first join should show the welcome card")
 	assert(sentTo(A, "Profile"), "profile snapshot sent")
 	assert(S.PlayerService.session(A).friends == 1, "Alice and Bob are friends")
@@ -817,6 +844,13 @@ check("receipts: granted once, rollback on failed save, crate, server luck, lock
 	storeFailSaves = true
 	assert(receipt("r2", 1001) == NotYet, "should not grant without saving")
 	assert(profileA.Cash == afterFirst and not profileA.Receipts.r2, "rollback failed")
+	-- income that lands while the failing save is in flight must survive the rollback
+	storeFailSaves = function()
+		profileA.Cash += 5
+	end
+	assert(receipt("r2", 1001) == NotYet)
+	assert(profileA.Cash == afterFirst + 5 and not profileA.Receipts.r2, "rollback undid unrelated changes: " .. profileA.Cash)
+	profileA.Cash -= 5
 	storeFailSaves = false
 	assert(receipt("r2", 1001) == Granted and profileA.Cash > afterFirst, "retry")
 	-- unknown player / product
@@ -1046,7 +1080,78 @@ check("leaving saves the profile and frees the plot", function()
 		savedCount += 1
 	end
 	assert(savedCount == uidCount, "saved Blobbies")
+	assert(saved.Lock == nil, "session lock not cleared on leave")
+	assert(world.plots[2].consoleLabel.Text == "LOCK", "console label not reset")
 	assert(#S.BlobbyService.records(B) == 0)
+end)
+
+check("session lock: waits on a live server's lock, steals a stale one, never overwrites a takeover", function()
+	local Granted, NotYet = roblox.Enum.ProductPurchaseDecision.PurchaseGranted, roblox.Enum.ProductPurchaseDecision.NotProcessedYet
+	local studio = fakeRun.IsStudio
+	fakeRun.IsStudio = function()
+		return false
+	end
+	local now = os.time()
+	storeData["player_4"] = { Version = 1, Cash = 777, LastSeen = now - 10, Lock = { JobId = "other-server", Time = now - 5 } }
+	local D = makePlayer(4, "Dave")
+	-- a live server holds the lock: the load waits (parked here) and writes nothing
+	task.spawn(S.DataService.load, D)
+	assert(S.DataService.getProfile(D) == nil, "loaded a profile another server still holds")
+	assert(storeData["player_4"].Lock.JobId == "other-server", "foreign lock overwritten")
+	-- that server died 10 minutes ago: the lock is stale and gets taken over
+	storeData["player_4"].Lock.Time = now - 600
+	assert(S.DataService.load(D), "stale lock should be stolen")
+	assert(S.DataService.getProfile(D).Cash == 777 and S.DataService.isPersistent(D))
+	assert(storeData["player_4"].Lock.JobId == S.DataService.SERVER_ID, "lock not taken")
+	-- another server took the profile over meanwhile: our save is cancelled, saving stops
+	storeData["player_4"] = { Version = 1, Cash = 1, Lock = { JobId = "newer-server", Time = os.time() } }
+	assert(not S.DataService.save(D), "saved over another server's session")
+	assert(storeData["player_4"].Cash == 1 and storeData["player_4"].Lock.JobId == "newer-server", "newer data overwritten")
+	assert(not S.DataService.isPersistent(D), "should stop saving after losing the lock")
+	-- live game + profile that can't be saved: purchases wait instead of granting
+	local cash = S.DataService.getProfile(D).Cash
+	assert(S.ShopService.processReceipt({ PlayerId = 4, ProductId = 1001, PurchaseId = "d1" }) == NotYet, "granted a purchase that can't persist")
+	assert(S.DataService.getProfile(D).Cash == cash and not S.DataService.getProfile(D).Receipts.d1)
+	fakeRun.IsStudio = studio
+	-- in Studio a non-persistent session still gets test purchases
+	assert(S.ShopService.processReceipt({ PlayerId = 4, ProductId = 1001, PurchaseId = "d2" }) == Granted)
+	D.Parent = nil
+	fakePlayers.PlayerRemoving:Fire(D)
+	assert(storeData["player_4"].Cash == 1, "non-persistent session saved on leave")
+	settle()
+end)
+
+check("9th player waits for a base and gets the next one that frees up", function()
+	local fillers = {}
+	for i = 1, 8 do
+		if not S.PlotService.ownerOf(i) then
+			local p = makePlayer(100 + i, "Filler" .. i)
+			fakePlayers.PlayerAdded:Fire(p)
+			table.insert(fillers, p)
+		end
+	end
+	settle()
+	for i = 1, 8 do
+		assert(S.PlotService.ownerOf(i), "plot " .. i .. " not taken")
+	end
+	storeData["player_200"] = { Version = 1, Cash = 50, Blobbies = { b1 = { Species = "Wobbleton", Slot = 1 } }, NextUid = 2 }
+	local late = makePlayer(200, "Late")
+	makeCharacter(late)
+	fakePlayers.PlayerAdded:Fire(late)
+	settle()
+	assert(S.PlotService.plotIndexOf(late) == nil and next(S.BlobbyService.records(late)) == nil, "9th player got a base")
+	local freed = S.PlotService.plotIndexOf(fillers[1])
+	fillers[1].Parent = nil
+	fakePlayers.PlayerRemoving:Fire(fillers[1])
+	settle()
+	assert(S.PlotService.plotIndexOf(late) == freed, "waiting player not given the freed base")
+	assert(next(S.BlobbyService.records(late)) ~= nil, "saved Blobby not spawned in the new base")
+	assert(late:GetAttribute("PlotIndex") == freed)
+	for _, p in ipairs({ late, table.unpack(fillers, 2) }) do
+		p.Parent = nil
+		fakePlayers.PlayerRemoving:Fire(p)
+	end
+	settle()
 end)
 
 check("remotes reject bad arguments", function()
@@ -1092,6 +1197,7 @@ check("client controllers initialise and render real server snapshots", function
 	settle()
 	local snap = S.PlayerService.snapshot(A)
 	Net.event("Profile").OnClientEvent:Fire(snap)
+	assert(controllers.ClientState.profile == snap, "the client never received the profile snapshot")
 	Net.event("Tick").OnClientEvent:Fire({ cash = 1234, ips = 56, lock = { status = "Cooldown", remaining = 30 }, lockTokens = 1 })
 	Net.event("Events").OnClientEvent:Fire(S.EventService.snapshot())
 	Net.event("Carry").OnClientEvent:Fire({ name = "Gold Gigachonk", rarity = "Legendary", timeout = 45, victim = "Bob" })
@@ -1128,7 +1234,7 @@ check("client controllers initialise and render real server snapshots", function
 	end
 	Menu.open("Shop")
 	-- click through the shop tabs
-	local shopFrame = playerGui.SnatchMenus.Shop
+	local shopFrame = playerGui.SnatchMenus.Root.Shop
 	local clicked = 0
 	for _, tabName in ipairs({ "BOOSTS", "PASSES", "CASH" }) do
 		for _, d in ipairs(shopFrame:GetDescendants()) do
@@ -1157,6 +1263,22 @@ check("client controllers initialise and render real server snapshots", function
 	end
 	controllers.HudController.renderEvents()
 	assert(playerGui:FindFirstChild("SnatchHUD") and playerGui:FindFirstChild("SnatchMenus") and playerGui:FindFirstChild("SnatchEffects"), "GUIs missing")
+	-- UIScale lives on a Root frame (so right/bottom anchored UI stays on its edge), not on the ScreenGui
+	for _, name in ipairs({ "SnatchHUD", "SnatchMenus", "SnatchEffects" }) do
+		local screen = playerGui[name]
+		assert(not screen:FindFirstChildOfClass("UIScale") and screen.Root:FindFirstChildOfClass("UIScale"), name .. " UIScale placement")
+	end
+	-- re-rendering the goals panel must not stack up extra headers
+	for _ = 1, 3 do
+		Net.event("Profile").OnClientEvent:Fire(snap)
+	end
+	local headers = 0
+	for _, child in ipairs(playerGui.SnatchHUD.Root.Goals:GetChildren()) do
+		if child:IsA("TextButton") then
+			headers += 1
+		end
+	end
+	assert(headers == 1, "goals headers leaked: " .. headers)
 	settle()
 end)
 

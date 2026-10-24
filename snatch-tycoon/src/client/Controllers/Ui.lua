@@ -203,9 +203,15 @@ function Ui.screen(name, playerGui, displayOrder)
 	})
 end
 
--- Adds a UIScale that shrinks the UI on small (phone) screens.
+--[[
+	Shrinks the UI on small (phone) screens. Returns a full-screen "Root" frame to parent
+	the UI to. The UIScale sits on that frame, not on the ScreenGui: the frame is laid out
+	at 1/scale of the screen and then scaled back to exactly the screen, so elements anchored
+	to the right or bottom edge stay on that edge at any scale.
+]]
 function Ui.autoScale(screenGui)
-	local scale = Ui.new("UIScale", { Scale = 1, Parent = screenGui })
+	local root = Ui.new("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = screenGui })
+	local scale = Ui.new("UIScale", { Scale = 1, Parent = root })
 	local function update()
 		local camera = workspace.CurrentCamera
 		if not camera then
@@ -217,14 +223,16 @@ function Ui.autoScale(screenGui)
 		if not ok or size.X <= 1 or size.Y <= 1 then
 			return
 		end
-		scale.Scale = math.clamp(math.min(size.X / 1280, size.Y / 760), 0.55, 1.2)
+		local s = math.clamp(math.min(size.X / 1280, size.Y / 760), 0.55, 1.2)
+		scale.Scale = s
+		root.Size = UDim2.fromScale(1 / s, 1 / s)
 	end
 	update()
 	local camera = workspace.CurrentCamera
 	if camera then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
 	end
-	return scale
+	return root, scale
 end
 
 -- Pops an element in with a bounce (needs or adds a UIScale).

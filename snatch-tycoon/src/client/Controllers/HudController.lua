@@ -346,7 +346,8 @@ end
 local renderGoals
 function renderGoals(profile)
 	for _, child in ipairs(goalsFrame:GetChildren()) do
-		if child:IsA("Frame") or child:IsA("TextLabel") then
+		-- GuiObject also covers the TextButton header, so it isn't stacked up on every render
+		if child:IsA("GuiObject") then
 			child:Destroy()
 		end
 	end
@@ -465,8 +466,7 @@ function HudController.bumpCash()
 end
 
 function HudController.init()
-	gui = Ui.screen("SnatchHUD", player:WaitForChild("PlayerGui"), 1)
-	Ui.autoScale(gui)
+	gui = Ui.autoScale(Ui.screen("SnatchHUD", player:WaitForChild("PlayerGui"), 1))
 	buildCash()
 	buildMenu()
 	buildRight()

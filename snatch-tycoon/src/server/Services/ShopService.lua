@@ -4,8 +4,9 @@
 	Developer Products (consumables) go through MarketplaceService.ProcessReceipt:
 	  1. the profile-side grant is applied (cash, queued crate Blobby, lock token) and the
 	     receipt's PurchaseId is recorded in the profile,
-	  2. the profile is saved; if the save fails everything is rolled back and Roblox is
-	     told NotProcessedYet so it retries later,
+	  2. the profile is saved; if the save fails the grant is undone and Roblox is told
+	     NotProcessedYet so it retries later. A profile that can't be saved (load failed,
+	     DataStores down) never gets a grant in a live game: NotProcessedYet as well,
 	  3. only then world effects run (server luck, placing the Blobby, locking the door)
 	     and PurchaseGranted is returned.
 	  A receipt seen before returns PurchaseGranted without granting again.
@@ -111,29 +112,13 @@ end
 -- Products
 ---------------------------------------------------------------------------------------------
 
-local function deepCopy(t)
-	if type(t) ~= "table" then
-		return t
-	end
-	local out = {}
-	for k, v in pairs(t) do
-		out[k] = deepCopy(v)
-	end
-	return out
-end
+local function noop() end
 
-local function restore(profile, snapshot)
-	for k in pairs(profile) do
-		if snapshot[k] == nil then
-			profile[k] = nil
-		end
-	end
-	for k, v in pairs(snapshot) do
-		profile[k] = v
-	end
-end
-
--- Applies the profile part of a product and returns a function that applies the world part.
+--[[
+	Applies the profile part of a product. Returns two functions: one that applies the world
+	part, and one that undoes exactly this grant (used when the save fails). Only the grant
+	is undone, so income, buys and sells that happened while the save was yielding stay.
+]]
 function ShopService.applyProduct(player, profile, product)
 	if product.Kind == "Cash" then
 		local amount = Economy.cashPackAmount(product.Pack, services.PlayerService.incomePerSecond(player))
@@ -141,6 +126,9 @@ function ShopService.applyProduct(player, profile, product)
 		profile.TotalEarned += amount
 		return function()
 			services.Remotes.Popup:FireClient(player, "Cash", { amount = amount, big = true })
+		end, function()
+			profile.Cash = math.max(0, profile.Cash - amount)
+			profile.TotalEarned = math.max(0, profile.TotalEarned - amount)
 		end
 	elseif product.Kind == "Crate" then
 		local rarity = Spawner.rollCrate(product.Odds, function()
@@ -148,23 +136,31 @@ function ShopService.applyProduct(player, profile, product)
 		end)
 		local species, mutation = services.RewardService.rollBlobby(rarity)
 		-- Saved in the queue first so it survives a crash; placed right after.
-		table.insert(profile.Queued, { Species = species.Id, Mutation = mutation })
+		local queued = { Species = species.Id, Mutation = mutation }
+		table.insert(profile.Queued, queued)
 		return function()
 			services.BlobbyService.flushQueue(player)
 			services.Remotes.Popup:FireClient(player, "Reveal", { species = species.Id, mutation = mutation, rarity = rarity, source = "crate" })
 			services.FeedService.announce(string.format("%s opened a Mythic Crate and got a %s%s %s!", player.DisplayName, if mutation then string.upper(mutation) .. " " else "", string.upper(rarity), species.Name), { 255, 64, 112 }, true)
+		end, function()
+			local index = table.find(profile.Queued, queued)
+			if index then
+				table.remove(profile.Queued, index)
+			end
 		end
 	elseif product.Kind == "LockNow" then
 		profile.LockTokens = (profile.LockTokens or 0) + 1
 		return function()
 			services.PlotService.useLockToken(player)
+		end, function()
+			profile.LockTokens = math.max(0, profile.LockTokens - 1)
 		end
 	elseif product.Kind == "ServerLuck" then
 		return function()
 			services.EventService.addServerLuck(GameConfig.Events.ServerLuckPerPurchase, player.DisplayName)
-		end
+		end, noop
 	end
-	return function() end
+	return noop, noop
 end
 
 local function trimReceipts(profile)
@@ -197,14 +193,19 @@ function ShopService.processReceipt(receipt)
 	if profile.Receipts[id] then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
-	local snapshot = deepCopy(profile)
-	local after = ShopService.applyProduct(player, profile, product)
-	profile.Receipts[id] = os.time()
-	trimReceipts(profile)
-	if services.DataService.isPersistent(player) and not services.DataService.save(player) then
-		restore(profile, snapshot)
+	local persistent = services.DataService.isPersistent(player)
+	if not persistent and not RunService:IsStudio() then
+		-- The grant could never be saved: let Roblox retry when the profile loads properly.
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
+	local after, undo = ShopService.applyProduct(player, profile, product)
+	profile.Receipts[id] = os.time()
+	if persistent and not services.DataService.save(player) then
+		undo()
+		profile.Receipts[id] = nil
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	trimReceipts(profile)
 	services.DataService.markDirty(player)
 	after()
 	services.Remotes.Notify:FireClient(player, "Thanks! " .. product.Name .. " delivered.", "good")

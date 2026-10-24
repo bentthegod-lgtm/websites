@@ -127,6 +127,7 @@ function PlotService.release(player)
 	byPlayer[player] = nil
 	rt.plot.signLabel.Text = "EMPTY PLOT"
 	rt.plot.statusLabel.Text = ""
+	rt.plot.consoleLabel.Text = "LOCK"
 	rt.plot.laser.blocker:SetAttribute("OwnerId", nil)
 	rt.plot.model:SetAttribute("OwnerId", nil)
 	setLaser(rt, false)
@@ -137,6 +138,22 @@ function PlotService.release(player)
 		pedestal.pad.Transparency = 0.15
 		pedestal.lockedGui.Enabled = false
 		pedestal.cashLabel.Text = ""
+	end
+	task.defer(PlotService.assignWaiting)
+end
+
+-- A player who joined while all bases were taken gets the next one that frees up.
+function PlotService.assignWaiting()
+	for _, player in ipairs(services.DataService.loadedPlayers()) do
+		if player.Parent and not byPlayer[player] and PlotService.assign(player) then
+			services.BlobbyService.spawnSaved(player)
+			local character = player.Character
+			if character and character.Parent then
+				character:PivotTo(PlotService.spawnCFrame(player))
+			end
+			services.Remotes.Notify:FireClient(player, "A base opened up - it's yours now!", "good")
+			services.PlayerService.sendProfile(player)
+		end
 	end
 end
 

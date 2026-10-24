@@ -295,8 +295,7 @@ function EffectsController.knockback(velocity)
 end
 
 function EffectsController.init()
-	gui = Ui.screen("SnatchEffects", player:WaitForChild("PlayerGui"), 10)
-	Ui.autoScale(gui)
+	gui = Ui.autoScale(Ui.screen("SnatchEffects", player:WaitForChild("PlayerGui"), 10))
 	ClientState.Popup:Connect(function(kind, data)
 		local handler = handlers[kind]
 		if handler and type(data) == "table" then

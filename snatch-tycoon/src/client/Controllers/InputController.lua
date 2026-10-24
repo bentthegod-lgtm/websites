@@ -3,7 +3,7 @@
 	  F / R1           slap
 	  L / L1           lock your base
 	  G / DPad down    drop what you carry
-	  B / Select       shop
+	  B / DPad up      shop
 	ProximityPrompts (buy, steal, sell, lock console) use E / gamepad X by default.
 ]]
 
@@ -29,7 +29,7 @@ function InputController.init()
 	bind("ST_Drop", HudController.drop, Enum.KeyCode.G, Enum.KeyCode.DPadDown)
 	bind("ST_Shop", function()
 		MenuController.toggle("Shop")
-	end, Enum.KeyCode.B, Enum.KeyCode.ButtonSelect)
+	end, Enum.KeyCode.B, Enum.KeyCode.DPadUp)
 end
 
 return InputController

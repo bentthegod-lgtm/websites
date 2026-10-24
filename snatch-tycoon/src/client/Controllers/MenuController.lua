@@ -427,8 +427,7 @@ end
 ---------------------------------------------------------------------------------------------
 
 function MenuController.init()
-	gui = Ui.screen("SnatchMenus", player:WaitForChild("PlayerGui"), 5)
-	Ui.autoScale(gui)
+	gui = Ui.autoScale(Ui.screen("SnatchMenus", player:WaitForChild("PlayerGui"), 5))
 
 	local shop = makePanel("Shop", "SHOP", C.Good, 680, 560)
 	Ui.list(shop.body, 10)

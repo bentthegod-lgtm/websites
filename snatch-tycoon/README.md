@@ -58,7 +58,7 @@ In Studio:
 | Slap | F | R1 | SLAP button |
 | Lock base | L | L1 | LOCK button |
 | Drop carried Blobby | G | D-pad down | DROP button |
-| Shop | B | Select | SHOP button |
+| Shop | B | D-pad up | SHOP button |
 
 All HUD buttons can be selected with a gamepad. On small screens a `UIScale` shrinks the whole
 UI (`Ui.autoScale`). On phones the goals panel starts collapsed and the action buttons sit above
@@ -254,9 +254,12 @@ Carry speed stays below walking speed. Paid locks can't chain. Cash packs only s
   right after every Robux purchase.
 * If a load fails 3 times, the session runs **non-persistent and never saves**, so it can't
   overwrite real data. The player sees a notice.
-* There is **no session locking**: if someone hops servers within seconds, the older server's save
-  can land last. Before a big launch, consider moving the profile layer to ProfileStore or adding
-  a session lock. A Blobby moved by a steal is written to two profiles that save independently.
+* **Session lock:** the stored profile carries `Lock = { JobId, Time }`. Loading takes it with
+  `UpdateAsync`, waits (about 12 s, then kicks with "rejoin in a minute") while another live server
+  holds it, and steals a lock older than 3 minutes. Every save refreshes it, the save on leave
+  clears it, and a save that finds another server's lock is cancelled and stops saving. In a live
+  game a purchase for a profile that can't be saved returns `NotProcessedYet`. A Blobby moved by a
+  steal is still written to two profiles that save independently.
 * OrderedDataStore `SnatchTycoon_BestIncome_v1` holds the leaderboard.
 
 ## Audio
@@ -286,7 +289,7 @@ rojo build -o build/SnatchTycoon.rbxlx && lune run tests/harness build/SnatchTyc
   200K rolls), luck and mythic boosts, lock and cooldown state (including the paid-lock gap),
   daily streak, event schedule, Lucky Hour, server luck stacking, goals, layout geometry, and
   config sanity (20 unique looks, ID placeholders, audio IDs).
-* **Harness (24 checks):** loads the built place in Lune and runs the **real modules** against
+* **Harness (26 checks):** loads the built place in Lune and runs the **real modules** against
   Lune's reflection-checked Instance API, with stubbed engine services and in-memory DataStores.
   It covers:
   * building the world (8 bases × 20 pedestals) and every species × every mutation
@@ -344,7 +347,7 @@ exactly like Roblox.
 **Verified here (no Roblox Studio available):**
 
 * `selene src`: 0 errors, 0 warnings. All 41 Luau files compile.
-* 37 of 37 unit tests pass. The harness passes 24 of 24 checks on the Rojo-built `.rbxlx`.
+* 37 of 37 unit tests pass. The harness passes 26 of 26 checks on the Rojo-built `.rbxlx`.
 * The 20 Blobbies and the world layout were checked visually through the three.js preview renders
   (approximate).
 
