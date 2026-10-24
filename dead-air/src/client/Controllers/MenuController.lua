@@ -12,6 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = ReplicatedStorage:WaitForChild("DeadAir")
 local Net = require(Shared.Net)
 local DifficultyConfig = require(Shared.Config.DifficultyConfig)
+local ShopConfig = require(Shared.Config.ShopConfig)
 
 local Ui = require(script.Parent.Ui)
 local ClientState = require(script.Parent.ClientState)
@@ -25,6 +26,7 @@ local C = Ui.Colors
 
 local gui, lobbyFrame, partyList, readyButton, difficultyButton, countdownLabel, persistLabel, levelLabel
 local settingsFrame, profileFrame, profileBody, resultsFrame, resultsBody, loreFrame, loreTitle, loreBody
+local shopFrame, shopBody
 local modalButton
 local isReady = false
 
@@ -40,7 +42,7 @@ end
 
 -- While any panel is open in first person, a Modal button frees the mouse cursor.
 local function updateModal()
-	local open = settingsFrame.Visible or profileFrame.Visible or resultsFrame.Visible or loreFrame.Visible
+	local open = settingsFrame.Visible or profileFrame.Visible or resultsFrame.Visible or loreFrame.Visible or (shopFrame ~= nil and shopFrame.Visible)
 	modalButton.Modal = open
 	modalButton.Visible = open
 end
@@ -158,7 +160,7 @@ local function buildLobby()
 
 	readyButton = Ui.button("READY", { Size = UDim2.new(1, 0, 0, 48), TextSize = 20, LayoutOrder = 7, Parent = lobbyFrame })
 	readyButton.Activated:Connect(function()
-		if ClientState.roundState ~= "Lobby" then
+		if not MenuController.myBay then
 			return
 		end
 		isReady = not isReady
@@ -167,15 +169,23 @@ local function buildLobby()
 
 	difficultyButton = Ui.button("DIFFICULTY: NORMAL", { Size = UDim2.new(1, 0, 0, 38), LayoutOrder = 8, Parent = lobbyFrame })
 	difficultyButton.Activated:Connect(function()
-		local party = ClientState.party
-		local current = table.find(DifficultyConfig.Order, party.difficulty) or 2
+		local bay = MenuController.myBay
+		if not bay or bay.leaderUserId ~= player.UserId then
+			return
+		end
+		local current = table.find(DifficultyConfig.Order, bay.difficulty) or 2
 		local nextName = DifficultyConfig.Order[(current % #DifficultyConfig.Order) + 1]
 		Net.event("SetDifficulty"):FireServer(nextName)
 	end)
 
 	local row = Ui.new("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1, LayoutOrder = 9, Parent = lobbyFrame })
-	local settingsButton = Ui.button("SETTINGS", { Size = UDim2.new(0.5, -4, 1, 0), Parent = row })
-	local profileButton = Ui.button("RECORD", { Position = UDim2.new(0.5, 4, 0, 0), Size = UDim2.new(0.5, -4, 1, 0), Parent = row })
+	local settingsButton = Ui.button("SETTINGS", { Size = UDim2.new(1 / 3, -4, 1, 0), Parent = row })
+	local profileButton = Ui.button("RECORD", { Position = UDim2.new(1 / 3, 2, 0, 0), Size = UDim2.new(1 / 3, -4, 1, 0), Parent = row })
+	local shopButton = Ui.button("SHOP", { Position = UDim2.new(2 / 3, 4, 0, 0), Size = UDim2.new(1 / 3, -4, 1, 0), Parent = row })
+	shopButton.TextColor3 = C.Accent
+	shopButton.Activated:Connect(function()
+		MenuController.toggleShop(true)
+	end)
 	settingsButton.Activated:Connect(function()
 		MenuController.toggleSettings(true)
 	end)
@@ -184,8 +194,8 @@ local function buildLobby()
 	end)
 
 	Ui.scalable(Ui.new("TextLabel", {
-		Text = "Sprint is loud. Metal floors are louder. Crouch to move, open doors and set items down quietly. "
-			.. "Throw bottles to lure it away. Catch your breath before you hide. Never leave your team behind.",
+		Text = "Walk into an elevator with your friends: SOLO, DUO, TRIO or SQUAD. It leaves when it's full or when "
+			.. "everyone inside presses READY. Freeze and it can't sense you. Crouch to stay quiet (except on metal).",
 		TextSize = 13,
 		TextWrapped = true,
 		TextColor3 = C.Dim,
@@ -206,49 +216,80 @@ local function buildLobby()
 	}))
 end
 
+local countdownToken
 local function renderParty(party)
 	for _, child in ipairs(partyList:GetChildren()) do
 		if child:IsA("TextLabel") then
 			child:Destroy()
 		end
 	end
-	local me
-	for i, member in ipairs(party.members or {}) do
-		if member.userId == player.UserId then
-			me = member
+	local myBay
+	for i, bay in ipairs(party.bays or {}) do
+		local names = {}
+		for _, m in ipairs(bay.members) do
+			if m.userId == player.UserId then
+				myBay = bay
+			end
+			table.insert(names, (if m.userId == bay.leaderUserId then "★" else "") .. m.name .. (if m.ready then " ✓" else ""))
 		end
-		local tag = if member.ready then "READY" else "..."
-		if member.status ~= "Lobby" then
-			tag = string.upper(member.status)
+		local line = string.format("%s (%d)   %d/%d", string.upper(bay.id), bay.size, #bay.members, bay.size)
+		if bay.locked then
+			line ..= "   IN USE"
+		elseif bay.countdown then
+			line ..= string.format("   leaving in %d", math.ceil(bay.countdown))
+		end
+		if #names > 0 then
+			line ..= "\n   " .. table.concat(names, ", ") .. "  -  " .. string.upper(bay.difficulty)
 		end
 		Ui.scalable(Ui.new("TextLabel", {
-			Text = string.format("%s%s   LV %d   %s", member.host and "★ " or "", member.name, member.level or 1, tag),
-			TextSize = 15,
-			TextColor3 = if member.ready then C.Good else C.Text,
-			Size = UDim2.new(1, 0, 0, 20),
+			Text = line,
+			TextSize = 14,
+			TextWrapped = true,
+			TextColor3 = if myBay == bay then C.Accent elseif #bay.members > 0 then C.Text else C.Dim,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			LayoutOrder = i,
 			Parent = partyList,
 		}))
 	end
+	local me
+	for _, m in ipairs(myBay and myBay.members or {}) do
+		if m.userId == player.UserId then
+			me = m
+		end
+	end
 	isReady = me ~= nil and me.ready
-	readyButton.Text = if isReady then "READY  (click to cancel)" else "READY"
+	readyButton.AutoButtonColor = myBay ~= nil
+	readyButton.TextTransparency = if myBay then 0 else 0.45
+	if not myBay then
+		readyButton.Text = "WALK INTO AN ELEVATOR TO JOIN A PARTY"
+	elseif isReady then
+		readyButton.Text = "READY  (click to cancel)"
+	else
+		readyButton.Text = string.format("READY  -  go with %d", #myBay.members)
+	end
 	readyButton.BackgroundColor3 = if isReady then Color3.fromRGB(40, 70, 44) else C.PanelLight
+	local leader = myBay ~= nil and myBay.leaderUserId == player.UserId
 	local pressure = party.pressure or 0
-	difficultyButton.Text = "DIFFICULTY: " .. string.upper(party.difficulty or "Normal") .. (if pressure > 0 then string.format("  (+%d pressure)", pressure) else "")
-	difficultyButton.AutoButtonColor = me ~= nil and me.host
-	difficultyButton.TextTransparency = if me and me.host then 0 else 0.4
-	if party.countdown then
-		countdownLabel.Text = string.format("DESCENDING IN %d", math.ceil(party.countdown))
-		local endsAt = os.clock() + party.countdown
+	difficultyButton.Text = "DIFFICULTY: " .. string.upper(myBay and myBay.difficulty or "-") .. (if pressure > 0 then string.format("  (+%d pressure)", pressure) else "")
+	difficultyButton.AutoButtonColor = leader
+	difficultyButton.TextTransparency = if leader then 0 else 0.45
+	MenuController.myBay = myBay
+	countdownToken = {}
+	local token = countdownToken
+	if myBay and myBay.countdown then
+		local endsAt = os.clock() + myBay.countdown
 		task.spawn(function()
-			while os.clock() < endsAt and ClientState.party == party do
-				countdownLabel.Text = string.format("DESCENDING IN %d", math.ceil(endsAt - os.clock()))
+			while os.clock() < endsAt and countdownToken == token do
+				countdownLabel.Text = string.format("DOORS CLOSING IN %d", math.ceil(endsAt - os.clock()))
 				task.wait(0.2)
 			end
 		end)
+	elseif myBay and myBay.locked then
+		countdownLabel.Text = "Another party is in the facility. Please wait..."
 	else
-		countdownLabel.Text = if ClientState.roundState ~= "Lobby" then "A run is in progress..." else ""
+		countdownLabel.Text = ""
 	end
 end
 
@@ -422,6 +463,143 @@ function MenuController.toggleProfile(open)
 end
 
 ---------------------------------------------------------------------------------------------
+-- Shop (Robux boosts)
+---------------------------------------------------------------------------------------------
+
+local function buildShop()
+	shopFrame = modalPanel("Shop", 560, 600)
+	shopBody = Ui.new("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, -48),
+		BackgroundTransparency = 1,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		ScrollBarThickness = 4,
+		ZIndex = 11,
+		Parent = shopFrame,
+	})
+	Ui.list(shopBody, 8)
+	closeButton(shopFrame, function()
+		MenuController.toggleShop(false)
+	end)
+end
+
+local function renderShop(profile)
+	if not shopBody then
+		return
+	end
+	for _, child in ipairs(shopBody:GetChildren()) do
+		if not child:IsA("UIListLayout") then
+			child:Destroy()
+		end
+	end
+	heading("SUPPLY SHOP", shopBody, 0)
+	Ui.scalable(Ui.new("TextLabel", {
+		Text = "One-run boosts. Switch one ON and it is used up when your next descent starts.",
+		TextSize = 13,
+		TextWrapped = true,
+		TextColor3 = C.Dim,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = 1,
+		ZIndex = 11,
+		Parent = shopBody,
+	}))
+	local boosts = profile and profile.boosts or {}
+	local armed = profile and profile.armed or {}
+	for i, key in ipairs(ShopConfig.BoostOrder) do
+		local def = ShopConfig.Boosts[key]
+		local owned = boosts[key] or 0
+		local row = Ui.panel({ Size = UDim2.new(1, -8, 0, 84), BackgroundColor3 = C.PanelLight, BackgroundTransparency = 0.3, LayoutOrder = 1 + i, ZIndex = 11, Parent = shopBody })
+		Ui.padding(row, 8)
+		Ui.scalable(Ui.new("TextLabel", {
+			Text = string.format("%s   x%d", def.Name, owned),
+			Font = Ui.Fonts.Bold,
+			TextSize = 16,
+			TextColor3 = Color3.fromRGB(def.Color[1], def.Color[2], def.Color[3]),
+			Size = UDim2.new(1, -130, 0, 20),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 12,
+			Parent = row,
+		}))
+		Ui.scalable(Ui.new("TextLabel", {
+			Text = def.Description,
+			TextSize = 13,
+			TextWrapped = true,
+			TextColor3 = C.Dim,
+			Position = UDim2.new(0, 0, 0, 22),
+			Size = UDim2.new(1, -130, 0, 44),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			ZIndex = 12,
+			Parent = row,
+		}))
+		local on = armed[key] == true
+		local toggle = Ui.button(if on then "NEXT RUN: ON" else "NEXT RUN: OFF", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, 0, 0, 0),
+			Size = UDim2.new(0, 124, 0, 30),
+			TextSize = 12,
+			ZIndex = 12,
+			Parent = row,
+		})
+		toggle.TextColor3 = if on then C.Good elseif owned > 0 then C.Text else C.Dim
+		toggle.Activated:Connect(function()
+			if owned > 0 or on then
+				Net.event("ShopArm"):FireServer(key, not on)
+			end
+		end)
+		-- Buy button for the single-boost product.
+		for _, product in ipairs(ShopConfig.Products) do
+			if product.Grants[key] and next(product.Grants, next(product.Grants)) == nil then
+				local buy = Ui.button(string.format("BUY  R$ %d", product.Robux), {
+					AnchorPoint = Vector2.new(1, 1),
+					Position = UDim2.new(1, 0, 1, 0),
+					Size = UDim2.new(0, 124, 0, 30),
+					TextSize = 12,
+					ZIndex = 12,
+					Parent = row,
+				})
+				buy.TextColor3 = C.Accent
+				buy.Activated:Connect(function()
+					Net.event("ShopBuy"):FireServer(product.Key)
+				end)
+			end
+		end
+	end
+	-- Bundles (products that grant more than one boost).
+	for i, product in ipairs(ShopConfig.Products) do
+		local kinds = 0
+		for _ in pairs(product.Grants) do
+			kinds += 1
+		end
+		if kinds > 1 then
+			local buy = Ui.button(string.format("%s   -   R$ %d", product.Name, product.Robux), {
+				Size = UDim2.new(1, -8, 0, 40),
+				TextSize = 14,
+				LayoutOrder = 20 + i,
+				ZIndex = 11,
+				Parent = shopBody,
+			})
+			buy.TextColor3 = C.Accent
+			buy.Activated:Connect(function()
+				Net.event("ShopBuy"):FireServer(product.Key)
+			end)
+		end
+	end
+end
+
+function MenuController.toggleShop(open)
+	shopFrame.Visible = open
+	if open then
+		settingsFrame.Visible = false
+		profileFrame.Visible = false
+		renderShop(ClientState.profile)
+	end
+	updateModal()
+end
+
+---------------------------------------------------------------------------------------------
 -- Lore reader
 ---------------------------------------------------------------------------------------------
 
@@ -515,8 +693,11 @@ local function renderResults(results)
 		}))
 	end
 	line(string.format("%s  -  %s  -  objectives %d/%d", results.title, results.difficulty, math.min(results.stepsCompleted, results.totalSteps), results.totalSteps), 1, C.Dim)
+	if results.mvp then
+		line("MVP: " .. results.mvp, 1, C.Accent, 18)
+	end
 	for i, p in ipairs(results.players) do
-		line(string.format("%s   %s   items %d   revives %d", p.name, STATUS_TEXT[p.status] or p.status, p.items, p.revives), 1 + i, if p.status == "Escaped" then C.Good else C.Text)
+		line(string.format("#%d  %s   %s   score %d   items %d   revives %d", i, p.name, STATUS_TEXT[p.status] or p.status, p.score or 0, p.items, p.revives), 1 + i, if p.status == "Escaped" then C.Good else C.Text)
 	end
 	local xp = results.xp
 	if xp then
@@ -543,8 +724,7 @@ end
 ---------------------------------------------------------------------------------------------
 
 local function refreshLobby()
-	local inLobby = not ClientState.inRun() or ClientState.roundState == "Lobby"
-	lobbyFrame.Visible = inLobby and ClientState.roundState ~= "Results"
+	lobbyFrame.Visible = not ClientState.inRun()
 	if lobbyFrame.Visible then
 		focus(readyButton)
 	end
@@ -565,6 +745,7 @@ function MenuController.init()
 	buildProfile()
 	buildLore()
 	buildResults()
+	buildShop()
 
 	ClientState.PartyChanged:Connect(renderParty)
 	ClientState.RoundChanged:Connect(function(state, data)
@@ -583,6 +764,9 @@ function MenuController.init()
 		persistLabel.Text = if profile.persistent then "" else "Progress saving unavailable on this server."
 		if profileFrame.Visible then
 			renderProfile(profile)
+		end
+		if shopFrame.Visible then
+			renderShop(profile)
 		end
 	end)
 	ClientState.ResultsReceived:Connect(function(results)

@@ -357,16 +357,19 @@ check("MapBuilder builds 30 facilities (both chains) without errors", function()
 	end
 end)
 
-check("lobby builds with ready pad, boards, specimen and practice locker", function()
+check("lobby builds with four party elevators (1-4), specimen and practice locker", function()
 	local LobbyBuilder = requireModule(Services.LobbyBuilder)
 	local lobby = LobbyBuilder.build()
-	assert(lobby.spawnCFrame and lobby.padZone and lobby.statusLabel and lobby.recordLabel)
+	assert(lobby.spawnCFrame and lobby.recordLabel and #lobby.bays == 4, "lobby is missing its party elevators")
+	local sizes = {}
+	for _, bay in ipairs(lobby.bays) do
+		sizes[bay.id] = bay.size
+		assert(lobby:bayAt(bay.zone.CFrame.Position) == bay, "pad centre should be inside its own elevator pad")
+		lobby:setBayStatus(bay, "2 / 4", true)
+	end
+	assert(sizes.Solo == 1 and sizes.Duo == 2 and sizes.Trio == 3 and sizes.Squad == 4, "wrong elevator sizes")
+	assert(lobby:bayAt(lobby.spawnCFrame.Position) == nil, "spawn should not be on a pad")
 	assert(lobby.folder:FindFirstChild("SpecimenExhibit"):FindFirstChild("Specimen"), "specimen missing")
-	local specimenRoot = lobby.folder.SpecimenExhibit.Specimen:FindFirstChild("HumanoidRootPart")
-	assert(specimenRoot.CFrame.Position.Y > lobby.origin.Y, "specimen is not standing in the lobby")
-	assert(lobby:isOnPad(lobby.padZone.CFrame.Position), "pad centre should count as on the pad")
-	assert(not lobby:isOnPad(lobby.spawnCFrame.Position), "spawn should not be on the pad")
-	lobby:setStatus("2 / 3 READY")
 	lobby:setRecord("LAST RUN: ESCAPED")
 	lobby:wirePracticeLocker({ get = function()
 		return nil
@@ -455,12 +458,15 @@ local remotes = setmetatable({}, {
 
 check("services initialise and objectives set up on a built map", function()
 	local registry = { Remotes = remotes, SoundConfig = requireModule(Shared.Config.SoundConfig) }
-	for _, name in ipairs({ "DataService", "PlayerService", "NoiseService", "DoorService", "HidingService", "ItemService", "ObjectiveService", "MonsterService", "HorrorEventService", "RoundService" }) do
+	local names = { "DataService", "PlayerService", "NoiseService", "DoorService", "HidingService", "ItemService", "ObjectiveService", "MonsterService", "HorrorEventService", "RoundService", "PartyService", "ShopService" }
+	for _, name in ipairs(names) do
 		registry[name] = requireModule(Services[name])
 	end
-	for _, name in ipairs({ "DataService", "PlayerService", "NoiseService", "DoorService", "HidingService", "ItemService", "ObjectiveService", "MonsterService", "HorrorEventService", "RoundService" }) do
+	for _, name in ipairs(names) do
 		registry[name].init(registry)
 	end
+	assert(not registry.RoundService.isBusy(), "a fresh server should not be busy")
+	assert(registry.RoundService.currentParty() == nil)
 	assert(#maps >= 2, "map building failed earlier")
 	for i, map in ipairs({ maps[1], maps[2] }) do
 		registry.ItemService.setFolder(map.itemsFolder)
@@ -608,7 +614,10 @@ check("client controllers initialise and render sample state", function()
 			{ userId = 0, name = "Tester", ready = true, status = "Lobby", level = 3, host = true },
 			{ userId = 2, name = "Friend", ready = false, status = "Alive", level = 1, host = false },
 		},
-		difficulty = "Hard",
+		bays = {
+			{ id = "Solo", size = 1, members = {}, difficulty = "Normal" },
+			{ id = "Squad", size = 4, members = { { name = "Tester", userId = 0, ready = true }, { name = "Friend", userId = 2, ready = false } }, leaderUserId = 0, difficulty = "Hard", countdown = 3 },
+		},
 		pressure = 2,
 		state = "Lobby",
 	})
@@ -625,16 +634,19 @@ check("client controllers initialise and render sample state", function()
 		unlocked = { Standard = true }, equipped = "Standard",
 		settings = { Master = 0.8, Music = 0.5, Sfx = 1, Sensitivity = 1.2, Fov = 80, Brightness = 0.1, HeadBob = false, ReduceFlicker = true, CameraShake = false, LargeText = true },
 		cosmetics = ProgressionConfig.Cosmetics, persistent = false, loreCount = 2,
+		boosts = { QuietShoes = 2, Adrenaline = 1 }, armed = { QuietShoes = true },
 	}
 	ClientState.profile = profile
 	ClientState.ProfileChanged:Fire(profile)
 	controllers.MenuController.toggleProfile(true)
 	controllers.MenuController.toggleSettings(true)
+	controllers.MenuController.toggleShop(true)
 	ClientState.LoreReceived:Fire({ id = "x", title = "TEST NOTE", body = "Body text." })
 	ClientState.ResultsReceived:Fire({
 		outcome = "Escaped", title = "BLACKOUT PROTOCOL", difficulty = "Hard", seed = 1,
 		stepsCompleted = 6, totalSteps = 6, pressureNext = 1,
-		players = { { name = "Tester", userId = 0, status = "Escaped", items = 4, revives = 1 } },
+		mvp = "Tester",
+		players = { { name = "Tester", userId = 0, status = "Escaped", items = 4, revives = 1, score = 1210 }, { name = "Friend", userId = 2, status = "Dead", items = 1, revives = 0, score = 300 } },
 		xp = { lines = { { label = "Escaped", amount = 120 } }, total = 168, multiplier = 1.4, levelBefore = 2, levelAfter = 3, unlocks = { "Sodium Amber" } },
 	})
 	controllers.HudController.notify("Power restored.", "danger")

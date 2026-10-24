@@ -58,6 +58,9 @@ local function defaultProfile()
 		Unlocked = { Standard = true },
 		Equipped = "Standard",
 		Settings = defaultSettings(),
+		Boosts = {}, -- owned one-run boosts: { [boostKey] = count }
+		Armed = {}, -- boosts switched on for the next run: { [boostKey] = true }
+		Receipts = {}, -- processed Robux purchase ids -> os.time(), so a purchase is never granted twice
 	}
 end
 
@@ -123,6 +126,34 @@ function DataService.cosmeticColor(id)
 	return Color3.fromRGB(c[1], c[2], c[3])
 end
 
+-- Roblox player-list leaderboard: Level and Escapes.
+function DataService.updateLeaderstats(player)
+	local data = DataService.getProfile(player)
+	if not data or not player.Parent then
+		return
+	end
+	local stats = player:FindFirstChild("leaderstats")
+	if not stats then
+		stats = Instance.new("Folder")
+		stats.Name = "leaderstats"
+		for _, name in ipairs({ "Level", "Escapes" }) do
+			local value = Instance.new("IntValue")
+			value.Name = name
+			value.Parent = stats
+		end
+		stats.Parent = player
+	end
+	stats.Level.Value = DataService.levelFor(data.Xp)
+	stats.Escapes.Value = data.Stats.Escapes
+end
+
+function DataService.markDirty(player)
+	local entry = profiles[player]
+	if entry then
+		entry.dirty = true
+	end
+end
+
 function DataService.getProfile(player)
 	local entry = profiles[player]
 	return entry and entry.data
@@ -150,6 +181,8 @@ function DataService.sendProfile(player)
 		equipped = data.Equipped,
 		settings = data.Settings,
 		cosmetics = ProgressionConfig.Cosmetics,
+		boosts = data.Boosts,
+		armed = data.Armed,
 		persistent = entry.persistent,
 		loreCount = data.Stats.LoreFound,
 	})
@@ -179,6 +212,7 @@ local function load(player)
 	profiles[player] = { data = reconcile(data), persistent = persistent, dirty = false }
 	DataService.checkUnlocks(player)
 	DataService.sendProfile(player)
+	DataService.updateLeaderstats(player)
 	if not persistent then
 		services.Remotes.Notify:FireClient(player, "Progress saving unavailable (Studio or DataStore offline).", "warn")
 	end
@@ -281,6 +315,7 @@ function DataService.awardRun(player, summary)
 		stats.BlackBoxes += 1
 	end
 	local unlocks = DataService.checkUnlocks(player)
+	DataService.updateLeaderstats(player)
 	task.spawn(DataService.save, player)
 	return {
 		lines = lines,

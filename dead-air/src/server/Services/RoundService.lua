@@ -1,8 +1,10 @@
 --[[
 	RoundService - the game loop.
 
-	Lobby -> (everyone ready, countdown) -> Starting (generate facility) -> Playing
-	-> Results -> Lobby.
+	A party (from a lobby elevator, see PartyService) -> Starting (generate facility) ->
+	Playing -> Results -> back to the lobby. Only the party's players take part; anyone
+	else stays in the lobby. On a reserved run server the party arrives by teleport and is
+	teleported back to a public lobby afterwards.
 
 	A run does not end on a timer. It ends when no player is left standing in the facility:
 	everyone has escaped, died, or is downed with nobody left to revive them.
@@ -27,15 +29,11 @@ local RoundService = {}
 local services
 local lobby
 local state = "Lobby"
-local ready = {}
-local padReady = {} -- players currently standing on the lobby ready pad
 local lastRecord = "No descents yet."
 local difficultyName = DifficultyConfig.Default
-local hostUserId
 local streak = 0
 local runCounter = 0
 local currentRun
-local countdownEndsAt
 
 function RoundService.init(registry)
 	services = registry
@@ -77,84 +75,31 @@ local function monsterMods(difficulty)
 end
 
 ---------------------------------------------------------------------------------------------
--- Party / state broadcast
+-- State
 ---------------------------------------------------------------------------------------------
 
-local function ensureHost()
-	if hostUserId and Players:GetPlayerByUserId(hostUserId) then
-		return
-	end
-	local first = Players:GetPlayers()[1]
-	hostUserId = first and first.UserId
+function RoundService.isBusy()
+	return currentRun ~= nil or state ~= "Lobby"
 end
 
+-- Players taking part in the current run (nil when no run is in progress).
+function RoundService.currentParty()
+	return currentRun and currentRun.party
+end
+
+function RoundService.pressure()
+	return math.min(streak, DifficultyConfig.Pressure.MaxStacks)
+end
+
+-- Kept for callers that refresh lobby/HUD party state.
 function RoundService.broadcastParty()
-	ensureHost()
-	local members = {}
-	for _, player in ipairs(Players:GetPlayers()) do
-		local profile = services.DataService.getProfile(player)
-		table.insert(members, {
-			userId = player.UserId,
-			name = player.DisplayName,
-			ready = ready[player] == true or padReady[player] == true,
-			status = player:GetAttribute("DA_Status") or "Lobby",
-			level = profile and services.DataService.levelFor(profile.Xp) or 1,
-			host = player.UserId == hostUserId,
-		})
-	end
-	RoundService.updateLobbyBoards(members)
-	services.Remotes.Party:FireAllClients({
-		members = members,
-		difficulty = difficultyName,
-		pressure = math.min(streak, DifficultyConfig.Pressure.MaxStacks),
-		countdown = countdownEndsAt and math.max(0, countdownEndsAt - os.clock()) or nil,
-		state = state,
-	})
+	services.PartyService.broadcast()
 end
 
--- Physical boards in the lobby mirror the party state.
-function RoundService.updateLobbyBoards(members)
-	if not lobby then
-		return
+local function updateRecordBoard()
+	if lobby then
+		lobby:setRecord(lastRecord)
 	end
-	local readyCount = 0
-	for _, m in ipairs(members) do
-		if m.ready then
-			readyCount += 1
-		end
-	end
-	local text
-	if state == "Lobby" and countdownEndsAt then
-		text = string.format("DESCENDING IN %d\nAll %d staff ready.", math.ceil(math.max(0, countdownEndsAt - os.clock())), #members)
-	elseif state == "Lobby" then
-		text = string.format("%d / %d READY\nStand on the pad or press READY.\nDifficulty: %s", readyCount, #members, difficultyName)
-	elseif state == "Results" then
-		text = "Run complete.\nDebriefing..."
-	else
-		text = "RUN IN PROGRESS\nNew arrivals join the next descent."
-	end
-	lobby:setStatus(text)
-	lobby:setRecord(lastRecord)
-	lobby.beacon.Color = if state == "Lobby" and not countdownEndsAt then Color3.fromRGB(80, 20, 16) else Color3.fromRGB(255, 70, 40)
-end
-
--- Tracks who is standing on the ready pad. Returns true when that changed.
-local function updatePad()
-	if not lobby then
-		return false
-	end
-	local changed = false
-	for _, player in ipairs(Players:GetPlayers()) do
-		local character = player.Character
-		local root = character and character:FindFirstChild("HumanoidRootPart")
-		local s = services.PlayerService.get(player)
-		local on = root ~= nil and s ~= nil and not s.inRound and lobby:isOnPad(root.Position)
-		if (padReady[player] == true) ~= on then
-			padReady[player] = on or nil
-			changed = true
-		end
-	end
-	return changed
 end
 
 local function setState(newState, data)
@@ -191,18 +136,7 @@ local function cleanupRun()
 	end
 end
 
-local function participants()
-	local list = {}
-	for _, player in ipairs(Players:GetPlayers()) do
-		local s = services.PlayerService.get(player)
-		if s then
-			table.insert(list, player)
-		end
-	end
-	return list
-end
-
-local function startRun()
+local function startRun(party)
 	runCounter += 1
 	local seed = (os.time() * 1000 + runCounter * 7919) % 2147483646 + 1
 	local rng = Rng.new(seed)
@@ -237,6 +171,7 @@ local function startRun()
 	local map = mapOrErr
 
 	currentRun = {
+		party = party,
 		seed = seed,
 		map = map,
 		chainName = chainName,
@@ -263,7 +198,7 @@ local function startRun()
 	-- Spawn everyone in parallel, and wait for all characters before the end-of-run check
 	-- can run (otherwise a slow load would look like "nobody alive").
 	local pending = 0
-	for i, player in ipairs(participants()) do
+	for i, player in ipairs(party) do
 		local spawn = map.startSpawns[((i - 1) % #map.startSpawns) + 1]
 		pending += 1
 		task.spawn(function()
@@ -274,12 +209,16 @@ local function startRun()
 			if ok and spawned then
 				-- Everyone starts with one lure, so nobody is defenceless.
 				services.ItemService.give(player, ObjectiveConfig.StartingItem)
+				-- Robux boosts the player switched on for this run.
+				local boosts = services.ShopService.consumeForRun(player)
+				if #boosts > 0 then
+					services.PlayerService.applyBoosts(player, boosts)
+					services.Remotes.Notify:FireClient(player, "Boosts active: " .. table.concat(boosts, ", "), "info")
+				end
 			end
 			pending -= 1
 		end)
 	end
-	table.clear(ready)
-	table.clear(padReady)
 	local waitStarted = os.clock()
 	while pending > 0 and os.clock() - waitStarted < 15 do
 		task.wait(0.1)
@@ -287,7 +226,9 @@ local function startRun()
 	task.wait(0.5)
 
 	setState("Playing", currentRun.publicInfo)
-	services.Remotes.Notify:FireAllClients(chainDef.Steps[1].Text, "objective")
+	for _, player in ipairs(party) do
+		services.Remotes.Notify:FireClient(player, chainDef.Steps[1].Text, "objective")
+	end
 
 	local runRecord = currentRun
 	task.delay(difficulty.MonsterSpawnDelay, function()
@@ -303,6 +244,11 @@ local function runIsOver()
 	local alive = services.PlayerService.countStatus("Alive")
 	if alive > 0 then
 		return false
+	end
+	for _, s in ipairs(services.PlayerService.inRound()) do
+		if s.status == "Downed" and s.selfReviveAt then
+			return false -- an Adrenaline Shot is about to get them back up
+		end
 	end
 	-- Nobody standing: downed players cannot be revived.
 	for _, s in ipairs(services.PlayerService.inRound()) do
@@ -337,6 +283,8 @@ local function finishRun()
 			teamSteps = teamSteps,
 		}
 		breakdowns[s.player] = services.DataService.awardRun(s.player, summary)
+		-- Score for bragging rights between friends.
+		local score = math.floor((if escaped then 500 else 0) + summary.objectives * 120 + summary.items * 25 + summary.revives * 100 + summary.lore * 40 + math.min(survived, 900) * 0.5)
 		table.insert(results.players, {
 			name = s.player.DisplayName,
 			userId = s.player.UserId,
@@ -344,7 +292,14 @@ local function finishRun()
 			cause = s.deathCause,
 			items = summary.items,
 			revives = summary.revives,
+			score = score,
 		})
+	end
+	table.sort(results.players, function(a, b)
+		return a.score > b.score
+	end)
+	if #results.players > 1 then
+		results.mvp = results.players[1].name
 	end
 	results.outcome = if escapedAny then "Escaped" else "Failed"
 	results.stepsCompleted = teamSteps
@@ -373,79 +328,97 @@ local function finishRun()
 		streak
 	)
 
+	updateRecordBoard()
 	setState("Results", { outcome = results.outcome })
-	for _, player in ipairs(Players:GetPlayers()) do
-		local personal = table.clone(results)
-		personal.xp = breakdowns[player]
-		services.Remotes.Results:FireClient(player, personal)
-		services.DataService.sendProfile(player)
+	local party = {}
+	for _, player in ipairs(run.party) do
+		if player.Parent then
+			table.insert(party, player)
+			local personal = table.clone(results)
+			personal.xp = breakdowns[player]
+			services.Remotes.Results:FireClient(player, personal)
+			services.DataService.sendProfile(player)
+		end
 	end
 
 	task.wait(14)
 	cleanupRun()
 	currentRun = nil
-	for _, player in ipairs(Players:GetPlayers()) do
-		task.spawn(services.PlayerService.sendToLobby, player, lobby.spawnCFrame)
+	-- A private run server sends its party back to a public lobby; otherwise (Studio or a
+	-- failed teleport) everyone returns to this server's lobby.
+	if not (services.PartyService.isRunServer() and services.PartyService.returnToLobby(party)) then
+		for _, player in ipairs(party) do
+			task.spawn(services.PlayerService.sendToLobby, player, lobby.spawnCFrame)
+		end
 	end
 	task.wait(1)
 	setState("Lobby", {})
 end
 
-local function allReady()
-	local players = Players:GetPlayers()
-	if #players == 0 then
+-- Starts a run for a party (called by PartyService). Runs in the background.
+function RoundService.startRun(party, difficulty)
+	if RoundService.isBusy() then
 		return false
 	end
-	for _, player in ipairs(players) do
-		if not ready[player] and not padReady[player] then
-			return false
+	difficultyName = if DifficultyConfig.Presets[difficulty] then difficulty else DifficultyConfig.Default
+	state = "Starting"
+	task.spawn(function()
+		local ok, err = pcall(startRun, party)
+		if not ok then
+			warn("[DeadAir] Failed to start run: " .. tostring(err))
+			cleanupRun()
+			currentRun = nil
+			for _, player in ipairs(party) do
+				if player.Parent then
+					task.spawn(services.PlayerService.sendToLobby, player, lobby.spawnCFrame)
+				end
+			end
+			setState("Lobby", { error = "Run failed to start." })
+		end
+	end)
+	return true
+end
+
+-- Reserved run server: wait for the teleported party, then start their run.
+local function runServerFlow()
+	local expected, difficulty = nil, DifficultyConfig.Default
+	local started = os.clock()
+	while os.clock() - started < 25 do
+		task.wait(0.5)
+		for _, player in ipairs(Players:GetPlayers()) do
+			local data = player:GetJoinData().TeleportData
+			if type(data) == "table" and type(data.party) == "table" then
+				expected = data.party
+				difficulty = data.difficulty
+			end
+		end
+		local present = 0
+		for _, userId in ipairs(expected or {}) do
+			local player = Players:GetPlayerByUserId(userId)
+			if player and services.PlayerService.get(player) and player.Character then
+				present += 1
+			end
+		end
+		if expected and present >= #expected then
+			break
 		end
 	end
-	return true
+	local party = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		if services.PlayerService.get(player) then
+			table.insert(party, player)
+		end
+	end
+	if #party > 0 then
+		RoundService.startRun(party, difficulty)
+	end
 end
 
 local function loop()
 	while true do
-		if state == "Lobby" then
-			if updatePad() then
-				RoundService.broadcastParty()
-			end
-			if allReady() then
-				countdownEndsAt = os.clock() + 5
-				RoundService.broadcastParty()
-				local cancelled = false
-				while os.clock() < countdownEndsAt do
-					task.wait(0.25)
-					if updatePad() then
-						RoundService.broadcastParty()
-					end
-					RoundService.updateLobbyBoards({})
-					if not allReady() then
-						cancelled = true
-						break
-					end
-				end
-				countdownEndsAt = nil
-				if cancelled then
-					RoundService.broadcastParty()
-				else
-					local ok, err = pcall(startRun)
-					if not ok then
-						warn("[DeadAir] Failed to start run: " .. tostring(err))
-						cleanupRun()
-						currentRun = nil
-						setState("Lobby", { error = "Run failed to start." })
-					end
-				end
-			end
-			task.wait(0.25)
-		elseif state == "Playing" then
-			task.wait(0.5)
-			if currentRun and runIsOver() then
-				finishRun()
-			end
-		else
-			task.wait(0.25)
+		task.wait(0.5)
+		if state == "Playing" and currentRun and runIsOver() then
+			finishRun()
 		end
 	end
 end
@@ -455,22 +428,6 @@ function RoundService.start()
 	lobby:wirePracticeLocker(services.PlayerService)
 	local remotes = services.Remotes
 
-	remotes.SetReady.OnServerEvent:Connect(function(player, value)
-		if type(value) ~= "boolean" or state ~= "Lobby" then
-			return
-		end
-		ready[player] = value or nil
-		RoundService.broadcastParty()
-	end)
-	remotes.SetDifficulty.OnServerEvent:Connect(function(player, name)
-		if state ~= "Lobby" or player.UserId ~= hostUserId or type(name) ~= "string" then
-			return
-		end
-		if DifficultyConfig.Presets[name] then
-			difficultyName = name
-			RoundService.broadcastParty()
-		end
-	end)
 	local lastRequest = {}
 	remotes.RequestState.OnServerEvent:Connect(function(player)
 		local now = os.clock()
@@ -498,7 +455,6 @@ function RoundService.start()
 	end)
 
 	local function onPlayerAdded(player)
-		ensureHost()
 		task.spawn(function()
 			-- Wait for PlayerService to register the player before spawning.
 			local tries = 0
@@ -507,9 +463,8 @@ function RoundService.start()
 				tries += 1
 			end
 			services.PlayerService.sendToLobby(player, lobby.spawnCFrame)
-			if state ~= "Lobby" then
-				services.PlayerService.setSpectating(player)
-				services.Remotes.Notify:FireClient(player, "A run is in progress. You'll join the next one.", "info")
+			if RoundService.isBusy() and not services.PartyService.isRunServer() then
+				services.Remotes.Notify:FireClient(player, "The elevators are in use. Wait in the lobby for the next descent.", "info")
 			end
 			sendStateTo(player)
 		end)
@@ -519,19 +474,18 @@ function RoundService.start()
 		onPlayerAdded(player)
 	end
 	Players.PlayerRemoving:Connect(function(player)
-		ready[player] = nil
-		padReady[player] = nil
 		if lobby and lobby.releasePractice then
 			lobby.releasePractice(player)
 		end
 		lastRequest[player] = nil
-		if player.UserId == hostUserId then
-			hostUserId = nil
-		end
-		task.defer(RoundService.broadcastParty)
 	end)
 
+	services.PartyService.start(lobby)
+	updateRecordBoard()
 	task.spawn(loop)
+	if services.PartyService.isRunServer() then
+		task.spawn(runServerFlow)
+	end
 end
 
 return RoundService

@@ -67,6 +67,8 @@ local registry = {
 	MonsterService = require(Services.MonsterService),
 	HorrorEventService = require(Services.HorrorEventService),
 	RoundService = require(Services.RoundService),
+	PartyService = require(Services.PartyService),
+	ShopService = require(Services.ShopService),
 }
 
 for _, name in ipairs({
@@ -80,6 +82,8 @@ for _, name in ipairs({
 	"MonsterService",
 	"HorrorEventService",
 	"RoundService",
+	"PartyService",
+	"ShopService",
 }) do
 	registry[name].init(registry)
 end
@@ -87,6 +91,7 @@ end
 registry.DataService.start()
 registry.PlayerService.start()
 registry.ItemService.start()
+registry.ShopService.start()
 registry.RoundService.start()
 
 print("[DeadAir] Server ready.")

@@ -10,7 +10,7 @@
 	  south    staff lounge with couches, vending machine and the spawn point
 	  corner   practice locker you can climb into
 
-	Standing on the ready pad marks you ready (the READY button works too).
+	A party elevator goes down when it is full, or when everyone on its pad presses READY.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -161,55 +161,76 @@ function LobbyBuilder.build()
 		end
 	end
 
-	-- North: elevator + ready pad + status board --------------------------------------------
+	-- North: four party elevators (Solo / Duo / Trio / Squad) ----------------------------------
+	-- Walk into one with your friends. It goes down when it is full, or when everyone in
+	-- it presses READY. Each has a pad, a status sign and a beacon.
 	local northZ = -DEPTH / 2 + 0.5
-	local elevator = model(folder, "DescentElevator")
-	newPart(elevator, { Name = "Frame", Size = Vector3.new(14, 12, 0.6), Position = at(0, 6, northZ + 0.2), Color = rgb(80, 84, 84), Material = MAT.MetalPlain })
-	for _, s in ipairs({ -1, 1 }) do
-		newPart(elevator, {
-			Name = "Door",
-			Size = Vector3.new(5.4, 10.4, 0.4),
-			Position = at(s * 2.75, 5.2, northZ + 0.7),
-			Color = rgb(150, 154, 150),
-			Material = MAT.MetalPlain,
-		})
-	end
-	local beacon = newPart(elevator, { Name = "Beacon", Size = Vector3.new(1.2, 0.6, 0.6), Position = at(0, 12.6, northZ + 0.8), Color = rgb(255, 70, 40), Material = MAT.Neon, CanCollide = false })
-	local beaconLight = Instance.new("PointLight")
-	beaconLight.Color = rgb(255, 70, 40)
-	beaconLight.Range = 16
-	beaconLight.Brightness = 0.8
-	beaconLight.Parent = beacon
-	self.beacon = beacon
+	self.bays = {}
+	local baySpecs = {
+		{ id = "Solo", size = 1, x = -27 },
+		{ id = "Duo", size = 2, x = -9 },
+		{ id = "Trio", size = 3, x = 9 },
+		{ id = "Squad", size = 4, x = 27 },
+	}
+	for _, spec in ipairs(baySpecs) do
+		local x = spec.x
+		local elevator = model(folder, "Elevator_" .. spec.id)
+		newPart(elevator, { Name = "Frame", Size = Vector3.new(12, 11, 0.6), Position = at(x, 5.5, northZ + 0.2), Color = rgb(80, 84, 84), Material = MAT.MetalPlain })
+		for _, sd in ipairs({ -1, 1 }) do
+			newPart(elevator, {
+				Name = "Door",
+				Size = Vector3.new(4.8, 9.6, 0.4),
+				Position = at(x + sd * 2.45, 4.8, northZ + 0.7),
+				Color = rgb(150, 154, 150),
+				Material = MAT.MetalPlain,
+			})
+		end
+		local beacon = newPart(elevator, { Name = "Beacon", Size = Vector3.new(1.2, 0.6, 0.6), Position = at(x, 11.6, northZ + 0.8), Color = rgb(80, 20, 16), Material = MAT.Neon, CanCollide = false })
+		local beaconLight = Instance.new("PointLight")
+		beaconLight.Color = rgb(255, 70, 40)
+		beaconLight.Range = 12
+		beaconLight.Brightness = 0.6
+		beaconLight.Enabled = false
+		beaconLight.Parent = beacon
+		local sign = newPart(elevator, { Name = "Sign", Size = Vector3.new(10, 1.6, 0.2), Position = at(x, 12.9, northZ + 0.7), Color = rgb(28, 30, 26) })
+		surfaceText(sign, Enum.NormalId.Back, string.upper(spec.id) .. "  -  " .. spec.size .. (if spec.size == 1 then " PLAYER" else " PLAYERS"), rgb(232, 196, 96), rgb(28, 30, 26))
 
-	-- Ready pad: hazard stripes on the floor in front of the doors.
-	local padCenter = at(0, 0, northZ + 7)
-	local pad = model(folder, "ReadyPad")
-	newPart(pad, { Name = "Base", Size = Vector3.new(14, 0.1, 9), Position = padCenter + Vector3.new(0, 0.05, 0), Color = rgb(30, 30, 28), CanCollide = false })
-	for k = -3, 3 do
-		newPart(pad, {
-			Name = "Stripe",
-			Size = Vector3.new(1, 0.12, 9.6),
-			CFrame = CFrame.new(padCenter + Vector3.new(k * 2, 0.06, 0)) * CFrame.Angles(0, math.rad(35), 0),
-			Color = rgb(214, 172, 40),
+		local padCenter = at(x, 0, northZ + 6)
+		local pad = model(folder, "Pad_" .. spec.id)
+		newPart(pad, { Name = "Base", Size = Vector3.new(11, 0.1, 8), Position = padCenter + Vector3.new(0, 0.05, 0), Color = rgb(30, 30, 28), CanCollide = false })
+		for k = -2, 2 do
+			newPart(pad, {
+				Name = "Stripe",
+				Size = Vector3.new(0.9, 0.12, 8.6),
+				CFrame = CFrame.new(padCenter + Vector3.new(k * 2, 0.06, 0)) * CFrame.Angles(0, math.rad(35), 0),
+				Color = rgb(214, 172, 40),
+				CanCollide = false,
+				CanQuery = false,
+			})
+		end
+		local zone = newPart(pad, {
+			Name = "Zone",
+			Size = Vector3.new(11, 8, 8),
+			CFrame = CFrame.new(padCenter + Vector3.new(0, 4, 0)),
+			Transparency = 1,
 			CanCollide = false,
 			CanQuery = false,
+			CanTouch = false,
+		})
+		-- Status display on the frame above the doors (who is in, countdown).
+		local display = newPart(elevator, { Name = "Display", Size = Vector3.new(10.5, 1.3, 0.2), CFrame = facing(x, 10.3, northZ + 0.6, x, 0), Color = rgb(10, 14, 10) })
+		local _, statusLabel = surfaceText(display, Enum.NormalId.Front, "EMPTY", rgb(140, 255, 160), rgb(10, 14, 10))
+		table.insert(self.bays, {
+			id = spec.id,
+			size = spec.size,
+			zone = zone,
+			statusLabel = statusLabel,
+			beacon = beacon,
+			beaconLight = beaconLight,
 		})
 	end
-	local padLabel = newPart(pad, { Name = "Label", Size = Vector3.new(12, 0.1, 2.2), Position = padCenter + Vector3.new(0, 0.13, 3.4), Color = rgb(30, 30, 28), CanCollide = false })
-	surfaceText(padLabel, Enum.NormalId.Top, "STAND HERE TO READY UP", rgb(232, 196, 96), rgb(30, 30, 28))
-	self.padZone = newPart(pad, {
-		Name = "Zone",
-		Size = Vector3.new(14, 8, 9),
-		Position = padCenter + Vector3.new(0, 4, 0),
-		Transparency = 1,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
-	})
-
-	self.statusLabel = board(folder, facing(-14, 8.5, northZ + 0.7, -14, 0), Vector2.new(12, 5), "NEXT DESCENT", "Waiting for staff...")
-	self.recordLabel = board(folder, facing(14, 8.5, northZ + 0.7, 14, 0), Vector2.new(12, 5), "SUB-LEVEL 3 RECORD", "No descents yet.")
+	self.beacon = self.bays[1].beacon
+	self.recordLabel = board(folder, facing(-22, 8.5, DEPTH / 2 - 0.7, -22, 0), Vector2.new(12, 5), "SUB-LEVEL 3 RECORD", "No descents yet.")
 
 	-- West: the specimen exhibit ------------------------------------------------------------
 	local westX = -WIDTH / 2 + 8
@@ -280,8 +301,8 @@ function LobbyBuilder.build()
 	board(folder, facing(eastX, 6.5, 12, 0, 12), Vector2.new(11, 6.5), "3. TEAMWORK",
 		"Downed teammates can be revived (hold E).\nThe elevator alarm draws it in.\nNobody escapes if nobody waits.")
 
-	-- Practice locker (north-east corner) ---------------------------------------------------
-	local lockerPos = at(WIDTH / 2 - 2.2, 0, -DEPTH / 2 + 6)
+	-- Practice locker (east side, by the lounge) ---------------------------------------------
+	local lockerPos = at(WIDTH / 2 - 2.2, 0, 18)
 	local practice = MapBuilder.buildLocker(folder, CFrame.lookAt(lockerPos, lockerPos + Vector3.new(-1, 0, 0)))
 	self.practiceLocker = practice
 	local tag = newPart(folder, { Name = "PracticeSign", Size = Vector3.new(0.2, 1.2, 3), Position = lockerPos + Vector3.new(-1.4, 8.4, 0), Color = rgb(40, 40, 36) })
@@ -298,7 +319,7 @@ function LobbyBuilder.build()
 		return (a + b) / 2
 	end })
 	Props.vending(folder, facing(-WIDTH / 2 + 4, 0, southZ - 4, 0, southZ - 4))
-	Props.cooler(folder, facing(WIDTH / 2 - 4, 0, southZ - 4, 0, southZ - 4))
+	Props.cooler(folder, facing(WIDTH / 2 - 9, 0, southZ - 4, 0, southZ - 4))
 	for _, x in ipairs({ -16, 16 }) do
 		Props.plant(folder, CFrame.new(at(x, 0, southZ - 2.5)))
 	end
@@ -321,16 +342,24 @@ function LobbyBuilder.build()
 	return self
 end
 
-function Lobby:isOnPad(position)
-	local localPos = self.padZone.CFrame:PointToObjectSpace(position)
-	local half = self.padZone.Size / 2
-	return math.abs(localPos.X) <= half.X and math.abs(localPos.Y) <= half.Y and math.abs(localPos.Z) <= half.Z
+-- Which party elevator pad a position is standing on (or nil).
+function Lobby:bayAt(position)
+	for _, bay in ipairs(self.bays) do
+		local localPos = bay.zone.CFrame:PointToObjectSpace(position)
+		local half = bay.zone.Size / 2
+		if math.abs(localPos.X) <= half.X and math.abs(localPos.Y) <= half.Y and math.abs(localPos.Z) <= half.Z then
+			return bay
+		end
+	end
+	return nil
 end
 
-function Lobby:setStatus(text)
-	if self.statusLabel.Text ~= text then
-		self.statusLabel.Text = text
+function Lobby:setBayStatus(bay, text, active)
+	if bay.statusLabel.Text ~= text then
+		bay.statusLabel.Text = text
 	end
+	bay.beacon.Color = if active then Color3.fromRGB(255, 70, 40) else Color3.fromRGB(80, 20, 16)
+	bay.beaconLight.Enabled = active
 end
 
 function Lobby:setRecord(text)

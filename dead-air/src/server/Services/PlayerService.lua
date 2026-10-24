@@ -22,6 +22,7 @@ local SoundConfig = require(Shared.Config.SoundConfig)
 local SoundMath = require(Shared.SoundMath)
 local Signal = require(Shared.Signal)
 local FlashlightModel = require(Shared.FlashlightModel)
+local ShopConfig = require(Shared.Config.ShopConfig)
 
 local PlayerService = {}
 PlayerService.StatusChanged = Signal.new() -- (player, status, previous)
@@ -220,6 +221,9 @@ function PlayerService.prepareForRound(player, cframe)
 	state.sprintHeld = false
 	state.hiddenIn = nil
 	state.roundStats = { items = 0, revives = 0, objectives = 0, lore = 0, startedAt = os.clock() }
+	state.boosts = {}
+	state.staminaMax = PlayerConfig.Stamina.Max
+	state.selfReviveAt = nil
 	state.aliveSince = os.clock()
 	player.CameraMode = Enum.CameraMode.LockFirstPerson
 	player.CameraMaxZoomDistance = 0.5
@@ -245,6 +249,9 @@ function PlayerService.sendToLobby(player, cframe)
 	state.inRound = false
 	state.hiddenIn = nil
 	state.flashlightOn = false
+	state.boosts = {}
+	state.staminaMax = PlayerConfig.Stamina.Max
+	state.selfReviveAt = nil
 	if state.revivePrompt then
 		state.revivePrompt:Destroy()
 		state.revivePrompt = nil
@@ -367,11 +374,15 @@ function PlayerService.revive(player, reviver)
 		state.humanoid.JumpPower = 34
 	end
 	local rs = states[reviver]
-	if rs and rs.roundStats then
+	if rs and rs.roundStats and reviver ~= player then
 		rs.roundStats.revives += 1
 	end
 	PlayerService.Revived:Fire(reviver, player)
-	services.Remotes.Notify:FireAllClients(reviver.DisplayName .. " revived " .. player.DisplayName, "info")
+	if reviver == player then
+		services.Remotes.Notify:FireAllClients(player.DisplayName .. " got back up (Adrenaline)", "info")
+	else
+		services.Remotes.Notify:FireAllClients(reviver.DisplayName .. " revived " .. player.DisplayName, "info")
+	end
 	PlayerService.pushAttributes(state, true)
 end
 
@@ -389,6 +400,14 @@ function PlayerService.catch(player)
 		if other ~= player and s.inRound and s.status == "Alive" then
 			othersStanding += 1
 		end
+	end
+	-- Adrenaline Shot: go down instead of dying (even solo) and get up after a few seconds.
+	if state.boosts and state.boosts.Adrenaline and not state.adrenalineUsed then
+		state.adrenalineUsed = true
+		PlayerService.down(player)
+		state.selfReviveAt = os.clock() + ShopConfig.AdrenalineDelay
+		services.Remotes.Notify:FireClient(player, "Adrenaline kicking in... hold on", "info")
+		return "Downed"
 	end
 	if services.RoundService.difficulty().DownedEnabled and othersStanding > 0 then
 		PlayerService.down(player)
@@ -436,6 +455,7 @@ function PlayerService.pushAttributes(state, force)
 	if force or player:GetAttribute("DA_Stamina") ~= stamina then
 		player:SetAttribute("DA_Stamina", stamina)
 	end
+	player:SetAttribute("DA_StaminaMax", state.staminaMax or PlayerConfig.Stamina.Max)
 	if force or player:GetAttribute("DA_Battery") ~= battery then
 		player:SetAttribute("DA_Battery", battery)
 	end
@@ -481,7 +501,8 @@ local function tickPlayer(state, dt, now)
 
 	-- Flashlight battery
 	if state.flashlightOn then
-		state.battery = math.max(0, state.battery - PlayerConfig.Flashlight.DrainPerSecond * dt)
+		local drain = PlayerConfig.Flashlight.DrainPerSecond * (if state.boosts and state.boosts.LithiumCell then ShopConfig.LithiumDrain else 1)
+		state.battery = math.max(0, state.battery - drain * dt)
 		if state.battery <= 0 then
 			state.flashlightOn = false
 			services.Remotes.Notify:FireClient(state.player, "Flashlight battery dead", "warn")
@@ -489,6 +510,15 @@ local function tickPlayer(state, dt, now)
 	end
 
 	if state.status == "Downed" then
+		if state.selfReviveAt then
+			-- Adrenaline: no bleeding out while the shot kicks in.
+			if now >= state.selfReviveAt then
+				state.selfReviveAt = nil
+				PlayerService.revive(state.player, state.player)
+			end
+			PlayerService.pushAttributes(state)
+			return
+		end
 		if state.bleedOutAt and now >= state.bleedOutAt then
 			PlayerService.kill(state.player, "BledOut")
 		end
@@ -503,7 +533,7 @@ local function tickPlayer(state, dt, now)
 	if state.hiddenIn then
 		-- Recover stamina while hidden, but panting is audible.
 		state.sprinting = false
-		state.stamina = math.min(stamina.Max, state.stamina + stamina.RegenPerSecond * dt)
+		state.stamina = math.min(state.staminaMax or stamina.Max, state.stamina + stamina.RegenPerSecond * dt)
 		if state.stamina < stamina.PantingBelow and now - (state.lastBreath or 0) > 1.6 then
 			state.lastBreath = now
 			services.NoiseService:emit("Breathing", position, { source = state.player })
@@ -529,7 +559,8 @@ local function tickPlayer(state, dt, now)
 	local canSprint = state.sprintHeld and not state.crouch and not state.exhausted and state.stamina > 0
 	if canSprint and moving then
 		state.sprinting = true
-		state.stamina = math.max(0, state.stamina - stamina.SprintDrainPerSecond * dt)
+		local drain = stamina.SprintDrainPerSecond * (if state.boosts and state.boosts.SecondWind then ShopConfig.SecondWindDrain else 1)
+		state.stamina = math.max(0, state.stamina - drain * dt)
 		state.lastSprintAt = now
 		if state.stamina <= 0 then
 			state.exhausted = true
@@ -537,7 +568,7 @@ local function tickPlayer(state, dt, now)
 	else
 		state.sprinting = false
 		if now - (state.lastSprintAt or 0) > stamina.RegenDelay then
-			state.stamina = math.min(stamina.Max, state.stamina + stamina.RegenPerSecond * dt)
+			state.stamina = math.min(state.staminaMax or stamina.Max, state.stamina + stamina.RegenPerSecond * dt)
 		end
 	end
 	if state.exhausted and state.stamina >= stamina.ExhaustedRecoverAt then
@@ -590,6 +621,9 @@ local function tickPlayer(state, dt, now)
 				local surfaceMult = SoundConfig.Surfaces[surface] or SoundConfig.Surfaces.Default
 				-- Moving faster than the server allows (exploit or lag) is extra loud.
 				local overspeed = if speed > PlayerConfig.SprintSpeed + 4 then 1.4 else 1
+				if state.boosts and state.boosts.QuietShoes then
+					overspeed *= ShopConfig.QuietShoesMultiplier
+				end
 				services.NoiseService:emit(category, position, { source = state.player, surfaceMultiplier = surfaceMult, multiplier = overspeed })
 			end
 		end
@@ -705,6 +739,29 @@ function PlayerService.start()
 			end
 		end
 	end)
+end
+
+-- Applies purchased one-run boosts (keys from ShopConfig.Boosts) for the current run.
+function PlayerService.applyBoosts(player, keys)
+	local state = states[player]
+	if not state then
+		return
+	end
+	state.boosts = {}
+	state.adrenalineUsed = false
+	for _, key in ipairs(keys) do
+		state.boosts[key] = true
+	end
+	if state.boosts.SecondWind then
+		state.staminaMax = PlayerConfig.Stamina.Max * ShopConfig.SecondWindStamina
+		state.stamina = state.staminaMax
+	end
+	if state.boosts.LureKit then
+		services.ItemService.give(player, "Can")
+		services.ItemService.give(player, "Can")
+		services.ItemService.give(player, "AlarmClock")
+	end
+	PlayerService.pushAttributes(state, true)
 end
 
 function PlayerService.setFlashlightColor(player, color)

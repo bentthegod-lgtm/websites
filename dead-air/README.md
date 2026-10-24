@@ -58,6 +58,45 @@ Players arrive in a surface-level staff reception between runs:
   climb into.
 * A **staff lounge** with couches, a vending machine and the spawn point.
 
+## Playing with friends
+
+The lobby has four party elevators: **SOLO (1)**, **DUO (2)**, **TRIO (3)** and **SQUAD (4)**.
+
+* Walk onto an elevator's striped pad with your friends. The first player in is the
+  leader and picks the difficulty.
+* It leaves when it's full, or when everyone on it presses READY, after a 5-second
+  countdown. That means two friends can take a Squad elevator without waiting for strangers.
+* **In a published game**, each party is teleported to its own private (reserved) server,
+  so several parties can play at once. When the run ends, everyone is teleported back to
+  a lobby. Studio can't teleport, so there the run happens on the same server, and the
+  elevators show "IN USE" until it ends.
+* To test parties in Studio, use Test → Clients and Servers with 2–4 players.
+
+## Robux shop (one-run boosts)
+
+The lobby **SHOP** button sells boosts. You switch a boost "ON" and it's used up when your
+next descent starts.
+
+| Boost | Effect |
+|---|---|
+| Padded Soles | Footsteps 40% quieter |
+| Second Wind | 50% more stamina, sprint drains 25% slower |
+| Lithium Cell | Flashlight battery lasts twice as long |
+| Lure Kit | Start with 2 tin cans and an alarm clock |
+| Adrenaline Shot | Once per run, get back up on your own 6 seconds after going down (even solo) |
+
+**Setup:**
+1. In Creator Hub, go to your experience → Monetization → Developer Products and create one
+   product per entry in `src/shared/Config/ShopConfig.lua`.
+2. Paste each product's ID into `ProductId`. Prices there are only shown in the shop UI; the
+   real price is whatever you set in Creator Hub.
+
+Until a ProductId is set, Buy grants that boost for free in Studio (for testing) and says
+"not available yet" in the live game.
+
+Purchases are handled through `ProcessReceipt`. Each purchase ID is saved with the profile
+before the purchase is confirmed, so a purchase is never granted twice.
+
 ## Controls
 
 | Action | Keyboard / mouse | Gamepad | Touch |
@@ -129,7 +168,7 @@ Players arrive in a surface-level staff reception between runs:
   * a pipe burst.
 * **Progression:** XP and levels, statistics, collectible lore notes, and flashlight colours
   unlocked by level or by stats. Consecutive escapes add "pressure" that makes the next run
-  harder. None of this is pay-to-win.
+  harder. Shop boosts are paid, but they only help for one run and never stop the Listener.
 * **Accessibility:** volume controls, sensitivity, field of view, brightness, head bob, camera
   shake, a photosensitivity "reduce flicker" mode, and large text.
 

@@ -17,8 +17,10 @@ Net.Names = {
 	"ThrowItem", -- (lookDirection: Vector3, slot: number?)
 	"DropItem", -- (slot: number)
 	"ExitHide", -- ()
-	"SetReady", -- (ready: boolean)
-	"SetDifficulty", -- (name: string)  host only
+	"SetReady", -- (ready: boolean)  only while standing in a party elevator
+	"SetDifficulty", -- (name: string)  party elevator leader only
+	"ShopBuy", -- (productKey: string)
+	"ShopArm", -- (boostKey: string, on: boolean) use this boost on my next run
 	"SaveSettings", -- (settings: table)
 	"EquipCosmetic", -- (id: string)
 	"RequestState", -- () ask for a full state resync after the client loads

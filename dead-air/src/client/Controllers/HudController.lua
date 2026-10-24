@@ -470,7 +470,7 @@ function HudController.init()
 		if not gui.Enabled then
 			return
 		end
-		local stamina = (player:GetAttribute("DA_Stamina") or 100) / PlayerConfig.Stamina.Max
+		local stamina = (player:GetAttribute("DA_Stamina") or 100) / (player:GetAttribute("DA_StaminaMax") or PlayerConfig.Stamina.Max)
 		staminaFill.Size = UDim2.new(math.clamp(stamina, 0, 1), 0, 1, 0)
 		staminaFill.BackgroundColor3 = if player:GetAttribute("DA_Exhausted") then C.Danger else C.Text
 		local battery = player:GetAttribute("DA_Battery") or 100
