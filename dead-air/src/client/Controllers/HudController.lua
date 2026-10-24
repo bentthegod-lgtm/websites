@@ -12,6 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("DeadAir")
 local ItemConfig = require(Shared.Config.ItemConfig)
+local ItemModels = require(Shared.ItemModels)
 local PlayerConfig = require(Shared.Config.PlayerConfig)
 
 local Ui = require(script.Parent.Ui)
@@ -352,20 +353,31 @@ local function renderInventory()
 		Ui.corner(slot, 6)
 		Ui.stroke(slot, if selected then C.Accent else C.Dim, if selected then 0.1 else 0.75)
 		if def then
-			local swatch = Ui.new("Frame", {
+			-- 3D icon: the item's own model in a little viewport.
+			local view = Ui.new("ViewportFrame", {
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, 8),
-				Size = UDim2.new(0, 18, 0, 18),
-				BackgroundColor3 = Color3.fromRGB(def.Color[1], def.Color[2], def.Color[3]),
+				Position = UDim2.new(0.5, 0, 0, 2),
+				Size = UDim2.new(0, 34, 0, 30),
+				BackgroundTransparency = 1,
+				Ambient = Color3.fromRGB(150, 150, 150),
+				LightColor = Color3.fromRGB(255, 244, 225),
+				LightDirection = Vector3.new(-1, -1.5, -1),
 				Parent = slot,
 			})
-			Ui.corner(swatch, 4)
+			local model = ItemModels.build(kind)
+			model.Parent = view
+			local camera = Instance.new("Camera")
+			local reach = math.max(def.Size[1], def.Size[2], def.Size[3])
+			camera.FieldOfView = 30
+			camera.CFrame = CFrame.lookAt(Vector3.new(0.9, 0.7, -1.3).Unit * reach * 2.3, Vector3.zero)
+			camera.Parent = view
+			view.CurrentCamera = camera
 			Ui.new("TextLabel", {
 				Text = def.DisplayName,
 				TextSize = 10,
 				TextWrapped = true,
-				Position = UDim2.new(0, 2, 0, 28),
-				Size = UDim2.new(1, -4, 0, 26),
+				Position = UDim2.new(0, 2, 0, 31),
+				Size = UDim2.new(1, -4, 0, 25),
 				Parent = slot,
 			})
 		end

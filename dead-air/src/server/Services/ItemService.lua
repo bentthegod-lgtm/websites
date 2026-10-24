@@ -17,6 +17,7 @@ local ItemConfig = require(Shared.Config.ItemConfig)
 local PlayerConfig = require(Shared.Config.PlayerConfig)
 local LoreConfig = require(Shared.Config.LoreConfig)
 local Signal = require(Shared.Signal)
+local ItemModels = require(Shared.ItemModels)
 
 local ItemService = {}
 ItemService.PickedUp = Signal.new() -- (player, kind)
@@ -30,9 +31,6 @@ local lastThrow = {}
 local lastDrop = {}
 
 local rgb = Color3.fromRGB
-local function color(list)
-	return rgb(list[1], list[2], list[3])
-end
 
 function ItemService.init(registry)
 	services = registry
@@ -107,34 +105,8 @@ end
 -- Pickup models
 ---------------------------------------------------------------------------------------------
 
-local function buildVisual(kind)
-	local def = ItemConfig[kind]
-	local part = Instance.new("Part")
-	part.Name = kind
-	part.Anchored = true
-	part.CanCollide = false
-	part.Size = Vector3.new(def.Size[1], def.Size[2], def.Size[3])
-	part.Color = color(def.Color)
-	part.Material = Enum.Material.SmoothPlastic
-	part.Transparency = def.Transparency or 0
-	if kind == "Fuse" or kind == "Bottle" or kind == "Battery" or kind == "Can" then
-		part.Shape = Enum.PartType.Cylinder
-		part.Size = Vector3.new(def.Size[2], def.Size[1], def.Size[3])
-	end
-	if kind == "Bottle" then
-		part.Material = Enum.Material.Glass
-	elseif kind == "FuelCan" or kind == "BlackBox" or kind == "Fuse" or kind == "Can" then
-		part.Material = Enum.Material.Metal
-	end
-	if def.Glow then
-		local light = Instance.new("PointLight")
-		light.Color = color(def.Glow)
-		light.Range = 7
-		light.Brightness = 0.7
-		light.Shadows = false
-		light.Parent = part
-	end
-	return part
+local function buildVisual(kind, cframe)
+	return ItemModels.build(kind, cframe)
 end
 
 local function removePickup(pickup)
@@ -154,13 +126,7 @@ function ItemService.spawn(kind, position)
 		warn("[DeadAir] Unknown item " .. tostring(kind))
 		return nil
 	end
-	local part = buildVisual(kind)
-	local cf = CFrame.new(position + Vector3.new(0, part.Size.Y / 2, 0))
-	if part.Shape == Enum.PartType.Cylinder then
-		-- Cylinders lie along X; stand fuses/bottles upright.
-		cf = CFrame.new(position + Vector3.new(0, part.Size.X / 2, 0)) * CFrame.Angles(0, 0, math.rad(90))
-	end
-	part.CFrame = cf
+	local part = buildVisual(kind, CFrame.new(position + Vector3.new(0, def.Size[2] / 2, 0)))
 	part:SetAttribute("Item", kind)
 	part.Parent = folder or Workspace
 
@@ -373,8 +339,7 @@ function ItemService.throw(player, direction, slot)
 	local velocity = direction * PlayerConfig.Throw.Speed + Vector3.new(0, PlayerConfig.Throw.UpBoost, 0)
 	local gravity = Vector3.new(0, -Workspace.Gravity * 0.5, 0)
 
-	local projectile = buildVisual(kind)
-	projectile.CFrame = CFrame.new(origin)
+	local projectile = buildVisual(kind, CFrame.new(origin))
 	projectile.Parent = folder or Workspace
 	local ignore = { state.character, projectile }
 	if folder then
@@ -513,9 +478,7 @@ function ItemService.hideIn(map, cellIndex, kind, rng)
 		local part = pickup.model
 		local rotation = CFrame.new()
 		local height = part.Size.Y
-		if part.Shape == Enum.PartType.Cylinder then
-			height = part.Size.Y -- cylinders lie along X by default
-		elseif part.Size.Y > part.Size.Z then
+		if part.Size.Y > part.Size.Z then
 			rotation = CFrame.Angles(math.rad(90), 0, 0)
 			height = part.Size.Z
 		end

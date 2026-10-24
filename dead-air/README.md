@@ -185,6 +185,7 @@ src/shared/            pure logic + configs (ReplicatedStorage.DeadAir)
   MonsterBrain.lua     Listener state machine (pure, tested)
   SoundMath.lua        propagation maths (pure, tested)
   ObjectiveChain.lua   objective progression (pure, tested)
+  ItemModels.lua       procedural 3D model for every item (pickups, thrown items, HUD icons)
 src/server/Services/   MapBuilder, DoorService, HidingService, ItemService, NoiseService,
                        PlayerService, MonsterService, MonsterModel, ObjectiveService,
                        HorrorEventService, RoundService, DataService
@@ -212,6 +213,8 @@ reflection database. It:
 * wires up all services and sets up the objectives;
 * sends real NoiseService events into the Listener's brain: a crouched step 30 studs away
   goes unheard, while a dropped metal object is investigated at an approximate position;
+* builds every item's 3D model and checks the parts are welded, inside the pickup box and
+  don't affect physics or raycasts;
 * initialises every client controller and renders sample state.
 
 Physics, pathfinding, tweens and players are stubbed.

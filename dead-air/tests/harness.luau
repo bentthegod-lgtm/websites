@@ -394,6 +394,31 @@ check("flashlight model builds with a lens that switches on and off", function()
 	assert(lens.Material == roblox.Enum.Material.Glass)
 end)
 
+check("every item has its own welded 3D model", function()
+	local ItemModels = requireModule(Shared.ItemModels)
+	local ItemConfig = requireModule(Shared.Config.ItemConfig)
+	for kind, def in pairs(ItemConfig) do
+		local cf = roblox.CFrame.new(10, 2, -4)
+		local root = ItemModels.build(kind, cf)
+		assert(root.Name == kind and root.Anchored and root.Transparency == 1, kind .. ": bad root")
+		local half = root.Size * 0.5 + roblox.Vector3.new(0.12, 0.12, 0.12)
+		local parts = 0
+		for _, d in ipairs(root:GetChildren()) do
+			if d:IsA("BasePart") then
+				parts += 1
+				assert(not d.CanCollide and not d.CanQuery and d.Massless, kind .. "." .. d.Name .. " would affect physics or raycasts")
+				local weld = d:FindFirstChildOfClass("WeldConstraint")
+				assert(weld and weld.Part0 == root and weld.Part1 == d, kind .. "." .. d.Name .. " is not welded")
+				local offset = cf:PointToObjectSpace(d.CFrame.Position)
+				assert(math.abs(offset.X) <= half.X and math.abs(offset.Y) <= half.Y and math.abs(offset.Z) <= half.Z,
+					kind .. "." .. d.Name .. " sticks out of the pickup box")
+			end
+		end
+		assert(parts >= 4, kind .. ": only " .. parts .. " detail parts")
+		assert((def.Glow ~= nil) == (root:FindFirstChildOfClass("PointLight") ~= nil), kind .. ": glow mismatch")
+	end
+end)
+
 check("scary sound cues build: layered jumpscare and single-asset screech", function()
 	local AudioUtil = requireModule(Shared.AudioUtil)
 	local AudioAssets = requireModule(Shared.Config.AudioAssets)
