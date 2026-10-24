@@ -46,6 +46,8 @@ return {
 	MonsterStep = { Id = BUILTIN_STEP, Volume = 0.9, Pitch = 0.42, MaxDistance = 80 },
 	MonsterVocal = { Id = "rbxassetid://9113985466", Volume = 0.9, Pitch = 0.9, MaxDistance = 160, Duration = 3.5, Fade = 1 },
 	MonsterScreech = { Id = "rbxassetid://9113985604", Volume = 1.6, Pitch = 0.85, MinDistance = 15, MaxDistance = 220, Duration = 3 },
+	-- Second roar, alternated with MonsterScreech every few seconds during a chase.
+	MonsterChaseRoar = { Id = "rbxassetid://9113980319", Volume = 1.6, Pitch = 0.9, MinDistance = 15, MaxDistance = 220, Duration = 3 },
 	MonsterListen = { Id = "rbxassetid://9125475729", Volume = 0.8, Pitch = 0.8, MaxDistance = 45, Duration = 1.5 },
 	MonsterAttack = { Id = "rbxassetid://9043346594", Volume = 1.4, MinDistance = 10, MaxDistance = 90, Duration = 3, Fade = 0.8 },
 
@@ -70,7 +72,7 @@ return {
 	LobbyMusic = { Id = "rbxassetid://134959834418523", Volume = 0.35, Looped = true },
 
 	-- Music layers (2D). Leave empty for a silence-first experience.
-	ChaseLayer = { Id = "rbxassetid://80586845389169", Volume = 0.55, Looped = true },
+	ChaseLayer = { Id = "rbxassetid://80586845389169", Volume = 0.8, Looped = true },
 	TensionLayer = { Id = "rbxassetid://9043359885", Volume = 0.35, Looped = true },
 	Heartbeat = { Id = "rbxassetid://9043365842", Volume = 0.7, Looped = true },
 

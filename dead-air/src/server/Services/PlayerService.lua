@@ -584,11 +584,14 @@ local function tickPlayer(state, dt, now)
 		if state.stepAccum >= stride then
 			state.stepAccum -= stride
 			local surface = surfaceUnder(state)
-			local category = "Footstep" .. gait
-			local surfaceMult = SoundConfig.Surfaces[surface] or SoundConfig.Surfaces.Default
-			-- Moving faster than the server allows (exploit or lag) is extra loud.
-			local overspeed = if speed > PlayerConfig.SprintSpeed + 4 then 1.4 else 1
-			services.NoiseService:emit(category, position, { source = state.player, surfaceMultiplier = surfaceMult, multiplier = overspeed })
+			-- Crouched: the Listener only hears you on metal grating.
+			if not state.crouch or SoundMath.crouchAudible(surface) then
+				local category = "Footstep" .. gait
+				local surfaceMult = SoundConfig.Surfaces[surface] or SoundConfig.Surfaces.Default
+				-- Moving faster than the server allows (exploit or lag) is extra loud.
+				local overspeed = if speed > PlayerConfig.SprintSpeed + 4 then 1.4 else 1
+				services.NoiseService:emit(category, position, { source = state.player, surfaceMultiplier = surfaceMult, multiplier = overspeed })
+			end
 		end
 	else
 		state.stepAccum = 0

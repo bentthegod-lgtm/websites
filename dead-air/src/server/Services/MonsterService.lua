@@ -572,6 +572,7 @@ local function tick(dt, now)
 	if brain.state ~= monster.lastState then
 		if brain.state == MonsterBrain.States.Chase and monster.lastState ~= MonsterBrain.States.Attack then
 			playSound("Screech")
+			monster.nextRoar = now + monster.rng:range(2.6, 3.4)
 			local target = brain.targetId and playerByUserId(brain.targetId)
 			services.Remotes.MonsterCue:FireAllClients("ChaseStart", { targetUserId = brain.targetId, position = monster.root.Position })
 			if target then
@@ -629,6 +630,13 @@ local function tick(dt, now)
 
 	checkStuck(intent, now)
 
+	-- Keeps roaring for the whole chase, alternating two roars, so you always hear it coming.
+	if brain.state == MonsterBrain.States.Chase and now >= (monster.nextRoar or 0) then
+		monster.nextRoar = now + monster.rng:range(3, 4.5)
+		monster.roarToggle = not monster.roarToggle
+		playSound(if monster.roarToggle then "ChaseRoar" else "Screech")
+	end
+
 	-- Occasional distant vocalisation while hunting quietly.
 	if (brain.state == "Patrol" or brain.state == "Search") and now >= monster.nextVocal then
 		monster.nextVocal = now + monster.rng:range(25, 60)
@@ -655,6 +663,7 @@ function MonsterService.spawn(map, mods, rng)
 	local sounds = {
 		Vocal = AudioUtil.cue(AudioAssets.MonsterVocal, head, "SFX"),
 		Screech = AudioUtil.cue(AudioAssets.MonsterScreech, head, "SFX"),
+		ChaseRoar = AudioUtil.cue(AudioAssets.MonsterChaseRoar, head, "SFX"),
 		Listen = AudioUtil.cue(AudioAssets.MonsterListen, head, "SFX"),
 		Attack = AudioUtil.cue(AudioAssets.MonsterAttack, head, "SFX"),
 	}

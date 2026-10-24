@@ -38,10 +38,15 @@ function SoundMath.decay(value, elapsed, halfLife)
 	return value * 0.5 ^ (elapsed / halfLife)
 end
 
--- Classifies movement into a gait for footstep noise. Creeping while crouched (at or below
--- crouch speed) returns nil: it makes no sound. Moving faster while crouched is "CrouchRun".
+-- Classifies movement into a gait for footstep noise. Crouched movement is "Creep" (slow)
+-- or "CrouchRun" (fast); both are silent unless the floor is metal (see crouchAudible).
 -- Fastest a crouched player can move and stay silent: halfway between creeping and
 -- crouch-running, so network jitter on a creeping player never produces a footstep.
+-- Crouched footsteps only make noise on metal grating; carpet, tile and concrete hide them.
+function SoundMath.crouchAudible(surface)
+	return surface == "Metal"
+end
+
 function SoundMath.creepLimit(playerConfig)
 	return (playerConfig.CrouchSpeed + playerConfig.CrouchRunSpeed) / 2
 end
@@ -51,7 +56,7 @@ function SoundMath.gait(speed, playerConfig, crouched)
 		return nil
 	elseif crouched then
 		if speed <= SoundMath.creepLimit(playerConfig) then
-			return nil
+			return "Creep"
 		end
 		return "CrouchRun"
 	elseif speed <= playerConfig.CrouchSpeed + 1.2 then
