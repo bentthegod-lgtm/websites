@@ -495,6 +495,9 @@ check("services initialise and objectives set up on a built map", function()
 			if c.pickup then
 				filled += 1
 				assert(not c.pickup.prompt.Enabled, "an item inside a closed cabinet can be grabbed")
+				if c.layFlat then
+					assert(c.itemShift and c.pickup.closedCFrame, "drawer item cannot ride out with the drawer")
+				end
 			end
 		end
 		hiddenTotal = filled

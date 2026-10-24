@@ -447,7 +447,7 @@ function ItemService.setupContainers(map)
 	for _, container in ipairs(map.containers) do
 		container.open = false
 		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = "Open"
+		prompt.ActionText = container.actionOpen or "Open"
 		prompt.ObjectText = container.label
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
 		prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
@@ -470,10 +470,18 @@ function ItemService.setupContainers(map)
 			task.delay(0.35, function()
 				container.moving = false
 			end)
-			prompt.ActionText = if opening then "Close" else "Open"
+			prompt.ActionText = if opening then (container.actionClose or "Close") else (container.actionOpen or "Open")
+			-- Items in drawers ride out with the drawer.
+			local pickup = container.pickup
+			if pickup and pickup.model and container.itemShift then
+				local goal = if opening then pickup.closedCFrame + container.itemShift else pickup.closedCFrame
+				TweenService:Create(pickup.model, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { CFrame = goal }):Play()
+				pickup.position = goal.Position
+			end
 			setContentsReachable(container, opening)
 			local crouched = services.PlayerService:isCrouching(player)
-			services.NoiseService:emit(if opening then "CabinetOpen" else "CabinetClose", container.position, {
+			local noise = if opening then (container.openNoise or "CabinetOpen") else (container.closeNoise or "CabinetClose")
+			services.NoiseService:emit(noise, container.position, {
 				source = player,
 				multiplier = if crouched then services.SoundConfig.CrouchInteractionMultiplier else 1,
 			})
@@ -498,6 +506,21 @@ function ItemService.hideIn(map, cellIndex, kind, rng)
 	if not pickup then
 		return false
 	end
+	if container.layFlat then
+		-- Lay the item on its side so it fits inside a shallow drawer.
+		local part = pickup.model
+		local rotation = CFrame.new()
+		local height = part.Size.Y
+		if part.Shape == Enum.PartType.Cylinder then
+			height = part.Size.Y -- cylinders lie along X by default
+		elseif part.Size.Y > part.Size.Z then
+			rotation = CFrame.Angles(math.rad(90), 0, 0)
+			height = part.Size.Z
+		end
+		part.CFrame = CFrame.new(container.itemSpot + Vector3.new(0, height / 2, 0)) * rotation
+		pickup.position = part.Position
+	end
+	pickup.closedCFrame = pickup.model.CFrame
 	pickup.container = container
 	container.pickup = pickup
 	setContentsReachable(container, container.open == true)

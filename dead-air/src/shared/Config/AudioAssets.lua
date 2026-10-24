@@ -93,6 +93,9 @@ return {
 	CanClatter = { Id = "rbxassetid://9116612715", Volume = 0.8, MaxDistance = 120 },
 	AlarmClockRing = { Id = "rbxassetid://9113087803", Volume = 0.7, MaxDistance = 120 },
 	CabinetOpen = { Id = "rbxassetid://9120839364", Volume = 0.5, Pitch = 1.3 },
+	-- Wooden drawers sliding out / back in.
+	DrawerOpen = { Id = "rbxassetid://9125756882", Volume = 0.6 },
+	DrawerClose = { Id = "rbxassetid://9125757128", Volume = 0.55, Pitch = 0.9 },
 	CabinetClose = { Id = "rbxassetid://9119129301", Volume = 0.45, Pitch = 1.4 },
 	Locker = { Id = "rbxassetid://9119633070", Volume = 0.6 },
 	CardSwipe = { Id = "rbxassetid://9113722650", Volume = 0.6 },

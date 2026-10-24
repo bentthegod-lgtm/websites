@@ -269,84 +269,192 @@ local function registerContainer(record)
 	table.insert(containerSink, record)
 end
 
--- Two-door cabinet facing the lane. Items are placed on its lower shelf (itemSpot) and are
--- only visible / reachable while the doors are open (ItemService handles the doors).
-local function buildCabinet(parent, cf, spec)
-	local m = model(parent, spec.name)
-	local body = spec.color
-	local w, h, d = spec.w, spec.h, spec.d
-	occluder(newPart(m, { Name = "Back", Size = Vector3.new(w, h, 0.15), CFrame = cf * CFrame.new(0, h / 2, d / 2 - 0.08), Color = body, Material = spec.material }), "Prop")
-	for _, s in ipairs({ -1, 1 }) do
-		occluder(newPart(m, { Name = "Side", Size = Vector3.new(0.15, h, d), CFrame = cf * CFrame.new(s * (w / 2 - 0.08), h / 2, 0), Color = body, Material = spec.material }), "Prop")
+-- Vintage painted furniture (distressed turquoise, like an old shop counter). Fronts face the
+-- lane (local -Z). Items are placed inside by ItemService and are only visible / reachable
+-- while the furniture is open.
+
+local PAINT = rgb(58, 136, 146)
+local PAINT_DARK = rgb(40, 102, 112)
+local PAINT_WORN = rgb(118, 176, 172)
+local BARE_WOOD = rgb(92, 74, 56)
+local PULL = rgb(46, 74, 66)
+
+local function weldTo(base, part)
+	part.Anchored = false
+	part.Massless = true
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = base
+	weld.Part1 = part
+	weld.Parent = part
+end
+
+-- Chipped paint: a few flat patches of bare wood and lighter worn paint on a face.
+local function weather(m, faceCF, width, height, rng, base)
+	for _ = 1, 4 do
+		local patch = newPart(m, {
+			Name = "Wear",
+			Size = Vector3.new(rng:range(0.08, 0.3) * width / 2, rng:range(0.04, 0.12) * height, 0.02),
+			CFrame = faceCF * CFrame.new(rng:range(-0.4, 0.4) * width, rng:range(-0.35, 0.35) * height, -0.01),
+			Color = if rng:chance(0.45) then BARE_WOOD else PAINT_WORN,
+			Material = MAT.Wood,
+			Transparency = 0.35,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		})
+		if base then
+			weldTo(base, patch)
+		end
 	end
-	newPart(m, { Name = "Top", Size = Vector3.new(w, 0.15, d), CFrame = cf * CFrame.new(0, h - 0.08, 0), Color = body:Lerp(Color3.new(0, 0, 0), 0.1), Material = spec.material })
-	newPart(m, { Name = "Bottom", Size = Vector3.new(w, 0.15, d), CFrame = cf * CFrame.new(0, 0.2, 0), Color = body, Material = spec.material })
-	for _, y in ipairs(spec.shelves) do
-		newPart(m, { Name = "Shelf", Size = Vector3.new(w - 0.3, 0.1, d - 0.3), CFrame = cf * CFrame.new(0, y, 0.1), Color = body, Material = spec.material })
+end
+
+local function pullHandle(m, cf, base)
+	local bar = newPart(m, { Name = "Pull", Size = Vector3.new(0.6, 0.1, 0.1), CFrame = cf * CFrame.new(0, 0, -0.14), Color = PULL, Material = MAT.MetalPlain, CanCollide = false })
+	for _, x in ipairs({ -0.26, 0.26 }) do
+		local post = newPart(m, { Name = "PullPost", Size = Vector3.new(0.08, 0.08, 0.14), CFrame = cf * CFrame.new(x, 0, -0.07), Color = PULL, Material = MAT.MetalPlain, CanCollide = false })
+		if base then
+			weldTo(base, post)
+		end
 	end
-	-- Dim interior so the shelf contents read when the doors swing open.
-	newPart(m, { Name = "Interior", Size = Vector3.new(w - 0.32, h - 0.4, 0.05), CFrame = cf * CFrame.new(0, h / 2, d / 2 - 0.2), Color = body:Lerp(Color3.new(0, 0, 0), 0.45), Material = MAT.Smooth, CanCollide = false })
+	if base then
+		weldTo(base, bar)
+	end
+end
+
+-- Low vintage chest with four drawers (2 x 2). Opening slides all four out; the item rides
+-- out in one of them.
+function Props.storageCabinet(parent, cf, rng)
+	local m = model(parent, "DrawerChest")
+	local w, d = 5.2, 2.6
+	local legH, bodyH = 0.5, 2.1
+	local top = legH + bodyH
+	for _, x in ipairs({ -1, 1 }) do
+		for _, z in ipairs({ -1, 1 }) do
+			newPart(m, { Name = "Leg", Size = Vector3.new(0.45, legH + 0.1, 0.45), CFrame = cf * CFrame.new(x * (w / 2 - 0.25), legH / 2, z * (d / 2 - 0.25)), Color = PAINT_DARK, Material = MAT.Wood })
+		end
+	end
+	occluder(newPart(m, { Name = "Carcass", Size = Vector3.new(w, bodyH, d - 0.25), CFrame = cf * CFrame.new(0, legH + bodyH / 2, 0.12), Color = PAINT, Material = MAT.Wood }), "Prop")
+	-- Thick worn top with a slight overhang.
+	newPart(m, { Name = "Top", Size = Vector3.new(w + 0.3, 0.22, d + 0.25), CFrame = cf * CFrame.new(0, top + 0.11, 0), Color = rgb(96, 120, 116), Material = MAT.Wood })
+	-- Face frame: rails and the centre stile between the drawers.
+	local faceZ = -d / 2 + 0.06
+	newPart(m, { Name = "Stile", Size = Vector3.new(0.22, bodyH, 0.14), CFrame = cf * CFrame.new(0, legH + bodyH / 2, faceZ), Color = PAINT_DARK, Material = MAT.Wood })
+	newPart(m, { Name = "Rail", Size = Vector3.new(w, 0.16, 0.14), CFrame = cf * CFrame.new(0, legH + bodyH / 2, faceZ), Color = PAINT_DARK, Material = MAT.Wood })
+	newPart(m, { Name = "Apron", Size = Vector3.new(w, 0.22, 0.16), CFrame = cf * CFrame.new(0, legH + 0.11, faceZ), Color = PAINT_DARK, Material = MAT.Wood })
+	weather(m, cf * CFrame.new(0, top - 0.3, faceZ - 0.08), w, 0.3, rng)
+
+	local dw, dh, dd = w / 2 - 0.25, bodyH / 2 - 0.22, d - 0.5
+	local slide = 1.5
+	local parts = {}
+	local drawers = {}
+	for row = 0, 1 do
+		for col = -1, 1, 2 do
+			local y = legH + 0.25 + dh / 2 + row * (dh + 0.2)
+			local frontCF = cf * CFrame.new(col * (w / 4), y, faceZ - 0.02)
+			local front = newPart(m, { Name = "DrawerFront", Size = Vector3.new(dw, dh, 0.16), CFrame = frontCF, Color = PAINT, Material = MAT.Wood })
+			occluder(front, "Door")
+			-- Drawer box behind the front (moves with it).
+			local boxCF = frontCF * CFrame.new(0, -dh / 2 + 0.08, dd / 2)
+			local bottom = newPart(m, { Name = "DrawerBottom", Size = Vector3.new(dw - 0.15, 0.08, dd), CFrame = boxCF, Color = BARE_WOOD, Material = MAT.Wood, CanCollide = false })
+			weldTo(front, bottom)
+			for _, sx in ipairs({ -1, 1 }) do
+				local side = newPart(m, { Name = "DrawerSide", Size = Vector3.new(0.08, dh - 0.15, dd), CFrame = frontCF * CFrame.new(sx * (dw / 2 - 0.12), -0.05, dd / 2), Color = BARE_WOOD, Material = MAT.Wood, CanCollide = false })
+				weldTo(front, side)
+			end
+			pullHandle(m, frontCF * CFrame.new(0, 0.05, 0), front)
+			weather(m, frontCF * CFrame.new(0, 0, -0.09), dw, dh, rng, front)
+			table.insert(parts, { part = front, closedCFrame = frontCF, openCFrame = frontCF * CFrame.new(0, 0, -slide) })
+			table.insert(drawers, boxCF)
+		end
+	end
+	local promptPart = newPart(m, { Name = "PromptAnchor", Size = Vector3.new(1, 1, 1), CFrame = cf * CFrame.new(0, legH + bodyH / 2, -d / 2 - 0.5), Transparency = 1, CanCollide = false, CanQuery = false })
+	local chosen = rng:pick(drawers)
+	registerContainer({
+		label = "Drawer Chest",
+		openNoise = "DrawerOpen",
+		closeNoise = "DrawerClose",
+		actionOpen = "Open drawers",
+		actionClose = "Close drawers",
+		parts = parts,
+		promptPart = promptPart,
+		itemSpot = (chosen * CFrame.new(0, 0.05, 0)).Position,
+		-- The item rides out with its drawer and lies flat to fit.
+		itemShift = (cf * CFrame.new(0, 0, -slide)).Position - cf.Position,
+		layFlat = true,
+	})
+	return (cf * CFrame.new(1.4, top + 0.22, 0)).Position
+end
+
+-- Tall vintage sideboard: a row of small (decorative) drawers over two doors you open by hand.
+function Props.tallCabinet(parent, cf, rng)
+	local m = model(parent, "Sideboard")
+	local w, h, d = 4.6, 5.2, 2.2
+	local legH = 0.45
+	for _, x in ipairs({ -1, 1 }) do
+		for _, z in ipairs({ -1, 1 }) do
+			newPart(m, { Name = "Leg", Size = Vector3.new(0.4, legH + 0.1, 0.4), CFrame = cf * CFrame.new(x * (w / 2 - 0.22), legH / 2, z * (d / 2 - 0.22)), Color = PAINT_DARK, Material = MAT.Wood })
+		end
+	end
+	local bodyH = h - legH
+	local function body(name, size, offset, color)
+		return occluder(newPart(m, { Name = name, Size = size, CFrame = cf * offset, Color = color or PAINT, Material = MAT.Wood }), "Prop")
+	end
+	body("Back", Vector3.new(w, bodyH, 0.15), CFrame.new(0, legH + bodyH / 2, d / 2 - 0.08))
+	for _, sx in ipairs({ -1, 1 }) do
+		body("Side", Vector3.new(0.15, bodyH, d), CFrame.new(sx * (w / 2 - 0.08), legH + bodyH / 2, 0))
+	end
+	newPart(m, { Name = "Top", Size = Vector3.new(w + 0.25, 0.2, d + 0.2), CFrame = cf * CFrame.new(0, h + 0.1, 0), Color = rgb(96, 120, 116), Material = MAT.Wood })
+	newPart(m, { Name = "Bottom", Size = Vector3.new(w, 0.15, d), CFrame = cf * CFrame.new(0, legH + 0.08, 0), Color = PAINT_DARK, Material = MAT.Wood })
+	-- Dark interior so the shelf contents read when the doors open.
+	newPart(m, { Name = "Interior", Size = Vector3.new(w - 0.32, bodyH - 1.3, 0.05), CFrame = cf * CFrame.new(0, legH + (bodyH - 1.1) / 2, d / 2 - 0.2), Color = rgb(52, 40, 30), Material = MAT.Wood, CanCollide = false })
+	local shelfY = legH + 1.9
+	newPart(m, { Name = "Shelf", Size = Vector3.new(w - 0.3, 0.1, d - 0.3), CFrame = cf * CFrame.new(0, shelfY, 0.1), Color = BARE_WOOD, Material = MAT.Wood })
+	-- Top row of four small drawers (decorative).
+	local faceZ = -d / 2 + 0.06
+	local rowY = h - 0.55
+	newPart(m, { Name = "DrawerRow", Size = Vector3.new(w, 1.1, 0.12), CFrame = cf * CFrame.new(0, rowY, faceZ), Color = PAINT_DARK, Material = MAT.Wood })
+	for k = 0, 3 do
+		local x = -w / 2 + w / 8 + k * (w / 4)
+		local frontCF = cf * CFrame.new(x, rowY, faceZ - 0.08)
+		newPart(m, { Name = "SmallDrawer", Size = Vector3.new(w / 4 - 0.15, 0.8, 0.1), CFrame = frontCF, Color = PAINT, Material = MAT.Wood })
+		pullHandle(m, frontCF * CFrame.new(0, 0, 0.04))
+	end
+	weather(m, cf * CFrame.new(0, rowY, faceZ - 0.14), w, 0.8, rng)
+	-- Two doors below.
+	local doorH = bodyH - 1.35
 	local doors = {}
-	for _, s in ipairs({ -1, 1 }) do
-		local hinge = cf * CFrame.new(s * (w / 2 - 0.05), h / 2, -d / 2 + 0.05)
+	for _, sx in ipairs({ -1, 1 }) do
+		local hinge = cf * CFrame.new(sx * (w / 2 - 0.05), legH + 0.15 + doorH / 2, -d / 2 + 0.05)
+		-- Doors meet in the middle so nothing on the shelf shows through the seam.
 		local door = newPart(m, {
 			Name = "Door",
-			Size = Vector3.new(w / 2 - 0.1, h - 0.35, 0.12),
-			CFrame = hinge * CFrame.new(-s * (w / 4 - 0.05), 0.05, 0),
-			Color = spec.doorColor,
-			Material = spec.material,
+			Size = Vector3.new(w / 2 - 0.06, doorH + 0.15, 0.12),
+			CFrame = hinge * CFrame.new(-sx * (w / 4 - 0.02), 0.07, 0),
+			Color = PAINT,
+			Material = MAT.Wood,
 		})
 		occluder(door, "Door")
-		local handle = newPart(m, { Name = "Handle", Size = Vector3.new(0.08, 0.5, 0.12), CFrame = hinge * CFrame.new(-s * (w / 2 - 0.35), 0.05, -0.1), Color = rgb(60, 58, 52), CanCollide = false })
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = door
-		weld.Part1 = handle
-		weld.Parent = handle
-		handle.Anchored = false
-		handle.Massless = true
+		-- Raised panel and a vertical pull near the centre seam.
+		local panel = newPart(m, { Name = "Panel", Size = Vector3.new(w / 2 - 0.6, doorH - 0.6, 0.06), CFrame = door.CFrame * CFrame.new(0, 0, -0.08), Color = PAINT_DARK, Material = MAT.Wood, CanCollide = false })
+		weldTo(door, panel)
+		local pull = newPart(m, { Name = "Pull", Size = Vector3.new(0.1, 0.55, 0.1), CFrame = hinge * CFrame.new(-sx * (w / 2 - 0.3), 0, -0.14), Color = PULL, Material = MAT.MetalPlain, CanCollide = false })
+		weldTo(door, pull)
+		weather(m, door.CFrame * CFrame.new(0, 0, -0.07), w / 2 - 0.1, doorH, rng, door)
 		local offset = hinge:ToObjectSpace(door.CFrame)
-		table.insert(doors, { part = door, closedCFrame = door.CFrame, openCFrame = hinge * CFrame.Angles(0, math.rad(s * 105), 0) * offset })
+		table.insert(doors, { part = door, closedCFrame = door.CFrame, openCFrame = hinge * CFrame.Angles(0, math.rad(sx * 105), 0) * offset })
 	end
-	local promptPart = newPart(m, { Name = "PromptAnchor", Size = Vector3.new(1, 1, 1), CFrame = cf * CFrame.new(0, math.min(h / 2, 3), -d / 2 - 0.4), Transparency = 1, CanCollide = false, CanQuery = false })
+	local promptPart = newPart(m, { Name = "PromptAnchor", Size = Vector3.new(1, 1, 1), CFrame = cf * CFrame.new(0, 2.6, -d / 2 - 0.4), Transparency = 1, CanCollide = false, CanQuery = false })
 	registerContainer({
-		label = spec.label,
+		label = "Sideboard",
+		openNoise = "CabinetOpen",
+		closeNoise = "CabinetClose",
+		actionOpen = "Open",
+		actionClose = "Close",
 		parts = doors,
 		promptPart = promptPart,
-		itemSpot = (cf * CFrame.new(0, spec.itemY, 0.05)).Position,
+		itemSpot = (cf * CFrame.new(0, shelfY + 0.05, 0.05)).Position,
 	})
-	return (cf * CFrame.new(0.8, h, 0)).Position
-end
-
--- Waist-high wooden storage cabinet.
-function Props.storageCabinet(parent, cf)
-	return buildCabinet(parent, cf, {
-		name = "StorageCabinet",
-		label = "Storage Cabinet",
-		w = 4,
-		h = 3,
-		d = 2,
-		shelves = { 1.6 },
-		itemY = 0.3,
-		color = rgb(132, 122, 100),
-		doorColor = rgb(146, 134, 108),
-		material = MAT.Wood,
-	})
-end
-
--- Tall grey metal supply cupboard (item on the middle shelf, at eye level).
-function Props.tallCabinet(parent, cf)
-	return buildCabinet(parent, cf, {
-		name = "SupplyCupboard",
-		label = "Supply Cupboard",
-		w = 3.2,
-		h = 6.5,
-		d = 2,
-		shelves = { 2.3, 4.4 },
-		itemY = 2.4,
-		color = rgb(112, 118, 112),
-		doorColor = rgb(124, 130, 122),
-		material = MAT.MetalPlain,
-	})
+	return (cf * CFrame.new(0.8, h + 0.2, 0)).Position
 end
 
 function Props.desk(parent, cf, rng)
