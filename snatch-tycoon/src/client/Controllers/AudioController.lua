@@ -32,10 +32,16 @@ function AudioController.play(key, position)
 	sound.PlaybackSpeed = (def.Pitch or 1) * (0.95 + math.random() * 0.1)
 	local holder
 	if typeof(position) == "Vector3" then
-		holder = Instance.new("Attachment")
+		holder = Instance.new("Part")
 		holder.Name = "SfxAt"
-		holder.Parent = workspace.Terrain
-		holder.WorldPosition = position
+		holder.Anchored = true
+		holder.CanCollide = false
+		holder.CanQuery = false
+		holder.CanTouch = false
+		holder.Transparency = 1
+		holder.Size = Vector3.new(0.2, 0.2, 0.2)
+		holder.CFrame = CFrame.new(position)
+		holder.Parent = workspace
 		sound.RollOffMaxDistance = 120
 		sound.Parent = holder
 	else

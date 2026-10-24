@@ -97,9 +97,9 @@ end
 
 local function pointerPosition()
 	local last = UserInputService:GetLastInputType()
-	local camera = workspace.CurrentCamera
-	if last and last.Name:sub(1, 7) == "Gamepad" and camera then
-		return camera.ViewportSize * 0.5
+	local size = Ui.viewportSize()
+	if last and last.Name:sub(1, 7) == "Gamepad" and size then
+		return size * 0.5
 	end
 	return UserInputService:GetMouseLocation()
 end
@@ -295,9 +295,9 @@ function PlotController.init()
 			dragging = true
 			lastDragIndex = target and target.index
 		elseif input.KeyCode == Enum.KeyCode.ButtonR2 then
-			local camera = workspace.CurrentCamera
-			if camera then
-				PlotController.act(targetAt(camera.ViewportSize * 0.5), false)
+			local size = Ui.viewportSize()
+			if size then
+				PlotController.act(targetAt(size * 0.5), false)
 			end
 		end
 	end)

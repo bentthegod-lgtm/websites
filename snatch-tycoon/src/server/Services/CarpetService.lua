@@ -138,7 +138,7 @@ function CarpetService.buy(player, walker)
 		return false
 	end
 	local root = walker.built.root
-	if (hrp.Position - root.Position).Magnitude > GameConfig.BuyDistance then
+	if (hrp.CFrame.Position - root.CFrame.Position).Magnitude > GameConfig.BuyDistance then
 		return false
 	end
 	if not services.BlobbyService.freeSlot(player) then
@@ -152,7 +152,7 @@ function CarpetService.buy(player, walker)
 		return false
 	end
 	walker.sold = true
-	local from = Vector3.new(root.Position.X, 0.3, root.Position.Z)
+	local from = Vector3.new(root.CFrame.Position.X, 0.3, root.CFrame.Position.Z)
 	removeWalker(walker)
 	services.BlobbyService.add(player, walker.species.Id, walker.mutation, { from = from, source = "carpet" })
 	data.Stats.Bought += 1

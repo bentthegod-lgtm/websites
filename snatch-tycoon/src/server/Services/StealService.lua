@@ -86,7 +86,7 @@ local function canSteal(thief, rec)
 		return false, "Your base is full! Sell a Blobby first."
 	end
 	local hrp = rootOf(thief)
-	if not hrp or (hrp.Position - rec.built.root.Position).Magnitude > S.PromptDistance + 6 then
+	if not hrp or (hrp.CFrame.Position - rec.built.root.CFrame.Position).Magnitude > S.PromptDistance + 6 then
 		return false, nil
 	end
 	return true
@@ -124,7 +124,7 @@ function StealService.tryGrab(thief, rec)
 	rec.built.model:SetAttribute("CarrierId", thief.UserId)
 	-- Sit on the thief's head, facing the same way.
 	root.Anchored = false
-	root.CFrame = hrp.CFrame * CFrame.new(0, (head.Position.Y - hrp.Position.Y) + head.Size.Y / 2 + 0.3, 0)
+	root.CFrame = hrp.CFrame * CFrame.new(0, (head.CFrame.Position.Y - hrp.CFrame.Position.Y) + head.Size.Y / 2 + 0.3, 0)
 	local weld = Instance.new("WeldConstraint")
 	weld.Name = "CarryWeld"
 	weld.Part0 = hrp
@@ -186,9 +186,9 @@ function StealService.drop(thief, reason, slapper)
 	if not rec.built or not services.BlobbyService.get(rec.uid) then
 		return true
 	end
-	local from = if hrp then Vector3.new(hrp.Position.X, 0.3, hrp.Position.Z) else rec.built.root.Position
-	if hrp and services.PlotService.insidePlot(carry.fromPlot, hrp.Position) then
-		from = Vector3.new(hrp.Position.X, 1, hrp.Position.Z)
+	local from = if hrp then Vector3.new(hrp.CFrame.Position.X, 0.3, hrp.CFrame.Position.Z) else rec.built.root.CFrame.Position
+	if hrp and services.PlotService.insidePlot(carry.fromPlot, hrp.CFrame.Position) then
+		from = Vector3.new(hrp.CFrame.Position.X, 1, hrp.CFrame.Position.Z)
 	end
 	services.BlobbyService.walkHome(rec, from, S.ReturnSpeed, "Returning")
 	services.BlobbyService.refresh(rec)
@@ -235,7 +235,7 @@ local function deliver(thief, carry)
 	local victim = rec.owner
 	local name = describe(rec)
 	local color = rarityColor(rec)
-	local from = if hrp then Vector3.new(hrp.Position.X, 1, hrp.Position.Z) else nil
+	local from = if hrp then Vector3.new(hrp.CFrame.Position.X, 1, hrp.CFrame.Position.Z) else nil
 	services.BlobbyService.transfer(rec, thief, from)
 	local thiefData = services.DataService.getProfile(thief)
 	if thiefData then
@@ -265,7 +265,7 @@ function StealService.step()
 			StealService.drop(thief, "timeout")
 		else
 			local home = services.PlotService.plotIndexOf(thief)
-			if home and services.PlotService.insidePlot(home, hrp.Position) then
+			if home and services.PlotService.insidePlot(home, hrp.CFrame.Position) then
 				deliver(thief, carry)
 			end
 		end
@@ -289,7 +289,7 @@ function StealService.slap(slapper)
 		if other ~= slapper then
 			local root = rootOf(other)
 			if root then
-				local dist = (root.Position - myRoot.Position).Magnitude
+				local dist = (root.CFrame.Position - myRoot.CFrame.Position).Magnitude
 				if dist <= GameConfig.Slap.Range then
 					local score = dist - (if carries[other] then 100 else 0)
 					if not bestScore or score < bestScore then
@@ -300,15 +300,15 @@ function StealService.slap(slapper)
 		end
 	end
 	if not best then
-		services.Remotes.SlapFx:FireAllClients(myRoot.Position, myRoot.Position + myRoot.CFrame.LookVector * 4, false)
+		services.Remotes.SlapFx:FireAllClients(myRoot.CFrame.Position, myRoot.CFrame.Position + myRoot.CFrame.LookVector * 4, false)
 		return false
 	end
 	local targetRoot = rootOf(best)
-	local dir = targetRoot.Position - myRoot.Position
+	local dir = targetRoot.CFrame.Position - myRoot.CFrame.Position
 	dir = Vector3.new(dir.X, 0, dir.Z)
 	dir = if dir.Magnitude > 0.01 then dir.Unit else myRoot.CFrame.LookVector
 	services.Remotes.Knockback:FireClient(best, dir * GameConfig.Slap.Knockback + Vector3.new(0, 38, 0))
-	services.Remotes.SlapFx:FireAllClients(myRoot.Position, targetRoot.Position, true)
+	services.Remotes.SlapFx:FireAllClients(myRoot.CFrame.Position, targetRoot.CFrame.Position, true)
 	stunnedUntil[best] = now + S.StunAfterSlap
 	local data = services.DataService.getProfile(slapper)
 	if data then

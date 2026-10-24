@@ -34,7 +34,9 @@ function PlayerService.teleport(player, cf)
 	if not root then
 		return false
 	end
-	root.AssemblyLinearVelocity = Vector3.zero
+	pcall(function()
+		root.AssemblyLinearVelocity = Vector3.zero
+	end)
 	root.CFrame = cf
 	return true
 end

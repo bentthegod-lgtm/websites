@@ -46,10 +46,10 @@ local function sideButton(text, color, order, parent)
 end
 
 function HudController.coinTarget()
-	if coinPill then
+	local ok, pos = pcall(function()
 		return coinPill.AbsolutePosition + coinPill.AbsoluteSize * 0.5
-	end
-	return Vector2.new(0, 0)
+	end)
+	return if ok and pos then pos else Vector2.new(575, 36)
 end
 
 function HudController.gui()
@@ -116,7 +116,7 @@ function HudController.announce(text, color)
 	local banner = Ui.new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, -80),
-		Size = UDim2.fromOffset(680, 54),
+		Size = UDim2.fromOffset(580, 54),
 		BackgroundColor3 = c,
 		Parent = bannerHolder,
 	})
@@ -169,10 +169,11 @@ local function build()
 	gui = Ui.screen("SproutHUD", 2)
 
 	-- Travel buttons (top left)
-	local travel = Ui.new("Frame", { Position = UDim2.fromOffset(12, 12), Size = UDim2.fromOffset(440, 46), BackgroundTransparency = 1, Parent = gui })
+	-- Below Roblox's own top-bar buttons.
+	local travel = Ui.new("Frame", { Position = UDim2.fromOffset(12, 64), Size = UDim2.fromOffset(360, 46), BackgroundTransparency = 1, Parent = gui })
 	Ui.list(travel, 8, Enum.FillDirection.Horizontal)
 	for i, dest in ipairs({ { "Garden", "GARDEN", C.Green }, { "Seeds", "SEEDS", Color3.fromRGB(150, 205, 70) }, { "Gear", "GEAR", C.Sky }, { "Sell", "SELL", C.Orange } }) do
-		local b = Ui.button(dest[2], { Size = UDim2.fromOffset(100, 44), TextSize = 18, LayoutOrder = i, Parent = travel }, dest[3])
+		local b = Ui.button(dest[2], { Size = UDim2.fromOffset(84, 44), TextSize = 16, LayoutOrder = i, Parent = travel }, dest[3])
 		b.Activated:Connect(function()
 			Net.event("Travel"):FireServer(dest[1])
 		end)
@@ -187,11 +188,13 @@ local function build()
 	bagLabel = Ui.title("Bag 0/60", { Size = UDim2.fromScale(1, 1), TextSize = 20, Parent = bagPill })
 
 	-- Restock + weather (top right)
-	local right = Ui.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(250, 96), BackgroundTransparency = 1, Parent = gui })
+	local right = Ui.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 64), Size = UDim2.fromOffset(250, 96), BackgroundTransparency = 1, Parent = gui })
 	local restockPill = pill(right, { Size = UDim2.fromOffset(250, 44) }, Color3.fromRGB(235, 250, 220))
-	restockLabel = Ui.title("Seeds restock 5:00", { Size = UDim2.fromScale(1, 1), TextSize = 19, TextColor3 = C.GreenDark, Parent = restockPill })
+	restockLabel = Ui.title("Seeds restock 5:00", { Size = UDim2.new(1, -12, 1, 0), Position = UDim2.fromOffset(6, 0), TextScaled = true, TextColor3 = C.GreenDark, Parent = restockPill })
+	Ui.new("UITextSizeConstraint", { MaxTextSize = 19, Parent = restockLabel })
 	weatherPill = pill(right, { Position = UDim2.fromOffset(0, 50), Size = UDim2.fromOffset(250, 44) }, Color3.fromRGB(225, 240, 255))
-	weatherLabel = Ui.title("Clear skies", { Size = UDim2.fromScale(1, 1), TextSize = 18, TextColor3 = Color3.fromRGB(60, 110, 170), Parent = weatherPill })
+	weatherLabel = Ui.title("Clear skies", { Size = UDim2.new(1, -12, 1, 0), Position = UDim2.fromOffset(6, 0), TextScaled = true, TextColor3 = Color3.fromRGB(60, 110, 170), Parent = weatherPill })
+	Ui.new("UITextSizeConstraint", { MaxTextSize = 18, Parent = weatherLabel })
 
 	-- Side menu (left)
 	local side = Ui.new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(84, 300), BackgroundTransparency = 1, Parent = gui })
@@ -215,19 +218,20 @@ local function build()
 	inviteButton.Activated:Connect(invite)
 
 	-- Goals (right middle)
-	goalsFrame = Ui.panel({ AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 10), Size = UDim2.fromOffset(250, 40), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 0.1, Parent = gui })
+	goalsFrame = Ui.panel({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 226), Size = UDim2.fromOffset(250, 40), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 0.1, Parent = gui })
 	Ui.padding(goalsFrame, 10, 8)
 	Ui.list(goalsFrame, 6)
 
 	-- Expand (bottom right)
-	expandButton = Ui.button("EXPAND GARDEN", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -110), Size = UDim2.fromOffset(240, 52), TextSize = 18, Visible = false, Parent = gui }, C.Orange)
+	-- Top right (not bottom right, where the mobile jump button lives).
+	expandButton = Ui.button("EXPAND GARDEN", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 166), Size = UDim2.fromOffset(250, 48), TextSize = 16, Visible = false, Parent = gui }, C.Orange)
 	expandButton.Activated:Connect(function()
 		Net.event("ExpandPlot"):FireServer()
 	end)
 
 	toastHolder = Ui.new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -118), Size = UDim2.fromOffset(700, 200), BackgroundTransparency = 1, Parent = gui })
 	Ui.list(toastHolder, 6, Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Bottom)
-	bannerHolder = Ui.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.fromOffset(700, 200), BackgroundTransparency = 1, ClipsDescendants = false, Parent = gui })
+	bannerHolder = Ui.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.fromOffset(600, 200), BackgroundTransparency = 1, ClipsDescendants = false, Parent = gui })
 end
 
 local function renderGoals(goals)

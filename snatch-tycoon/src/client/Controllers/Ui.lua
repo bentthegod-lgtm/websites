@@ -41,6 +41,9 @@ function Ui.rgb(t)
 	return Color3.fromRGB(t[1], t[2], t[3])
 end
 
+-- Option keys used by the helpers below; never assigned as instance properties.
+local OPTION_KEYS = { Parent = true, FillColor = true, StrokeThickness = true, Radius = true }
+
 function Ui.new(className, props, children)
 	local instance = Instance.new(className)
 	if className == "Frame" or className == "TextLabel" or className == "TextButton" or className == "ScrollingFrame" or className == "ImageLabel" or className == "TextBox" or className == "ViewportFrame" then
@@ -53,7 +56,7 @@ function Ui.new(className, props, children)
 		instance.TextSize = 18
 	end
 	for key, value in pairs(props or {}) do
-		if key ~= "Parent" then
+		if not OPTION_KEYS[key] then
 			instance[key] = value
 		end
 	end
@@ -208,8 +211,10 @@ function Ui.autoScale(screenGui)
 		if not camera then
 			return
 		end
-		local size = camera.ViewportSize
-		if size.X <= 1 or size.Y <= 1 then
+		local ok, size = pcall(function()
+			return camera.ViewportSize
+		end)
+		if not ok or size.X <= 1 or size.Y <= 1 then
 			return
 		end
 		scale.Scale = math.clamp(math.min(size.X / 1280, size.Y / 760), 0.55, 1.2)

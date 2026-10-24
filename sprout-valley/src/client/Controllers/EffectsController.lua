@@ -126,8 +126,8 @@ function EffectsController.coinShower(amount)
 	end
 	local scale = Ui.scaleOf(hud)
 	local target = HudController.coinTarget() / scale
-	local camera = workspace.CurrentCamera
-	local centre = (if camera then camera.ViewportSize * 0.5 else Vector2.new(500, 300)) / scale
+	local size = Ui.viewportSize()
+	local centre = (if size and size.X > 0 then size * 0.5 else Vector2.new(575, 340)) / scale
 	local n = math.clamp(math.floor(math.log10(math.max(amount, 1)) * 3), 4, 16)
 	for i = 1, n do
 		local start = centre + Vector2.new(math.random(-120, 120), math.random(-60, 60))

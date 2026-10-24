@@ -180,7 +180,7 @@ function EventService.collectCoin(player, coin)
 		return 0
 	end
 	coins[coin] = nil
-	local position = coin.Position
+	local position = coin.CFrame.Position
 	coin:Destroy()
 	local amount = EventService.coinValue(player)
 	services.PlayerService.addCash(player, amount)

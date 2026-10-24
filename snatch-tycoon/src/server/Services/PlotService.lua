@@ -199,7 +199,7 @@ local function onLocked(index)
 		if other ~= owner then
 			local character = other.Character
 			local hrp = character and character:FindFirstChild("HumanoidRootPart")
-			if hrp and PlotService.insidePlot(index, hrp.Position) then
+			if hrp and PlotService.insidePlot(index, hrp.CFrame.Position) then
 				local carry = services.StealService.carryOf(other)
 				if carry and carry.fromPlot == index then
 					services.StealService.drop(other, "laser")

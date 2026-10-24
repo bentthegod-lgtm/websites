@@ -358,7 +358,7 @@ function BlobbyService.sell(player, uid)
 		return false
 	end
 	local value = Economy.sellValue(BlobbyService.priceOf(rec.species.Id, rec.mutation), GameConfig.SellRefund)
-	local position = rec.built.root.Position
+	local position = rec.built.root.CFrame.Position
 	local pending = math.floor(rec.pending)
 	BlobbyService.remove(uid)
 	services.PlayerService.addCash(player, value + pending)
@@ -394,7 +394,7 @@ function BlobbyService.collect(player, slot)
 			local pedestal = pedestalOf(rec)
 			if pedestal then
 				pedestal.cashLabel.Text = ""
-				services.Remotes.Popup:FireClient(player, "Cash", { amount = amount, position = pedestal.pad.Position })
+				services.Remotes.Popup:FireClient(player, "Cash", { amount = amount, position = pedestal.pad.CFrame.Position })
 			end
 			services.Remotes.Sfx:FireClient(player, "CollectCash")
 			return amount

@@ -186,6 +186,18 @@ function Ui.click()
 	end
 end
 
+-- Camera viewport size, or nil when there is no camera yet.
+function Ui.viewportSize()
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return nil
+	end
+	local ok, size = pcall(function()
+		return camera.ViewportSize
+	end)
+	return if ok then size else nil
+end
+
 function Ui.screen(name, displayOrder)
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local gui = Ui.new("ScreenGui", {
@@ -198,8 +210,7 @@ function Ui.screen(name, displayOrder)
 	})
 	local scale = Ui.new("UIScale", { Parent = gui })
 	local function update()
-		local camera = workspace.CurrentCamera
-		local size = camera and camera.ViewportSize
+		local size = Ui.viewportSize()
 		if size and size.X > 0 then
 			scale.Scale = math.clamp(math.min(size.X / 1150, size.Y / 680), 0.5, 1.2)
 		end
