@@ -276,7 +276,7 @@ function LobbyBuilder.build()
 	board(folder, facing(eastX, 6.5, -12, 0, -12), Vector2.new(11, 6.5), "1. SOUND",
 		"Crouched, it can't hear your feet - unless you're on METAL.\nCrouch + Shift moves faster, same rule.\nSprinting and metal floors carry far. Throw bottles, cans or alarm clocks (G) to lure it.")
 	board(folder, facing(eastX, 6.5, 0, 0, 0), Vector2.new(11, 6.5), "2. HIDING",
-		"Search cabinets and drawers (hold E) for keycards, fuses and lures - many are empty.\nLockers hide you, they do not save you.\nIf it saw you get in, it will check.\nCatch your breath first - it hears panting.")
+		"Open cabinets (E) and look inside for keycards, fuses and lures - many are empty.\nLockers hide you, they do not save you.\nIf it saw you get in, it will check.\nCatch your breath first - it hears panting.")
 	board(folder, facing(eastX, 6.5, 12, 0, 12), Vector2.new(11, 6.5), "3. TEAMWORK",
 		"Downed teammates can be revived (hold E).\nThe elevator alarm draws it in.\nNobody escapes if nobody waits.")
 

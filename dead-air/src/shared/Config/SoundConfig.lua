@@ -36,8 +36,8 @@ return {
 		LockerExit = { Loudness = 0.28, Radius = 20 },
 		PropKnock = { Loudness = 0.70, Radius = 52 },
 		Pickup = { Loudness = 0.12, Radius = 10 },
-		DrawerOpen = { Loudness = 0.3, Radius = 26 },
 		CabinetOpen = { Loudness = 0.32, Radius = 26 },
+		CabinetClose = { Loudness = 0.3, Radius = 24 },
 
 		-- Objective noises
 		KeycardSwipe = { Loudness = 0.35, Radius = 28 },

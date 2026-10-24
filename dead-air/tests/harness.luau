@@ -479,7 +479,7 @@ check("services initialise and objectives set up on a built map", function()
 		end
 		assert(locked == 3, "expected 3 locked special doors, got " .. locked)
 		local function total(kind)
-			return registry.ItemService.countWorld(kind) + registry.ItemService.countHidden(map, kind)
+			return registry.ItemService.countWorld(kind)
 		end
 		local fuses = total(if chainName == "PowerGrid" then "Fuse" else "FuelCan")
 		local needed = if chainName == "PowerGrid" then 3 else 2
@@ -492,8 +492,9 @@ check("services initialise and objectives set up on a built map", function()
 		-- Lots of furniture to search, most of it empty, and most loot hidden inside.
 		local filled, hiddenTotal = 0, 0
 		for _, c in ipairs(map.containers) do
-			if c.contents then
+			if c.pickup then
 				filled += 1
+				assert(not c.pickup.prompt.Enabled, "an item inside a closed cabinet can be grabbed")
 			end
 		end
 		hiddenTotal = filled

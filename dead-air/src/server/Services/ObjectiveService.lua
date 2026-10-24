@@ -74,7 +74,29 @@ end
 ---------------------------------------------------------------------------------------------
 
 local function placeItems(map, rng, kind, count, used)
-	local cells = MazeGen.pickItemCells(map.layout, rng, count, used, 2)
+	-- Prefer rooms that still have an empty cabinet; fall back to any room.
+	local noCabinet = table.clone(used)
+	for index in ipairs(map.layout.cells) do
+		local hasFree = false
+		for _, container in ipairs(map.containersByCell[index] or {}) do
+			if not container.pickup then
+				hasFree = true
+			end
+		end
+		if not hasFree then
+			noCabinet[index] = true
+		end
+	end
+	local cells = MazeGen.pickItemCells(map.layout, rng, count, noCabinet, 2)
+	if #cells < count then
+		local taken = table.clone(used)
+		for _, cell in ipairs(cells) do
+			taken[cell.index] = true
+		end
+		for _, cell in ipairs(MazeGen.pickItemCells(map.layout, rng, count - #cells, taken, 2)) do
+			table.insert(cells, cell)
+		end
+	end
 	for _, cell in ipairs(cells) do
 		used[cell.index] = true
 		-- Hidden inside a cabinet/drawer when the room has one; otherwise left out in the open.

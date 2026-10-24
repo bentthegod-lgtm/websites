@@ -173,8 +173,13 @@ function ItemService.spawn(kind, position)
 	prompt.MaxActivationDistance = 7
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = part
+	pickup.prompt = prompt
 	prompt.Triggered:Connect(function(player)
 		if not pickup.model then
+			return
+		end
+		-- Items inside a cabinet can only be taken while its doors are open.
+		if pickup.container and not pickup.container.open then
 			return
 		end
 		if not services.PlayerService:canInteract(player, part.Position) then
@@ -193,6 +198,10 @@ function ItemService.spawn(kind, position)
 			services.Remotes.Notify:FireClient(player, "Picked up " .. def.DisplayName, "info")
 		end
 		removePickup(pickup)
+		if pickup.container then
+			pickup.container.pickup = nil
+			pickup.container = nil
+		end
 		if state.roundStats then
 			state.roundStats.items += 1
 		end
@@ -416,71 +425,68 @@ function ItemService.throw(player, direction, slot)
 end
 
 ---------------------------------------------------------------------------------------------
--- Searchable containers
+-- Cabinets
 ---------------------------------------------------------------------------------------------
 
-local SEARCH_TIME = 0.8
+-- Shows or hides a cabinet's contents: items can only be seen glowing and picked up while
+-- the doors are open.
+local function setContentsReachable(container, open)
+	local pickup = container.pickup
+	if pickup and pickup.model then
+		pickup.prompt.Enabled = open
+		local light = pickup.model:FindFirstChildOfClass("PointLight")
+		if light then
+			light.Enabled = open
+		end
+	end
+end
 
--- Wires up "Search" prompts on every cabinet / drawer MapBuilder created. ObjectiveService
--- decides what (if anything) is inside each one by setting container.contents.
+-- Wires up Open/Close prompts on every cabinet MapBuilder created.
 function ItemService.setupContainers(map)
 	local TweenService = game:GetService("TweenService")
 	for _, container in ipairs(map.containers) do
+		container.open = false
 		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = "Search"
+		prompt.ActionText = "Open"
 		prompt.ObjectText = container.label
-		prompt.HoldDuration = SEARCH_TIME
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
 		prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
 		prompt.MaxActivationDistance = 7
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = container.promptPart
-		local holdStart = {}
-		prompt.PromptButtonHoldBegan:Connect(function(player)
-			holdStart[player] = os.clock()
-		end)
-		prompt.PromptButtonHoldEnded:Connect(function(player)
-			holdStart[player] = nil
-		end)
+		container.prompt = prompt
 		prompt.Triggered:Connect(function(player)
-			local began = holdStart[player]
-			holdStart[player] = nil
-			-- The hold time is enforced here, not just by the client prompt.
-			if container.opened or not began or os.clock() - began < SEARCH_TIME * 0.8 then
+			if container.moving or not services.PlayerService:canInteract(player, container.promptPart.Position) then
 				return
 			end
-			if not services.PlayerService:canInteract(player, container.promptPart.Position) then
-				return
-			end
-			container.opened = true
-			prompt.Enabled = false
+			local opening = not container.open
+			container.open = opening
+			container.moving = true
 			for _, piece in ipairs(container.parts) do
-				TweenService:Create(piece.part, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { CFrame = piece.openCFrame }):Play()
+				TweenService:Create(piece.part, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {
+					CFrame = if opening then piece.openCFrame else piece.closedCFrame,
+				}):Play()
 			end
+			task.delay(0.35, function()
+				container.moving = false
+			end)
+			prompt.ActionText = if opening then "Close" else "Open"
+			setContentsReachable(container, opening)
 			local crouched = services.PlayerService:isCrouching(player)
-			services.NoiseService:emit(container.noise, container.position, {
+			services.NoiseService:emit(if opening then "CabinetOpen" else "CabinetClose", container.position, {
 				source = player,
 				multiplier = if crouched then services.SoundConfig.CrouchInteractionMultiplier else 1,
 			})
-			if container.contents then
-				local kind = container.contents
-				container.contents = nil
-				task.delay(0.3, function()
-					ItemService.spawn(kind, container.itemSpot)
-				end)
-				services.Remotes.Notify:FireClient(player, "Found: " .. ItemConfig[kind].DisplayName, "info")
-			else
-				services.Remotes.Notify:FireClient(player, "Empty.", "info")
-			end
 		end)
 	end
 end
 
--- Hides an item in a random unused container in the given cell. Returns false if none.
+-- Places an item on the shelf of a random empty cabinet in the given cell (hidden behind
+-- the closed doors). Returns false if the cell has no free cabinet.
 function ItemService.hideIn(map, cellIndex, kind, rng)
 	local free = {}
 	for _, container in ipairs(map.containersByCell[cellIndex] or {}) do
-		if not container.contents and not container.opened then
+		if not container.pickup then
 			table.insert(free, container)
 		end
 	end
@@ -488,19 +494,14 @@ function ItemService.hideIn(map, cellIndex, kind, rng)
 	if not container then
 		return false
 	end
-	container.contents = kind
-	return true
-end
-
--- How many of an item kind are still hidden (unopened) in containers.
-function ItemService.countHidden(map, kind)
-	local n = 0
-	for _, container in ipairs(map.containers) do
-		if container.contents == kind then
-			n += 1
-		end
+	local pickup = ItemService.spawn(kind, container.itemSpot)
+	if not pickup then
+		return false
 	end
-	return n
+	pickup.container = container
+	container.pickup = pickup
+	setContentsReachable(container, container.open == true)
+	return true
 end
 
 function ItemService.markEscapedWithItems(player)
