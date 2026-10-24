@@ -127,6 +127,12 @@ function WorldController.updateDoors()
 		if blocker and blocker:GetAttribute("OwnerId") == player.UserId and blocker.CanCollide then
 			blocker.CanCollide = false
 		end
+		-- only the owner sees their lock console prompt
+		local button = plot:FindFirstChild("LockButton")
+		local prompt = button and button:FindFirstChild("LockPrompt")
+		if prompt then
+			prompt.Enabled = plot:GetAttribute("OwnerId") == player.UserId
+		end
 	end
 end
 

@@ -235,6 +235,12 @@ local stubServices = {
 	GuiService = stubObject("GuiService"),
 	StarterGui = stubObject("StarterGui"),
 	SocialService = stubObject("SocialService"),
+	PolicyService = stubObject("PolicyService", {
+		GetPolicyInfoForPlayerAsync = function(_, player)
+			-- Carol (user 3) lives somewhere paid random items are restricted.
+			return { ArePaidRandomItemsRestricted = player.UserId == 3 }
+		end,
+	}),
 }
 
 local game = setmetatable({}, {
@@ -1017,6 +1023,12 @@ check("offline earnings: returning player gets capped income", function()
 	assert(math.abs(msg.args[2].amount - expected) <= ips * 2, "offline amount " .. msg.args[2].amount .. " vs " .. expected)
 	assert(S.DataService.getProfile(Cp).Daily, "reconciled missing fields")
 	assert(S.PlotService.plotIndexOf(Cp) == 3)
+	-- paid random items are hidden / refused where policy restricts them
+	assert(not S.ShopService.randomItemsAllowed(Cp) and S.ShopService.randomItemsAllowed(A), "policy check")
+	assert(S.PlayerService.snapshot(Cp).randomItemsAllowed == false)
+	local promptedBefore = #prompted
+	S.ShopService.requestProduct(Cp, "MythicCrate")
+	assert(#prompted == promptedBefore, "crate prompted for a restricted player")
 end)
 
 check("leaving saves the profile and frees the plot", function()

@@ -36,6 +36,7 @@ local eventsFrame, goalsFrame
 local lockButton, slapButton, dropButton
 local carryBanner, carryText, alarmFrame, alarmText
 local menuButtons = {}
+local goalsCollapsed = false
 local shownCash = 0
 local lastSlapPress = 0
 
@@ -208,8 +209,9 @@ local function buildMenu()
 	local column = Ui.new("Frame", {
 		Name = "Menu",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 12, 0.5, 0),
-		Size = UDim2.new(0, 140, 0, 380),
+		-- a bit below centre so it clears the chat window in the top-left corner
+		Position = UDim2.new(0, 12, 0.5, 40),
+		Size = UDim2.new(0, 140, 0, 420),
 		BackgroundTransparency = 1,
 		Parent = gui,
 	})
@@ -243,10 +245,11 @@ local function buildMenu()
 end
 
 local function buildRight()
+	-- Starts below the top-right corner, where Roblox shows the player list.
 	eventsFrame = Ui.new("Frame", {
 		Name = "Events",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 60),
+		Position = UDim2.new(1, -12, 0.27, 0),
 		Size = UDim2.new(0, 270, 0, 150),
 		BackgroundTransparency = 1,
 		Parent = gui,
@@ -256,13 +259,21 @@ local function buildRight()
 	goalsFrame = Ui.panel({
 		Name = "Goals",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 220),
+		Position = UDim2.new(1, -12, 0.27, 160),
 		Size = UDim2.new(0, 270, 0, 196),
 		BackgroundTransparency = 0.2,
+		ClipsDescendants = true,
 		Parent = gui,
 	})
 	Ui.padding(goalsFrame, 8)
 	Ui.list(goalsFrame, 6)
+	-- Phones: goals start collapsed so they don't cover the action buttons; tap to open.
+	goalsCollapsed = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
+
+function HudController.toggleGoals()
+	goalsCollapsed = not goalsCollapsed
+	goalsFrame.Size = UDim2.new(0, 270, 0, if goalsCollapsed then 40 else 196)
 end
 
 local function buildActions()
@@ -332,13 +343,20 @@ end
 -- Render
 ---------------------------------------------------------------------------------------------
 
-local function renderGoals(profile)
+local renderGoals
+function renderGoals(profile)
 	for _, child in ipairs(goalsFrame:GetChildren()) do
 		if child:IsA("Frame") or child:IsA("TextLabel") then
 			child:Destroy()
 		end
 	end
-	Ui.label("GOALS", { Font = Ui.Fonts.Title, Size = UDim2.new(1, 0, 0, 22), TextScaled = true, TextColor3 = C.Accent, LayoutOrder = 0, Parent = goalsFrame })
+	local header = Ui.new("TextButton", { Text = if goalsCollapsed then "GOALS  +" else "GOALS  -", Font = Ui.Fonts.Title, Size = UDim2.new(1, 0, 0, 22), TextScaled = true, TextColor3 = C.Accent, LayoutOrder = 0, Parent = goalsFrame })
+	Ui.textStroke(header, 2)
+	header.Activated:Connect(function()
+		HudController.toggleGoals()
+		renderGoals(profile)
+	end)
+	goalsFrame.Size = UDim2.new(0, 270, 0, if goalsCollapsed then 40 else 196)
 	for i, goal in ipairs(profile.goals or {}) do
 		local row = Ui.new("Frame", { Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1, LayoutOrder = i, Parent = goalsFrame })
 		Ui.label(goal.text, { Size = UDim2.new(0.72, 0, 0, 22), TextScaled = true, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })

@@ -264,6 +264,7 @@ function PlayerService.snapshot(player)
 		friends = if sessions[player] then sessions[player].friends else 0,
 		plotIndex = services.PlotService.plotIndexOf(player),
 		codesUsed = data.Codes,
+		randomItemsAllowed = services.ShopService.randomItemsAllowed(player),
 	}
 end
 
@@ -383,6 +384,7 @@ function PlayerService.tick(dt)
 			end
 			PlayerService.sendTick(player, ips)
 			PlayerService.updateLeaderstats(player, ips)
+			PlayerService.updateNameplate(player)
 		end
 	end
 end

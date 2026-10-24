@@ -19,6 +19,7 @@
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
+local PolicyService = game:GetService("PolicyService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -34,6 +35,7 @@ local services
 local productsByKey, productsById = {}, {}
 local passesByKey, passesById = {}, {}
 local owned = {} -- [player] = { [passKey] = true }
+local randomItemsRestricted = {} -- [player] = true when paid random items are not allowed
 local lastRequest = {}
 local rng = Random.new()
 
@@ -90,6 +92,19 @@ local function loadPasses(player)
 			end
 		end
 	end
+end
+
+-- Paid random items (the Mythic Crate) must be hidden for players whose region/policy
+-- restricts them. If the policy check fails we err on the safe side and hide it.
+local function loadPolicy(player)
+	local ok, info = pcall(function()
+		return PolicyService:GetPolicyInfoForPlayerAsync(player)
+	end)
+	randomItemsRestricted[player] = not ok or type(info) ~= "table" or info.ArePaidRandomItemsRestricted == true
+end
+
+function ShopService.randomItemsAllowed(player)
+	return randomItemsRestricted[player] ~= true
 end
 
 ---------------------------------------------------------------------------------------------
@@ -200,6 +215,9 @@ end
 
 -- Validation before prompting, so players aren't charged for something useless right now.
 local function canBuyProduct(player, product)
+	if product.Kind == "Crate" and not ShopService.randomItemsAllowed(player) then
+		return false, "The Mythic Crate isn't available for your account."
+	end
 	if product.Kind == "Crate" and not services.BlobbyService.freeSlot(player) then
 		return false, "Free up a pedestal first - the crate Blobby needs a spot!"
 	end
@@ -279,6 +297,7 @@ function ShopService.start()
 		end
 	end)
 	services.DataService.ProfileLoaded:Connect(function(player)
+		loadPolicy(player)
 		loadPasses(player)
 		services.PlotService.applySlots(player)
 		services.PlayerService.updateNameplate(player)
@@ -286,6 +305,7 @@ function ShopService.start()
 	services.DataService.Releasing:Connect(function(player)
 		owned[player] = nil
 		lastRequest[player] = nil
+		randomItemsRestricted[player] = nil
 	end)
 	services.Remotes.ShopBuy.OnServerEvent:Connect(ShopService.requestProduct)
 	services.Remotes.PassBuy.OnServerEvent:Connect(ShopService.requestPass)

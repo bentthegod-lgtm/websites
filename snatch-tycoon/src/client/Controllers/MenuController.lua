@@ -202,7 +202,8 @@ local function renderShop(profile)
 	else
 		for _, product in ipairs(ShopConfig.Products) do
 			local isCash = product.Kind == "Cash"
-			if (shopTab == "Cash") == isCash then
+			local hidden = product.Kind == "Crate" and profile ~= nil and profile.randomItemsAllowed == false
+			if (shopTab == "Cash") == isCash and not hidden then
 				order += 1
 				local extra
 				if isCash then
