@@ -3,7 +3,6 @@
 	end-of-round coin payouts.
 ]]
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("ReboundRumble")
@@ -153,6 +152,12 @@ local function limited(player, gap)
 	return false
 end
 
+-- Called by DataService on PlayerRemoving, before the leave save.
+function RewardService.onPlayerRemoving(player)
+	session[player] = nil
+	lastRequest[player] = nil
+end
+
 function RewardService.start()
 	local remotes = services.Remotes
 	remotes.ClaimDaily.OnServerEvent:Connect(function(player)
@@ -182,10 +187,6 @@ function RewardService.start()
 		services.DataService.addCoins(player, ProgressionConfig.InviteBonus)
 		remotes.Notify:FireClient(player, string.format("Thanks for inviting friends! +%d coins", ProgressionConfig.InviteBonus), "good")
 		services.DataService.sendProfile(player)
-	end)
-	Players.PlayerRemoving:Connect(function(player)
-		session[player] = nil
-		lastRequest[player] = nil
 	end)
 end
 

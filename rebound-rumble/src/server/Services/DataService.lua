@@ -3,7 +3,10 @@
 	DataStores are unavailable (Studio without API access, outages).
 
 	* Versioned defaults + migration (SchemaVersion in GameConfig).
-	* Autosave of dirty profiles, save on leave and on BindToClose.
+	* Autosave every GameConfig.AutosaveInterval, save on leave and on BindToClose.
+	* Session lock (data.Lock): a server only writes a profile it holds the lock for, so a
+	  quick rejoin on another server waits for the old server's leave save instead of
+	  loading stale data, and a stale server can't overwrite newer progress.
 	* leaderstats: Wins, Streak, Coins.
 ]]
 
@@ -23,6 +26,15 @@ local DataService = {}
 local services
 local profiles = {}
 local store
+
+-- A lock older than this belongs to a server that crashed (autosave refreshes it).
+local LOCK_STALE = GameConfig.AutosaveInterval * 3
+local LOAD_ATTEMPTS = 6
+
+-- Per-player cleanup that must run before the (yielding) leave save. MatchService goes
+-- first: eliminating a leaver can end the round and pay rewards (which read ShopService's
+-- pass cache and RewardService's session), and that progress belongs in the leave save.
+local REMOVING_ORDER = { "MatchService", "AbilityService", "CosmeticService", "RewardService", "ShopService" }
 
 local SETTINGS_SCHEMA = {
 	Music = { 0, 1, 0.5 },
@@ -236,27 +248,60 @@ local function key(player)
 	return "player_" .. player.UserId
 end
 
+local function newSession()
+	local ok, jobId = pcall(function()
+		return game.JobId
+	end)
+	return string.format("%s:%d:%d", if ok then tostring(jobId) else "", os.time(), math.random(1, 2 ^ 30))
+end
+
 function DataService.load(player)
 	local data
 	local persistent = false
+	local session = newSession()
 	if store then
-		for attempt = 1, 3 do
+		for attempt = 1, LOAD_ATTEMPTS do
+			local locked = false
 			local ok, result = pcall(function()
-				return store:GetAsync(key(player))
+				return store:UpdateAsync(key(player), function(old)
+					local lock = type(old) == "table" and old.Lock
+					-- Another server still holds the profile (leave save in flight): wait for it.
+					-- After the last attempt the lock is taken over; the other server's writes are then refused.
+					if type(lock) == "table" and lock.Session ~= session and os.time() - (tonumber(lock.At) or 0) < LOCK_STALE and attempt < LOAD_ATTEMPTS then
+						locked = true
+						return nil
+					end
+					local value = if type(old) == "table" then old else {}
+					value.Lock = { Session = session, At = os.time() }
+					return value
+				end)
 			end)
-			if ok then
+			if ok and not locked then
 				data = result
 				persistent = true
 				break
 			end
-			warn(string.format("[ReboundRumble] Profile load failed for %s (attempt %d): %s", player.Name, attempt, tostring(result)))
-			task.wait(1.5 * attempt)
+			if not ok then
+				warn(string.format("[ReboundRumble] Profile load failed for %s (attempt %d): %s", player.Name, attempt, tostring(result)))
+			end
+			if attempt < LOAD_ATTEMPTS then
+				task.wait(math.min(1.5 * attempt, 5))
+			end
+			if not player.Parent then
+				return
+			end
 		end
 	end
 	if not player.Parent then
+		if persistent then
+			-- Left while loading: give the lock back so their next join isn't delayed.
+			profiles[player] = { data = DataService.reconcile(data), persistent = true, dirty = false, session = session, leaving = true }
+			DataService.save(player)
+			DataService.release(player)
+		end
 		return
 	end
-	profiles[player] = { data = DataService.reconcile(data), persistent = persistent, dirty = false }
+	profiles[player] = { data = DataService.reconcile(data), persistent = persistent, dirty = false, session = session }
 	if services.ShopService then
 		services.ShopService.refreshPasses(player)
 	end
@@ -275,17 +320,50 @@ function DataService.save(player)
 	if not entry or not entry.persistent or not store then
 		return false
 	end
+	if entry.released then
+		return true -- the leave save already wrote and unlocked this profile
+	end
 	local data = entry.data
-	local ok, err = pcall(function()
-		store:UpdateAsync(key(player), function()
-			return data
+	local ok, err, lost
+	-- The leave / shutdown save is the last chance to persist, so it retries.
+	local attempts = if entry.leaving then 3 else 1
+	for attempt = 1, attempts do
+		lost = false
+		ok, err = pcall(function()
+			store:UpdateAsync(key(player), function(old)
+				local lock = type(old) == "table" and old.Lock
+				if type(lock) ~= "table" or lock.Session ~= entry.session then
+					-- No lock: our own leave save already released it. Otherwise another server owns it.
+					lost = not (entry.leaving and lock == nil)
+					return nil
+				end
+				data.Lock = if entry.leaving then nil else { Session = entry.session, At = os.time() }
+				return data
+			end)
 		end)
-	end)
-	if not ok then
+		if ok then
+			break
+		end
 		warn("[ReboundRumble] Profile save failed for " .. player.Name .. ": " .. tostring(err))
+		if attempt < attempts then
+			task.wait(1)
+		end
+	end
+	if ok and lost then
+		-- Another server took this profile over: stop writing (and stop granting purchases).
+		warn("[ReboundRumble] Profile for " .. player.Name .. " is locked by another server; not saving")
+		entry.persistent = false
+		return false
+	end
+	if ok and entry.leaving then
+		entry.released = true
 	end
 	entry.dirty = not ok
 	return ok
+end
+
+function DataService.release(player)
+	profiles[player] = nil
 end
 
 local function sanitizeSettings(incoming)
@@ -330,22 +408,47 @@ function DataService.start()
 		task.spawn(DataService.load, player)
 	end
 	Players.PlayerRemoving:Connect(function(player)
-		DataService.save(player)
-		profiles[player] = nil
+		local entry = profiles[player]
+		if entry then
+			entry.leaving = true
+		end
+		-- Cleanup that doesn't need the save runs first (and any progress it records, such as
+		-- a round that ends because this player left, makes it into the leave save).
 		lastSettingsSave[player] = nil
+		for _, name in ipairs(REMOVING_ORDER) do
+			local service = services[name]
+			if service and service.onPlayerRemoving then
+				local ok, err = pcall(service.onPlayerRemoving, player)
+				if not ok then
+					warn("[ReboundRumble] " .. name .. ".onPlayerRemoving failed: " .. tostring(err))
+				end
+			end
+		end
+		-- Then save (retries) and unlock.
+		DataService.save(player)
+		DataService.release(player)
 	end)
 	game:BindToClose(function()
-		for _, player in ipairs(Players:GetPlayers()) do
-			DataService.save(player)
+		-- Save everyone in parallel (sequential saves can run past the shutdown limit).
+		local pending = 0
+		for player, entry in pairs(profiles) do
+			entry.leaving = true
+			pending += 1
+			task.spawn(function()
+				DataService.save(player)
+				pending -= 1
+			end)
+		end
+		while pending > 0 do
+			task.wait(0.1)
 		end
 	end)
 	task.spawn(function()
 		while true do
 			task.wait(GameConfig.AutosaveInterval)
-			for player, entry in pairs(profiles) do
-				if entry.dirty then
-					DataService.save(player)
-				end
+			-- Every profile is saved (not just dirty ones) so the session lock stays fresh.
+			for player in pairs(profiles) do
+				task.spawn(DataService.save, player)
 			end
 		end
 	end)

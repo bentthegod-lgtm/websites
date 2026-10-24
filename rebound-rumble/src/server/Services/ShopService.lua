@@ -217,6 +217,12 @@ local function rateLimited(player)
 	return false
 end
 
+-- Called by DataService on PlayerRemoving, before the leave save.
+function ShopService.onPlayerRemoving(player)
+	lastRequest[player] = nil
+	passCache[player] = nil
+end
+
 function ShopService.start()
 	MarketplaceService.ProcessReceipt = ShopService.processReceipt
 
@@ -271,11 +277,6 @@ function ShopService.start()
 			services.Remotes.Notify:FireClient(player, "Thanks! " .. pass.Name .. " unlocked.", "good")
 			services.DataService.sendProfile(player)
 		end
-	end)
-
-	Players.PlayerRemoving:Connect(function(player)
-		lastRequest[player] = nil
-		passCache[player] = nil
 	end)
 end
 

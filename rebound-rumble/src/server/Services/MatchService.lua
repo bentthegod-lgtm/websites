@@ -34,6 +34,7 @@ local roundStartedAt = 0
 local roundNumber = 0
 local ready = {}
 local lastReadyToggle = {}
+local lastStateRequest = {}
 
 local L = GameConfig.Lobby
 
@@ -595,6 +596,17 @@ function MatchService.setReady(player, value)
 	MatchService.broadcastState()
 end
 
+-- Called by DataService on PlayerRemoving, before the leave save.
+function MatchService.onPlayerRemoving(player)
+	lastStateRequest[player] = nil
+	local c = MatchService.forPlayer(player)
+	if c then
+		MatchService.eliminate(c, nil, "left")
+	end
+	ready[player] = nil
+	lastReadyToggle[player] = nil
+end
+
 function MatchService.start()
 	local remotes = services.Remotes
 	remotes.SetReady.OnServerEvent:Connect(function(player, value)
@@ -605,7 +617,6 @@ function MatchService.start()
 		lastReadyToggle[player] = now
 		MatchService.setReady(player, value)
 	end)
-	local lastStateRequest = {}
 	remotes.RequestState.OnServerEvent:Connect(function(player)
 		local now = os.clock()
 		if lastStateRequest[player] and now - lastStateRequest[player] < 2 then
@@ -622,15 +633,6 @@ function MatchService.start()
 	for _, player in ipairs(Players:GetPlayers()) do
 		MatchService.playerAdded(player)
 	end
-	Players.PlayerRemoving:Connect(function(player)
-		lastStateRequest[player] = nil
-		local c = MatchService.forPlayer(player)
-		if c then
-			MatchService.eliminate(c, nil, "left")
-		end
-		ready[player] = nil
-		lastReadyToggle[player] = nil
-	end)
 	task.spawn(function()
 		while true do
 			task.wait(1)

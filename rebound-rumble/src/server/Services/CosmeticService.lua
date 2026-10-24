@@ -3,7 +3,6 @@
 	All rolls happen on the server; the client only plays the reveal animation.
 ]]
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("ReboundRumble")
@@ -119,6 +118,11 @@ function CosmeticService.equip(player, category, id)
 	return true
 end
 
+-- Called by DataService on PlayerRemoving, before the leave save.
+function CosmeticService.onPlayerRemoving(player)
+	lastOpen[player] = nil
+end
+
 function CosmeticService.start()
 	services.Remotes.OpenCrate.OnServerEvent:Connect(function(player, crateKey)
 		local now = os.clock()
@@ -138,9 +142,6 @@ function CosmeticService.start()
 		if CosmeticService.equip(player, category, id) then
 			services.DataService.sendProfile(player)
 		end
-	end)
-	Players.PlayerRemoving:Connect(function(player)
-		lastOpen[player] = nil
 	end)
 end
 

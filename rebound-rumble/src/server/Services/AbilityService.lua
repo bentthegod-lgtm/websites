@@ -7,7 +7,6 @@
 	other players (Freeze, Swap, Shield) runs entirely on the server.
 ]]
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("ReboundRumble")
@@ -170,6 +169,12 @@ function AbilityService.use(player, slot, moveDir)
 	return true
 end
 
+-- Called by DataService on PlayerRemoving, before the leave save.
+function AbilityService.onPlayerRemoving(player)
+	readyAt[player] = nil
+	lastUse[player] = nil
+end
+
 function AbilityService.start()
 	local remotes = services.Remotes
 	remotes.UseAbility.OnServerEvent:Connect(function(player, slot, moveDir)
@@ -194,10 +199,6 @@ function AbilityService.start()
 			remotes.Notify:FireClient(player, message, "warn")
 		end
 		services.DataService.sendProfile(player)
-	end)
-	Players.PlayerRemoving:Connect(function(player)
-		readyAt[player] = nil
-		lastUse[player] = nil
 	end)
 end
 

@@ -872,6 +872,135 @@ check("eliminated players respawn into the lobby as spectators until the round e
 	assert(alice:GetAttribute("RR_Status") == "Lobby")
 end)
 
+check("session lock: a fresh lock blocks a second server, a stale lock is taken over", function()
+	local Enum = roblox.Enum
+	local stored = {}
+	local onUpdate -- optional hook run inside UpdateAsync (simulates events during the call)
+	local function copy(v)
+		if type(v) ~= "table" then
+			return v
+		end
+		local t = {}
+		for k, x in pairs(v) do
+			t[k] = copy(x)
+		end
+		return t
+	end
+	local fakeStore = {
+		UpdateAsync = function(_, k, fn)
+			if onUpdate then
+				onUpdate(k)
+			end
+			local new = fn(copy(stored[k]))
+			if new ~= nil then
+				stored[k] = copy(new)
+			end
+			return copy(new)
+		end,
+	}
+	-- Joins on a coroutine: DataService's retry wait parks it (task.wait yields here), so
+	-- the test resumes each load attempt by hand.
+	local function joinAsync(userId, name)
+		local co = coroutine.create(makePlayer)
+		assert(coroutine.resume(co, userId, name))
+		return co
+	end
+	local function playerById(userId)
+		return fakePlayers:GetPlayerByUserId(userId)
+	end
+	local otherLock = function()
+		return { Session = "other-server", At = os.time() }
+	end
+	stubServices.DataStoreService.GetDataStore = function()
+		return fakeStore
+	end
+	DS.init(registry)
+	local ok, err = pcall(function()
+		-- 1. Profile held by another live server (its leave save is still in flight): the load
+		--    waits instead of reading stale data, and never overwrites the other server's lock.
+		stored.player_301 = { Coins = 10, Lock = otherLock() }
+		local co = joinAsync(301, "Carol")
+		local carol = playerById(301)
+		assert(coroutine.status(co) == "suspended" and DS.getProfile(carol) == nil, "loaded a profile locked by a fresh session")
+		assert(stored.player_301.Lock.Session == "other-server" and stored.player_301.Coins == 10, "second server overwrote a locked profile")
+		assert(coroutine.resume(co))
+		assert(DS.getProfile(carol) == nil and stored.player_301.Lock.Session == "other-server", "lock ignored on retry")
+		-- The other server's leave save lands (newer data, lock cleared): the next attempt loads it.
+		stored.player_301 = { Coins = 321 }
+		assert(coroutine.resume(co))
+		assert(coroutine.status(co) == "dead", "load still waiting after the lock was released")
+		assert(DS.isPersistent(carol) and DS.getProfile(carol).Coins == 321, "released profile not loaded")
+		local mine = stored.player_301.Lock
+		assert(type(mine) == "table" and mine.Session ~= "other-server", "profile not locked on load")
+		DS.getProfile(carol).Coins = 400
+		assert(DS.save(carol) and stored.player_301.Coins == 400 and stored.player_301.Lock.Session == mine.Session, "autosave failed")
+
+		-- 2. Another server takes the profile over: this server stops writing it, and receipts
+		--    are retried (ShopService's save + isPersistent contract) instead of granted.
+		stored.player_301.Lock = otherLock()
+		DS.getProfile(carol).Coins = 1
+		assert(not DS.save(carol), "saved over another server's lock")
+		assert(stored.player_301.Coins == 400 and not DS.isPersistent(carol), "taken-over profile still persistent")
+		DS.getProfile(carol).Coins = 400
+		harnessIsStudio = false
+		local okReceipt, decision = pcall(registry.ShopService.processReceipt, { PlayerId = 301, ProductId = 111, PurchaseId = "lock-1" })
+		harnessIsStudio = true
+		assert(okReceipt, decision)
+		assert(decision == Enum.ProductPurchaseDecision.NotProcessedYet, "granted after losing the lock")
+		assert(DS.getProfile(carol).Coins == 400 and DS.getProfile(carol).Receipts["lock-1"] == nil)
+		removePlayer(carol)
+		assert(stored.player_301.Coins == 400 and stored.player_301.Lock.Session == "other-server", "leave save overwrote the new owner")
+		assert(DS.getProfile(carol) == nil, "profile not released on leave")
+
+		-- 3. A crashed server's stale lock is taken over immediately; leaving saves and unlocks.
+		stored.player_302 = { Coins = 55, Lock = { Session = "crashed", At = os.time() - 100000 } }
+		co = joinAsync(302, "Dave")
+		local dave = playerById(302)
+		assert(coroutine.status(co) == "dead" and DS.isPersistent(dave) and DS.getProfile(dave).Coins == 55, "stale lock blocked the load")
+		assert(stored.player_302.Lock.Session ~= "crashed", "stale lock not replaced")
+		DS.getProfile(dave).Coins = 99
+		removePlayer(dave)
+		assert(stored.player_302.Coins == 99 and stored.player_302.Lock == nil, "leave save did not persist and unlock")
+
+		-- 4. A fresh lock that is never released is taken over on the last load attempt.
+		stored.player_303 = { Coins = 7, Lock = otherLock() }
+		co = joinAsync(303, "Erin")
+		local erin = playerById(303)
+		local waits = 0
+		while coroutine.status(co) == "suspended" do
+			waits += 1
+			assert(waits < 20, "load never gave up waiting")
+			stored.player_303.Lock = otherLock()
+			assert(coroutine.resume(co))
+		end
+		assert(waits == 5 and DS.isPersistent(erin) and DS.getProfile(erin).Coins == 7, "last-attempt takeover failed")
+		assert(stored.player_303.Lock.Session ~= "other-server")
+		removePlayer(erin)
+		assert(stored.player_303.Lock == nil)
+
+		-- 5. Leaving mid-load (after the lock was taken) gives the lock back.
+		stored.player_304 = { Coins = 12 }
+		onUpdate = function(k)
+			if k == "player_304" then
+				onUpdate = nil
+				playerById(304).Parent = nil
+			end
+		end
+		co = joinAsync(304, "Finn")
+		local finn = playerById(304)
+		assert(coroutine.status(co) == "dead" and DS.getProfile(finn) == nil, "left player kept a profile")
+		assert(stored.player_304.Coins == 12 and stored.player_304.Lock == nil, "mid-load leave kept the lock")
+		removePlayer(finn)
+	end)
+	onUpdate = nil
+	harnessIsStudio = true
+	stubServices.DataStoreService.GetDataStore = function()
+		error("DataStores are not available in the harness")
+	end
+	DS.init(registry)
+	assert(ok, err)
+end)
+
 ---------------------------------------------------------------------------------------------
 -- Client UI
 ---------------------------------------------------------------------------------------------
