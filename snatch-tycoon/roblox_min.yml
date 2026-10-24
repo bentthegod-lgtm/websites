@@ -1,0 +1,34 @@
+# Minimal Roblox globals for selene (the full generated std needs a download the
+# sandbox can't make). Engine APIs are typed as "any"; Luau builtins come from base.
+base: luau
+name: roblox_min
+globals:
+  game: { any: true }
+  workspace: { any: true }
+  script: { any: true }
+  Enum: { any: true }
+  Instance: { any: true }
+  Vector3: { any: true }
+  Vector2: { any: true }
+  CFrame: { any: true }
+  Color3: { any: true }
+  ColorSequence: { any: true }
+  ColorSequenceKeypoint: { any: true }
+  NumberSequence: { any: true }
+  NumberSequenceKeypoint: { any: true }
+  NumberRange: { any: true }
+  UDim: { any: true }
+  UDim2: { any: true }
+  TweenInfo: { any: true }
+  RaycastParams: { any: true }
+  OverlapParams: { any: true }
+  Random: { any: true }
+  Rect: { any: true }
+  Font: { any: true }
+  PhysicalProperties: { any: true }
+  typeof: { any: true }
+  tick: { any: true }
+  task: { any: true }
+  warn: { any: true }
+  DateTime: { any: true }
+  utf8: { any: true }

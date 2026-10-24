@@ -1,0 +1,57 @@
+{
+  "name": "SproutValley",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "SproutValley": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "SproutValleyServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 20,
+        "CharacterJumpPower": 50,
+        "CameraMaxZoomDistance": 90,
+        "CameraMinZoomDistance": 6
+      },
+      "StarterPlayerScripts": {
+        "SproutValleyClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 2.4,
+        "ClockTime": 14.5,
+        "EnvironmentDiffuseScale": 0.6,
+        "EnvironmentSpecularScale": 0.4
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}

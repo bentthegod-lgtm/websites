@@ -1,0 +1,56 @@
+{
+  "name": "ReboundRumble",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "ReboundRumble": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "ReboundRumbleServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 20,
+        "CharacterJumpPower": 50,
+        "CameraMaxZoomDistance": 40,
+        "CameraMinZoomDistance": 6
+      },
+      "StarterPlayerScripts": {
+        "ReboundRumbleClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true,
+        "RespawnTime": 2.5
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 2.2,
+        "ClockTime": 14.5
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
