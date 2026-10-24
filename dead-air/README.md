@@ -98,21 +98,19 @@ Until a ProductId is set, Buy grants that boost for free in Studio (for testing)
 Purchases are handled through `ProcessReceipt`. Each purchase ID is saved with the profile
 before the purchase is confirmed, so a purchase is never granted twice.
 
-## Content maturity (all ages)
+## Content maturity (13+)
 
-The game is made to be suitable for all ages:
+The game is aimed at players aged **13 and up**:
 
-* no blood, gore, weapons, swearing or realistic violence; being caught just ends your run
-  ("CAUGHT"), and teammates can revive you;
-* the catch scare is gentle: the creature leans in at arm's length with a soft sting and a
-  fade to black. There's no screaming, no red strobe and no face-filling lunge;
-* the lore notes are spooky but have no violent content.
+* there's no blood, gore, weapons or swearing;
+* it has intense horror: a monster that hunts you, loud screaming jumpscares when you're caught,
+  red strobe flashes (switch on "Reduce flicker" in Settings to turn them off), chase roars and
+  scary events.
 
-Roblox sets the maturity label from the **Maturity & Compliance questionnaire** you fill in on
-Creator Hub (experience → Audience). Answer honestly. The only category that applies is **Fear**:
-a monster that hunts you through dark halls is "mild fear". If you say the fear is occasional,
-the label is *Minimal* (all ages); if you say it's repeated, the label is *Mild* (ages 9+).
-Roblox decides the final label, not the game.
+Roblox sets the label from the **Maturity & Compliance questionnaire** in Creator Hub
+(experience → Audience). For **Fear**, answer *intense / frequent jumpscares* so the
+experience gets the **Moderate (13+)** label. Answer *none* for violence (being caught isn't
+shown as injury), blood, crude humor, gambling, romance and so on. Roblox makes the final call.
 
 ## Controls
 

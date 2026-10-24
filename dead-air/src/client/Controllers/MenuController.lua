@@ -658,7 +658,7 @@ local function buildResults()
 	end)
 end
 
-local STATUS_TEXT = { Escaped = "ESCAPED", Dead = "CAUGHT", Downed = "LEFT BEHIND", Alive = "ALIVE" }
+local STATUS_TEXT = { Escaped = "ESCAPED", Dead = "KILLED", Downed = "LEFT BEHIND", Alive = "ALIVE" }
 
 local function renderResults(results)
 	for _, child in ipairs(resultsBody:GetChildren()) do
