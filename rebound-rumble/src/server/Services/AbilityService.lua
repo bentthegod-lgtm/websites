@@ -49,7 +49,8 @@ function AbilityService.buy(player, id)
 		return false, "Not enough coins."
 	end
 	profile.Abilities[id] = true
-	if #profile.Loadout < AbilityService.maxSlots(player) then
+	-- The loadout only changes in the lobby (a round uses profile.Loadout live).
+	if #profile.Loadout < AbilityService.maxSlots(player) and player:GetAttribute("RR_Status") ~= "Arena" then
 		table.insert(profile.Loadout, id)
 	end
 	services.DataService.markDirty(player)

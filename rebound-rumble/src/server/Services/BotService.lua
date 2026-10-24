@@ -82,6 +82,10 @@ function BotService.buildModel(name, color, cframe)
 	limb(model, root, "Right Leg", Vector3.new(0.95, 2, 0.95), CFrame.new(0.5, -2, 0), dark, Enum.Material.Metal)
 	limb(model, root, "ChestLight", Vector3.new(0.6, 0.6, 0.1), CFrame.new(0, 0.3, -0.52), color, Enum.Material.Neon)
 	local humanoid = Instance.new("Humanoid")
+	-- R15 so HipHeight (root bottom to the ground) is honoured (R6 ignores it); there is no
+	-- Neck Motor6D in this welded rig, so don't let the neck check kill the bot.
+	humanoid.RigType = Enum.HumanoidRigType.R15
+	humanoid.RequiresNeck = false
 	humanoid.HipHeight = 2
 	humanoid.MaxHealth = 100
 	humanoid.Health = 100

@@ -97,6 +97,9 @@ local marketplace = stubObject("MarketplaceService", {
 	end,
 })
 
+-- Toggled by tests that simulate a live (non-Studio) server.
+local harnessIsStudio = true
+
 local stubServices = {
 	TweenService = stubObject("TweenService", {
 		Create = function(_, instance, _info, goals)
@@ -118,7 +121,7 @@ local stubServices = {
 			return false
 		end,
 		IsStudio = function()
-			return true
+			return harnessIsStudio
 		end,
 	}),
 	Players = fakePlayers,
@@ -539,6 +542,18 @@ check("Robux receipt processed twice is granted once; unknown player retried", f
 	assert(prompts[#prompts] and prompts[#prompts].id == 111, "should prompt purchase")
 end)
 
+check("live game without DataStores: receipts are retried, not granted", function()
+	local profile = DS.getProfile(alice)
+	local before = profile.Coins
+	local Enum = roblox.Enum
+	harnessIsStudio = false
+	local ok, decision = pcall(registry.ShopService.processReceipt, { PlayerId = 101, ProductId = 111, PurchaseId = "live-1" })
+	harnessIsStudio = true
+	assert(ok, decision)
+	assert(decision == Enum.ProductPurchaseDecision.NotProcessedYet, "granted a purchase that cannot be saved")
+	assert(profile.Coins == before and profile.Receipts["live-1"] == nil, "profile changed")
+end)
+
 check("Studio: id-0 products and passes are granted for free", function()
 	local profile = DS.getProfile(alice)
 	simTime += 2
@@ -659,6 +674,13 @@ local function runDelayed()
 	table.clear(delayed)
 	for _, d in ipairs(list) do
 		d.fn(table.unpack(d.args))
+	end
+	-- Time passed (results screen > Players.RespawnTime): dead characters have respawned.
+	for _, p in ipairs(playerList) do
+		local humanoid = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.Health <= 0 then
+			humanoid.Health = humanoid.MaxHealth
+		end
 	end
 end
 
@@ -818,6 +840,23 @@ check("ranked 2-player round: shield save, leaver, streak bookkeeping", function
 	end
 	runDelayed()
 	assert(MS.state() == "Lobby")
+end)
+
+check("bot rig: welded R15 humanoid that honours HipHeight and has a root part", function()
+	local model, root, humanoid = registry.BotService.buildModel("Rig", roblox.Color3.new(1, 1, 1), CFrame.new(0, 3, 0))
+	assert(root.Name == "HumanoidRootPart" and model.PrimaryPart == root and not root.Anchored)
+	assert(humanoid.RigType == roblox.Enum.HumanoidRigType.R15 and humanoid.HipHeight == 2, "HipHeight ignored by R6")
+	assert(humanoid.RequiresNeck == false, "welded rig has no Neck joint")
+	model:Destroy()
+end)
+
+check("a dead (respawning) player is not put into the next round", function()
+	local MS = registry.MatchService
+	local humanoid = alice.Character:FindFirstChildOfClass("Humanoid")
+	humanoid.Health = 0
+	assert(MS.startMatch({ theme = "FrostRing", seed = 4 }) == false, "dead character joined the round")
+	assert(MS.state() == "Lobby" and alice:GetAttribute("RR_Status") == "Lobby")
+	humanoid.Health = 100
 end)
 
 check("eliminated players respawn into the lobby as spectators until the round ends", function()

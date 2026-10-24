@@ -187,6 +187,11 @@ function ShopService.processReceipt(receipt)
 	if profile.Receipts[id] then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
+	-- Live game without a saved profile (DataStore down / load failed): don't grant something
+	-- that won't persist; Roblox retries the receipt later.
+	if not services.DataService.isPersistent(player) and not RunService:IsStudio() then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	grantProduct(profile, product)
 	profile.Receipts[id] = os.time()
 	trimReceipts(profile)

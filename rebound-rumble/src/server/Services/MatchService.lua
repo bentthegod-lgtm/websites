@@ -275,7 +275,8 @@ function MatchService.startMatch(opts)
 	for _, player in ipairs(MatchService.readyPlayers()) do
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if humanoid and character:FindFirstChild("HumanoidRootPart") then
+		-- Skip players who are dead / respawning: their old body would join the round.
+		if humanoid and humanoid.Health > 0 and character:FindFirstChild("HumanoidRootPart") then
 			table.insert(humans, player)
 		end
 		if #humans >= L.MaxContestants then
@@ -604,7 +605,13 @@ function MatchService.start()
 		lastReadyToggle[player] = now
 		MatchService.setReady(player, value)
 	end)
+	local lastStateRequest = {}
 	remotes.RequestState.OnServerEvent:Connect(function(player)
+		local now = os.clock()
+		if lastStateRequest[player] and now - lastStateRequest[player] < 2 then
+			return
+		end
+		lastStateRequest[player] = now
 		MatchService.broadcastState(player)
 		remotes.Roster:FireClient(player, MatchService.roster())
 		services.DataService.sendProfile(player)
@@ -616,6 +623,7 @@ function MatchService.start()
 		MatchService.playerAdded(player)
 	end
 	Players.PlayerRemoving:Connect(function(player)
+		lastStateRequest[player] = nil
 		local c = MatchService.forPlayer(player)
 		if c then
 			MatchService.eliminate(c, nil, "left")
@@ -626,7 +634,11 @@ function MatchService.start()
 	task.spawn(function()
 		while true do
 			task.wait(1)
-			MatchService.tickLobby()
+			-- One bad tick must never stop the lobby loop for good.
+			local ok, err = pcall(MatchService.tickLobby)
+			if not ok then
+				warn("[ReboundRumble] Lobby tick error: " .. tostring(err))
+			end
 		end
 	end)
 end

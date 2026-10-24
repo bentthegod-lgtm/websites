@@ -166,6 +166,8 @@ local function resolveHit()
 		local nextTarget = randomTarget(nil)
 		if nextTarget then
 			launchAt(nextTarget)
+		else
+			resetToCenter("respawn", B.RespawnDelay)
 		end
 		return
 	end
@@ -183,6 +185,9 @@ local function resolveHit()
 			ball.state.dir = Vector3.new(0, 1, 0)
 			ball.state.curve = B.CurveDelay
 			setTarget(nextTarget)
+		else
+			-- Nobody else to chase: leave "pending", or the next step would hit the victim again.
+			resetToCenter("respawn", B.RespawnDelay)
 		end
 		return
 	end

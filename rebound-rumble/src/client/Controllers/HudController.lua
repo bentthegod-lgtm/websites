@@ -110,7 +110,8 @@ local function cooldownOverlay(button)
 end
 
 local function buildButtons()
-	local holder = Ui.new("Frame", { Name = "Actions", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -18, 1, -18), Size = UDim2.fromOffset(300, 220), BackgroundTransparency = 1, Parent = gui })
+	local holder = Ui.new("Frame", { Name = "Actions", AnchorPoint = Vector2.new(1, 1), Position = if UserInputService.TouchEnabled then UDim2.new(1, -200, 1, -18) else UDim2.new(1, -18, 1, -18), Size = UDim2.fromOffset(300, 220), BackgroundTransparency = 1, Parent = gui })
+	-- On touch screens the panel sits left of Roblox's Jump button instead of on top of it.
 	parryButton = Ui.button("PARRY", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(130, 130), TextSize = 30, Parent = holder }, C.Accent)
 	Ui.corner(parryButton, 65)
 	Ui.gradient(parryButton, Color3.fromRGB(255, 120, 220), Color3.fromRGB(200, 30, 140))
