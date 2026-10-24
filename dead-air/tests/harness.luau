@@ -419,12 +419,12 @@ check("every item has its own welded 3D model", function()
 	end
 end)
 
-check("scary sound cues build: layered jumpscare and single-asset screech", function()
+check("sound cues build: all-ages caught sting and single-asset screech", function()
 	local AudioUtil = requireModule(Shared.AudioUtil)
 	local AudioAssets = requireModule(Shared.Config.AudioAssets)
 	local holder = roblox.Instance.new("Part")
 	local jumpscare = AudioUtil.cue(AudioAssets.Jumpscare, holder, "SFX")
-	assert(jumpscare and #jumpscare.sounds == 3, "jumpscare should have 3 layers")
+	assert(jumpscare and #jumpscare.sounds == 2, "caught sting should have 2 layers")
 	local distorted = 0
 	for _, sound in ipairs(jumpscare.sounds) do
 		assert(string.match(sound.SoundId, "^rbxassetid://%d+$"), "bad id " .. sound.SoundId)
@@ -432,7 +432,7 @@ check("scary sound cues build: layered jumpscare and single-asset screech", func
 			distorted += 1
 		end
 	end
-	assert(distorted == 1, "expected one distorted layer")
+	assert(distorted == 0, "all-ages caught sting should not be distorted")
 	jumpscare:Play()
 	local breaker = AudioUtil.cue(AudioAssets.BreakerPull, holder, "SFX")
 	assert(breaker and #breaker.sounds == 2, "breaker should layer a switch and a boom")

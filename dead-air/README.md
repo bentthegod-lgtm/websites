@@ -98,6 +98,22 @@ Until a ProductId is set, Buy grants that boost for free in Studio (for testing)
 Purchases are handled through `ProcessReceipt`. Each purchase ID is saved with the profile
 before the purchase is confirmed, so a purchase is never granted twice.
 
+## Content maturity (all ages)
+
+The game is made to be suitable for all ages:
+
+* no blood, gore, weapons, swearing or realistic violence; being caught just ends your run
+  ("CAUGHT"), and teammates can revive you;
+* the catch scare is gentle: the creature leans in at arm's length with a soft sting and a
+  fade to black. There's no screaming, no red strobe and no face-filling lunge;
+* the lore notes are spooky but have no violent content.
+
+Roblox sets the maturity label from the **Maturity & Compliance questionnaire** you fill in on
+Creator Hub (experience → Audience). Answer honestly. The only category that applies is **Fear**:
+a monster that hunts you through dark halls is "mild fear". If you say the fear is occasional,
+the label is *Minimal* (all ages); if you say it's repeated, the label is *Mild* (ages 9+).
+Roblox decides the final label, not the game.
+
 ## Controls
 
 | Action | Keyboard / mouse | Gamepad | Touch |

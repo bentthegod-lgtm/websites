@@ -47,24 +47,23 @@ return {
 	MonsterVocal = { Id = "rbxassetid://9113985466", Volume = 0.9, Pitch = 0.9, MaxDistance = 160, Duration = 3.5, Fade = 1 },
 	MonsterScreech = { Id = "rbxassetid://9113985604", Volume = 1.6, Pitch = 0.85, MinDistance = 15, MaxDistance = 220, Duration = 3 },
 	-- Second roar, alternated with MonsterScreech every few seconds during a chase.
-	MonsterChaseRoar = { Id = "rbxassetid://9113980319", Volume = 1.6, Pitch = 0.9, MinDistance = 15, MaxDistance = 220, Duration = 3 },
+	MonsterChaseRoar = { Id = "rbxassetid://9113980319", Volume = 1.1, Pitch = 0.9, MinDistance = 15, MaxDistance = 220, Duration = 3 },
 	MonsterListen = { Id = "rbxassetid://9125475729", Volume = 0.8, Pitch = 0.8, MaxDistance = 45, Duration = 1.5 },
-	MonsterAttack = { Id = "rbxassetid://9043346594", Volume = 1.4, MinDistance = 10, MaxDistance = 90, Duration = 3, Fade = 0.8 },
+	MonsterAttack = { Id = "rbxassetid://9043346594", Volume = 1.0, MinDistance = 10, MaxDistance = 90, Duration = 3, Fade = 0.8 },
 
 	-- Played only to the player the Listener has just spotted (2D).
 	SpottedSting = { Id = "rbxassetid://1839909461", Volume = 1.1, Duration = 3.5, Fade = 1 },
 
-	-- Death / downed jumpscare (2D, very loud). Layers play together: an impact, a
-	-- scream and a creature shriek on top.
+	-- Caught sting (2D). All-ages: a soft impact and a low creature growl - no scream,
+	-- no distortion, moderate volume.
 	Jumpscare = {
 		Id = "",
 		Volume = 1,
-		Duration = 2.6,
+		Duration = 1.6,
 		Fade = 0.6,
 		Layers = {
-			{ Id = "rbxassetid://9043338036", Volume = 1.6 },
-			{ Id = "rbxassetid://9043345728", Volume = 1.5, Pitch = 1.05 },
-			{ Id = "rbxassetid://9125474518", Volume = 1.2, Pitch = 0.8, Distortion = 0.35 },
+			{ Id = "rbxassetid://9043338036", Volume = 0.8 },
+			{ Id = "rbxassetid://9125474518", Volume = 0.5, Pitch = 0.75 },
 		},
 	},
 
