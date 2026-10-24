@@ -32,6 +32,11 @@ return {
 			Description = "Start a run with 2 tin cans and an alarm clock.",
 			Color = { 255, 170, 110 },
 		},
+		XRay = {
+			Name = "X-Ray Goggles",
+			Description = "See the Listener glowing red through walls for one run.",
+			Color = { 255, 90, 90 },
+		},
 		Adrenaline = {
 			Name = "Adrenaline Shot",
 			Description = "Once per run, when you go down you get back up on your own after 6 seconds - even solo.",
@@ -40,7 +45,7 @@ return {
 	},
 
 	-- Display order in the shop.
-	BoostOrder = { "QuietShoes", "SecondWind", "LithiumCell", "LureKit", "Adrenaline" },
+	BoostOrder = { "XRay", "QuietShoes", "SecondWind", "LithiumCell", "LureKit", "Adrenaline" },
 
 	Products = {
 		{ Key = "QuietShoes1", Name = "Padded Soles", Robux = 25, ProductId = 0, Grants = { QuietShoes = 1 } },
@@ -48,12 +53,13 @@ return {
 		{ Key = "LithiumCell1", Name = "Lithium Cell", Robux = 15, ProductId = 0, Grants = { LithiumCell = 1 } },
 		{ Key = "LureKit1", Name = "Lure Kit", Robux = 20, ProductId = 0, Grants = { LureKit = 1 } },
 		{ Key = "Adrenaline1", Name = "Adrenaline Shot", Robux = 40, ProductId = 0, Grants = { Adrenaline = 1 } },
+		{ Key = "XRay1", Name = "X-Ray Goggles", Robux = 50, ProductId = 0, Grants = { XRay = 1 } },
 		{
 			Key = "SurvivorPack",
 			Name = "Survivor Pack (3 of every boost)",
 			Robux = 199,
 			ProductId = 0,
-			Grants = { QuietShoes = 3, SecondWind = 3, LithiumCell = 3, LureKit = 3, Adrenaline = 3 },
+			Grants = { QuietShoes = 3, SecondWind = 3, LithiumCell = 3, LureKit = 3, Adrenaline = 3, XRay = 3 },
 		},
 	},
 

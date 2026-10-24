@@ -84,6 +84,7 @@ next descent starts.
 | Lithium Cell | Flashlight battery lasts twice as long |
 | Lure Kit | Start with 2 tin cans and an alarm clock |
 | Adrenaline Shot | Once per run, get back up on your own 6 seconds after going down (even solo) |
+| X-Ray Goggles | See the Listener outlined in red through walls for the whole run |
 
 **Setup:**
 1. In Creator Hub, go to your experience → Monetization → Developer Products and create one
@@ -132,7 +133,9 @@ before the purchase is confirmed, so a purchase is never granted twice.
   jump, landing, door, drop, throw, objective action, revive, panting and black-box burst.
   Each noise has a category, position, loudness, radius and timestamp, plus modifiers for
   surface, room acoustics and crouching.
+  * Hearing works in all directions (an area around the Listener), not only where it faces.
   * Occlusion is estimated with iterative raycasts that count walls, closed doors and large props.
+    Walls only muffle sound; a walking step one wall away is still heard.
   * Noises that repeat close together are merged, and each player is rate-limited.
   * The monster receives only an *approximate* position, jittered more for distant or muffled
     sounds, and never the player's live position.
@@ -194,7 +197,7 @@ tests/                 Lune test suites
 
 ```bash
 cd dead-air
-lune run tests/run                                         # 39 logic tests
+lune run tests/run                                         # 43 logic tests
 lune run tests/compile                                     # Luau compile check of every file
 selene src                                                 # lint (roblox_min std)
 rojo build -o build/DeadAir.rbxlx && lune run tests/harness build/DeadAir.rbxlx

@@ -32,7 +32,7 @@ return {
 	EmptyCornerCabinetChance = 0.8, -- empty corners that get a searchable cabinet
 	LockerCount = 22,
 	MaxLockersPerCell = 2,
-	LitChanceBeforePower = 0.75,
+	LitChanceBeforePower = 1.0, -- every ceiling light works (dimmer until the power is restored)
 	FlickerChance = 0.22,
 	AnomalyCount = 1,
 	StruggleCount = 2,

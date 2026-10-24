@@ -64,15 +64,15 @@ end)
 
 test("a single faint noise only causes suspicion", function()
 	local brain = newBrain()
-	brain:hear({ position = Vector3.new(20, 0, 0), intensity = 0.1, category = "FootstepWalk" }, 1)
+	brain:hear({ position = Vector3.new(20, 0, 0), intensity = 0.06, category = "FootstepWalk" }, 1)
 	assert(brain.state == S.Suspicion, "got " .. brain.state)
 end)
 
 test("a series of faint noises escalates to investigation", function()
 	local brain = newBrain()
 	local p = Vector3.new(20, 0, 0)
-	brain:hear({ position = p, intensity = 0.1, category = "FootstepWalk" }, 1)
-	brain:hear({ position = p + Vector3.new(2, 0, 0), intensity = 0.1, category = "FootstepWalk" }, 1.5)
+	brain:hear({ position = p, intensity = 0.06, category = "FootstepWalk" }, 1)
+	brain:hear({ position = p + Vector3.new(2, 0, 0), intensity = 0.06, category = "FootstepWalk" }, 1.5)
 	assert(brain.state == S.Investigate, "got " .. brain.state)
 end)
 

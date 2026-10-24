@@ -23,9 +23,9 @@ return {
 		MaxBattery = 100,
 		DrainPerSecond = 0.55, -- ~3 minutes per full battery
 		BatteryPickupAmount = 55,
-		Range = 46,
+		Range = 62,
 		Angle = 50,
-		Brightness = 2.4,
+		Brightness = 3.4,
 	},
 
 	Inventory = {

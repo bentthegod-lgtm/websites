@@ -76,11 +76,12 @@ return {
 	HardLandHeight = 9,
 
 	Occlusion = {
-		Wall = 0.45, -- remaining loudness per wall between source and listener
-		Door = 0.65, -- per closed door
-		Prop = 0.85, -- per large prop (partitions, shelves)
+		-- The Listener hears all around it: walls only partly muffle sound.
+		Wall = 0.72, -- remaining loudness per wall between source and listener
+		Door = 0.85, -- per closed door
+		Prop = 0.95, -- per large prop (partitions, shelves)
 		MaxHits = 4,
-		MinFactor = 0.06,
+		MinFactor = 0.3,
 	},
 
 	-- Listener never receives the exact source position: it receives a point jittered by up

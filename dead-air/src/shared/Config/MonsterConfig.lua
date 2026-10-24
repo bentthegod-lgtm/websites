@@ -22,8 +22,8 @@ return {
 	Acceleration = 14, -- studs/s^2 toward the desired speed outside of chase ramps
 
 	Hearing = {
-		Threshold = 0.06, -- perceived loudness below this is ignored
-		SuspicionBelow = 0.2, -- single quiet noises only make it stop and turn
+		Threshold = 0.04, -- perceived loudness below this is ignored
+		SuspicionBelow = 0.08, -- only the very faintest single noises just make it stop and turn
 		HighIntensity = 0.55, -- at or above this it rushes the location
 		MidIntensity = 0.25,
 		SeriesWindow = 7, -- seconds

@@ -1,6 +1,7 @@
 local SoundMath = require("../src/shared/SoundMath")
 local SoundConfig = require("../src/shared/Config/SoundConfig")
 local PlayerConfig = require("../src/shared/Config/PlayerConfig")
+local MonsterConfig = require("../src/shared/Config/MonsterConfig")
 
 local cases = {}
 local function test(name, fn)
@@ -18,7 +19,13 @@ end)
 test("walls muffle sound", function()
 	local open = SoundMath.perceived(1, 60, 20, SoundMath.occlusion(0, 0, 0, SoundConfig.Occlusion), 1)
 	local walled = SoundMath.perceived(1, 60, 20, SoundMath.occlusion(2, 0, 0, SoundConfig.Occlusion), 1)
-	assert(walled < open * 0.3, "two walls should muffle strongly")
+	assert(walled < open * 0.6, "two walls should muffle")
+end)
+
+test("a walking step is heard through a wall nearby (area hearing)", function()
+	local walk = cats.FootstepWalk
+	local heard = SoundMath.perceived(walk.Loudness, walk.Radius, 15, SoundMath.occlusion(1, 0, 0, SoundConfig.Occlusion), 1)
+	assert(heard > MonsterConfig.Hearing.Threshold, "walk through one wall at 15 studs unheard: " .. heard)
 end)
 
 test("sprinting is heard much farther than crouching", function()

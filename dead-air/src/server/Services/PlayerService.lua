@@ -252,6 +252,7 @@ function PlayerService.sendToLobby(player, cframe)
 	state.boosts = {}
 	state.staminaMax = PlayerConfig.Stamina.Max
 	state.selfReviveAt = nil
+	player:SetAttribute("DA_XRay", nil)
 	if state.revivePrompt then
 		state.revivePrompt:Destroy()
 		state.revivePrompt = nil
@@ -756,6 +757,8 @@ function PlayerService.applyBoosts(player, keys)
 		state.staminaMax = PlayerConfig.Stamina.Max * ShopConfig.SecondWindStamina
 		state.stamina = state.staminaMax
 	end
+	-- X-Ray Goggles are drawn by the player's own client (EffectsController).
+	player:SetAttribute("DA_XRay", state.boosts.XRay == true)
 	if state.boosts.LureKit then
 		services.ItemService.give(player, "Can")
 		services.ItemService.give(player, "Can")

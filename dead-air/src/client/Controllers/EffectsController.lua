@@ -5,6 +5,7 @@
 	  early warning cue that it is close, even when you cannot see it). "Reduce flicker"
 	  replaces strobing with a gentle dim.
 	* Proximity vignette, downed blur/tint, caught flash, blackout dimming.
+	* X-Ray Goggles boost: the Listener is outlined through walls for that player only.
 	* The first-person flashlight viewmodel: held in view, beam from its lens, click on
 	  toggle, stutters when the battery is nearly dead (other players see the server one).
 ]]
@@ -111,10 +112,34 @@ local function hideServerFlashlight(character)
 	character.DescendantAdded:Connect(hook)
 end
 
+-- X-Ray Goggles (shop boost): outline the Listener through walls for this player only.
+local xray
+local function updateXRay()
+	local monster = ClientState.monster()
+	local want = player:GetAttribute("DA_XRay") == true and ClientState.status() == "Alive" and monster ~= nil
+	if want and (not xray or xray.Adornee ~= monster or not xray.Parent) then
+		if xray then
+			xray:Destroy()
+		end
+		xray = Instance.new("Highlight")
+		xray.Name = "DA_XRay"
+		xray.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		xray.FillColor = Color3.fromRGB(255, 40, 30)
+		xray.FillTransparency = 0.55
+		xray.OutlineColor = Color3.fromRGB(255, 200, 190)
+		xray.OutlineTransparency = 0
+		xray.Adornee = monster
+		xray.Parent = monster
+	elseif not want and xray then
+		xray:Destroy()
+		xray = nil
+	end
+end
+
 function EffectsController.init()
 	local gui = Ui.screen("DeadAirEffects", player:WaitForChild("PlayerGui"), 2)
 	buildVignette(gui)
-	setVignette(0.35)
+	setVignette(0.2)
 	flash = Ui.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 240, 230), BackgroundTransparency = 1, Parent = gui })
 
 	blur = Instance.new("BlurEffect")
@@ -239,6 +264,7 @@ function EffectsController.init()
 			return
 		end
 		accumulator = 0
+		updateXRay()
 
 		local reduce = Settings.get("ReduceFlicker")
 		local monster = ClientState.monster()
@@ -270,7 +296,7 @@ function EffectsController.init()
 		end
 
 		-- Proximity vignette and tint.
-		local strength = 0.35
+		local strength = 0.2
 		if mroot then
 			local d = (mroot.Position - camPos).Magnitude
 			strength += math.clamp(1 - d / 45, 0, 1) * 0.45

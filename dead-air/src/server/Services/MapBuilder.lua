@@ -151,8 +151,8 @@ local function applyLight(entry, on, powered)
 	entry.tube.Material = if on then MAT.Neon else MAT.Smooth
 	if on then
 		entry.light.Color = if powered then LIGHT_POWER else LIGHT_EMERGENCY
-		entry.light.Brightness = if powered then 1.3 else 0.9
-		entry.light.Range = if powered then 28 else 23
+		entry.light.Brightness = if powered then 1.6 else 1.2
+		entry.light.Range = if powered then 32 else 27
 	end
 	entry.tube:SetAttribute("On", on)
 	-- Clients flicker lights locally relative to this value.
