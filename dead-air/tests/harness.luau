@@ -467,6 +467,7 @@ check("services initialise and objectives set up on a built map", function()
 		registry.NoiseService.setMap(map)
 		registry.DoorService.createFromMap(map)
 		registry.HidingService.createFromMap(map)
+		registry.ItemService.setupContainers(map)
 		local chainName = if i == 1 then "Generator" else "PowerGrid"
 		local difficulty = registry.RoundService.difficulty()
 		registry.ObjectiveService.begin(map, ObjectiveConfig.Chains[chainName], Rng.new(i), difficulty, {})
@@ -477,14 +478,28 @@ check("services initialise and objectives set up on a built map", function()
 			end
 		end
 		assert(locked == 3, "expected 3 locked special doors, got " .. locked)
-		local fuses = registry.ItemService.countWorld(if chainName == "PowerGrid" then "Fuse" else "FuelCan")
+		local function total(kind)
+			return registry.ItemService.countWorld(kind) + registry.ItemService.countHidden(map, kind)
+		end
+		local fuses = total(if chainName == "PowerGrid" then "Fuse" else "FuelCan")
 		local needed = if chainName == "PowerGrid" then 3 else 2
 		assert(fuses >= needed + difficulty.ItemSpares, "not enough objective items spawned: " .. fuses)
-		assert(registry.ItemService.countWorld("Keycard") == 1, "keycard count")
+		assert(total("Keycard") == 1, "keycard count")
 		assert(registry.ItemService.countWorld("Note") == ObjectiveConfig.LoreNotesPerRun, "notes")
-		local throwables = registry.ItemService.countWorld("Bottle") + registry.ItemService.countWorld("Can") + registry.ItemService.countWorld("AlarmClock")
+		local throwables = total("Bottle") + total("Can") + total("AlarmClock")
 		assert(throwables == difficulty.Throwables, "expected " .. difficulty.Throwables .. " throwables, got " .. throwables)
-		assert(registry.ItemService.countWorld("Battery") == difficulty.Supplies, "battery count")
+		assert(total("Battery") == difficulty.Supplies, "battery count")
+		-- Lots of furniture to search, most of it empty, and most loot hidden inside.
+		local filled, hiddenTotal = 0, 0
+		for _, c in ipairs(map.containers) do
+			if c.contents then
+				filled += 1
+			end
+		end
+		hiddenTotal = filled
+		assert(#map.containers >= 40, "too few searchable containers: " .. #map.containers)
+		assert(filled < #map.containers * 0.5, "most containers should be empty")
+		assert(hiddenTotal >= (throwables + fuses) * 0.6, "most items should be hidden in containers")
 		local cabinets, lockersCount = 0, 0
 		for _, locker in ipairs(map.lockers) do
 			if locker.label == "Supply Cabinet" then

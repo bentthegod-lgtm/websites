@@ -77,8 +77,11 @@ local function placeItems(map, rng, kind, count, used)
 	local cells = MazeGen.pickItemCells(map.layout, rng, count, used, 2)
 	for _, cell in ipairs(cells) do
 		used[cell.index] = true
-		local spot = rng:pick(map.itemSpots[cell.index]) or (map:cellCenter(cell.index) + Vector3.new(6, 0.3, 6))
-		services.ItemService.spawn(kind, spot)
+		-- Hidden inside a cabinet/drawer when the room has one; otherwise left out in the open.
+		if not services.ItemService.hideIn(map, cell.index, kind, rng) then
+			local spot = rng:pick(map.itemSpots[cell.index]) or (map:cellCenter(cell.index) + Vector3.new(6, 0.3, 6))
+			services.ItemService.spawn(kind, spot)
+		end
 	end
 	return #cells
 end

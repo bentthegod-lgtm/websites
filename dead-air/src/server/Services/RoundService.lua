@@ -257,6 +257,7 @@ local function startRun()
 	services.NoiseService.setMap(map)
 	services.DoorService.createFromMap(map)
 	services.HidingService.createFromMap(map)
+	services.ItemService.setupContainers(map)
 	services.ObjectiveService.begin(map, chainDef, rng, difficulty, overrides)
 
 	-- Spawn everyone in parallel, and wait for all characters before the end-of-run check

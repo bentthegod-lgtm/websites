@@ -28,7 +28,8 @@ return {
 	LoopChance = 0.24, -- extra connections beyond the spanning tree (escape loops)
 	DoorChance = 0.4, -- fraction of ordinary connections that get a door instead of an open arch
 	MinSpecialDistance = 3, -- special rooms are at least this many steps from the start room
-	PropChance = 0.65,
+	PropChance = 0.75,
+	EmptyCornerCabinetChance = 0.6, -- empty corners that get a searchable cabinet
 	LockerCount = 22,
 	MaxLockersPerCell = 2,
 	LitChanceBeforePower = 0.75,

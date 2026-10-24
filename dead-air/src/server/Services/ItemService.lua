@@ -415,6 +415,94 @@ function ItemService.throw(player, direction, slot)
 	end)
 end
 
+---------------------------------------------------------------------------------------------
+-- Searchable containers
+---------------------------------------------------------------------------------------------
+
+local SEARCH_TIME = 0.8
+
+-- Wires up "Search" prompts on every cabinet / drawer MapBuilder created. ObjectiveService
+-- decides what (if anything) is inside each one by setting container.contents.
+function ItemService.setupContainers(map)
+	local TweenService = game:GetService("TweenService")
+	for _, container in ipairs(map.containers) do
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Search"
+		prompt.ObjectText = container.label
+		prompt.HoldDuration = SEARCH_TIME
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+		prompt.MaxActivationDistance = 7
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = container.promptPart
+		local holdStart = {}
+		prompt.PromptButtonHoldBegan:Connect(function(player)
+			holdStart[player] = os.clock()
+		end)
+		prompt.PromptButtonHoldEnded:Connect(function(player)
+			holdStart[player] = nil
+		end)
+		prompt.Triggered:Connect(function(player)
+			local began = holdStart[player]
+			holdStart[player] = nil
+			-- The hold time is enforced here, not just by the client prompt.
+			if container.opened or not began or os.clock() - began < SEARCH_TIME * 0.8 then
+				return
+			end
+			if not services.PlayerService:canInteract(player, container.promptPart.Position) then
+				return
+			end
+			container.opened = true
+			prompt.Enabled = false
+			for _, piece in ipairs(container.parts) do
+				TweenService:Create(piece.part, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { CFrame = piece.openCFrame }):Play()
+			end
+			local crouched = services.PlayerService:isCrouching(player)
+			services.NoiseService:emit(container.noise, container.position, {
+				source = player,
+				multiplier = if crouched then services.SoundConfig.CrouchInteractionMultiplier else 1,
+			})
+			if container.contents then
+				local kind = container.contents
+				container.contents = nil
+				task.delay(0.3, function()
+					ItemService.spawn(kind, container.itemSpot)
+				end)
+				services.Remotes.Notify:FireClient(player, "Found: " .. ItemConfig[kind].DisplayName, "info")
+			else
+				services.Remotes.Notify:FireClient(player, "Empty.", "info")
+			end
+		end)
+	end
+end
+
+-- Hides an item in a random unused container in the given cell. Returns false if none.
+function ItemService.hideIn(map, cellIndex, kind, rng)
+	local free = {}
+	for _, container in ipairs(map.containersByCell[cellIndex] or {}) do
+		if not container.contents and not container.opened then
+			table.insert(free, container)
+		end
+	end
+	local container = rng:pick(free)
+	if not container then
+		return false
+	end
+	container.contents = kind
+	return true
+end
+
+-- How many of an item kind are still hidden (unopened) in containers.
+function ItemService.countHidden(map, kind)
+	local n = 0
+	for _, container in ipairs(map.containers) do
+		if container.contents == kind then
+			n += 1
+		end
+	end
+	return n
+end
+
 function ItemService.markEscapedWithItems(player)
 	local state = services.PlayerService.get(player)
 	if state and state.roundStats and ItemService.has(player, "BlackBox") > 0 then

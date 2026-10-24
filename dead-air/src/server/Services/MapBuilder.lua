@@ -250,12 +250,108 @@ end
 
 local Props = {}
 
+---------------------------------------------------------------------------------------------
+-- Searchable containers (storage cabinets, filing cabinets, desk drawers)
+---------------------------------------------------------------------------------------------
+
+-- Set by MapBuilder.build while a cell is being furnished; nil = do not register containers.
+local containerSink, containerCell
+local containerCounter = 0
+
+local function registerContainer(record)
+	if not containerSink then
+		return
+	end
+	containerCounter += 1
+	record.id = "Container" .. containerCounter
+	record.cell = containerCell
+	record.position = record.promptPart.Position
+	table.insert(containerSink, record)
+end
+
+-- Waist-high storage cabinet with two doors facing the lane.
+function Props.storageCabinet(parent, cf)
+	local m = model(parent, "StorageCabinet")
+	local body = rgb(132, 122, 100)
+	local w, h, d = 4, 3, 2
+	occluder(newPart(m, { Name = "Back", Size = Vector3.new(w, h, 0.15), CFrame = cf * CFrame.new(0, h / 2, d / 2 - 0.08), Color = body, Material = MAT.Wood }), "Prop")
+	for _, s in ipairs({ -1, 1 }) do
+		newPart(m, { Name = "Side", Size = Vector3.new(0.15, h, d), CFrame = cf * CFrame.new(s * (w / 2 - 0.08), h / 2, 0), Color = body, Material = MAT.Wood })
+	end
+	newPart(m, { Name = "Top", Size = Vector3.new(w, 0.15, d), CFrame = cf * CFrame.new(0, h - 0.08, 0), Color = body:Lerp(Color3.new(0, 0, 0), 0.1), Material = MAT.Wood })
+	newPart(m, { Name = "Bottom", Size = Vector3.new(w, 0.15, d), CFrame = cf * CFrame.new(0, 0.2, 0), Color = body, Material = MAT.Wood })
+	newPart(m, { Name = "Shelf", Size = Vector3.new(w - 0.3, 0.1, d - 0.3), CFrame = cf * CFrame.new(0, 1.6, 0.1), Color = body, Material = MAT.Wood })
+	local doors = {}
+	for _, s in ipairs({ -1, 1 }) do
+		local hinge = cf * CFrame.new(s * (w / 2 - 0.05), h / 2, -d / 2 + 0.05)
+		local door = newPart(m, {
+			Name = "Door",
+			Size = Vector3.new(w / 2 - 0.1, h - 0.35, 0.12),
+			CFrame = hinge * CFrame.new(-s * (w / 4 - 0.05), 0.05, 0),
+			Color = rgb(146, 134, 108),
+			Material = MAT.Wood,
+		})
+		occluder(door, "Door")
+		newPart(m, { Name = "Handle", Size = Vector3.new(0.08, 0.5, 0.12), CFrame = hinge * CFrame.new(-s * (w / 2 - 0.35), 0.05, -0.1), Color = rgb(60, 58, 52), CanCollide = false })
+		local offset = hinge:ToObjectSpace(door.CFrame)
+		table.insert(doors, { part = door, closedCFrame = door.CFrame, openCFrame = hinge * CFrame.Angles(0, math.rad(s * 105), 0) * offset })
+	end
+	local promptPart = newPart(m, { Name = "PromptAnchor", Size = Vector3.new(1, 1, 1), CFrame = cf * CFrame.new(0, 1.6, -d / 2 - 0.4), Transparency = 1, CanCollide = false, CanQuery = false })
+	registerContainer({
+		label = "Storage Cabinet",
+		noise = "CabinetOpen",
+		parts = doors,
+		promptPart = promptPart,
+		itemSpot = (cf * CFrame.new(0, 0.3, -0.1)).Position,
+	})
+	return (cf * CFrame.new(0.8, h, 0)).Position
+end
+
+-- Tall metal filing cabinet; the middle drawer slides out.
+function Props.filingCabinet(parent, cf)
+	local m = model(parent, "FilingCabinet")
+	local color = rgb(118, 124, 118)
+	local w, h, d = 2, 5, 2.4
+	occluder(newPart(m, { Name = "Body", Size = Vector3.new(w, h, d - 0.3), CFrame = cf * CFrame.new(0, h / 2, 0.15), Color = color, Material = MAT.MetalPlain }), "Prop")
+	for i, y in ipairs({ 0.9, 4.1 }) do
+		newPart(m, { Name = "DrawerFront" .. i, Size = Vector3.new(w - 0.15, 1.4, 0.12), CFrame = cf * CFrame.new(0, y, -d / 2 + 0.1), Color = color:Lerp(Color3.new(1, 1, 1), 0.08), Material = MAT.MetalPlain })
+	end
+	local drawerClosed = cf * CFrame.new(0, 2.5, 0)
+	local drawer = newPart(m, { Name = "Drawer", Size = Vector3.new(w - 0.2, 1.4, d - 0.1), CFrame = drawerClosed, Color = color:Lerp(Color3.new(1, 1, 1), 0.08), Material = MAT.MetalPlain, CanCollide = false })
+	local handle = newPart(m, { Name = "Handle", Size = Vector3.new(0.7, 0.12, 0.12), CFrame = drawerClosed * CFrame.new(0, 0.3, -d / 2 - 0.05), Color = rgb(50, 50, 48), CanCollide = false })
+	local drawerOpen = cf * CFrame.new(0, 2.5, -1.7)
+	local promptPart = newPart(m, { Name = "PromptAnchor", Size = Vector3.new(1, 1, 1), CFrame = cf * CFrame.new(0, 2.5, -d / 2 - 0.5), Transparency = 1, CanCollide = false, CanQuery = false })
+	registerContainer({
+		label = "Filing Cabinet",
+		noise = "DrawerOpen",
+		parts = {
+			{ part = drawer, closedCFrame = drawerClosed, openCFrame = drawerOpen },
+			{ part = handle, closedCFrame = handle.CFrame, openCFrame = handle.CFrame * CFrame.new(0, 0, -1.7) },
+		},
+		promptPart = promptPart,
+		itemSpot = (drawerOpen * CFrame.new(0, -0.55, 0)).Position,
+	})
+	return (cf * CFrame.new(0, h, 0)).Position
+end
+
 function Props.desk(parent, cf, rng)
 	local m = model(parent, "Desk")
 	local wood = rgb(140, 118, 84)
 	newPart(m, { Name = "Top", Size = Vector3.new(5, 0.3, 2.6), CFrame = cf * CFrame.new(0, 3, 0), Color = wood, Material = MAT.Wood })
 	newPart(m, { Name = "SideL", Size = Vector3.new(0.3, 2.85, 2.4), CFrame = cf * CFrame.new(-2.3, 1.43, 0), Color = wood, Material = MAT.Wood })
 	newPart(m, { Name = "SideR", Size = Vector3.new(0.3, 2.85, 2.4), CFrame = cf * CFrame.new(2.3, 1.43, 0), Color = wood, Material = MAT.Wood })
+	-- Drawer pedestal under the right side, facing the chair; it can hide an item.
+	local drawerClosed = cf * CFrame.new(1.5, 2.45, 0)
+	local drawer = newPart(m, { Name = "Drawer", Size = Vector3.new(1.4, 0.6, 2.2), CFrame = drawerClosed, Color = wood:Lerp(Color3.new(0, 0, 0), 0.1), Material = MAT.Wood, CanCollide = false })
+	local drawerOpen = drawerClosed * CFrame.new(0, 0, 1.3)
+	local deskPrompt = newPart(m, { Name = "PromptAnchor", Size = Vector3.new(1, 1, 1), CFrame = cf * CFrame.new(1.5, 2.45, 1.6), Transparency = 1, CanCollide = false, CanQuery = false })
+	registerContainer({
+		label = "Desk Drawer",
+		noise = "DrawerOpen",
+		parts = { { part = drawer, closedCFrame = drawerClosed, openCFrame = drawerOpen } },
+		promptPart = deskPrompt,
+		itemSpot = (drawerOpen * CFrame.new(0, -0.15, 0)).Position,
+	})
 	local chairCf = cf * CFrame.new(rng:range(-1, 1), 0, 2.4) * CFrame.Angles(0, math.rad(rng:range(-30, 30)), 0)
 	Props.chair(m, chairCf)
 	if rng:chance(0.5) then
@@ -399,12 +495,12 @@ function Props.vending(parent, cf)
 end
 
 local PROPS_BY_KIND = {
-	Office = { { "cubicle", 4 }, { "desk", 3 }, { "plant", 1 } },
-	Hallway = { { "cooler", 1 }, { "bench", 2 }, { "plant", 2 }, { "desk", 1 } },
-	Storage = { { "shelf", 4 }, { "crates", 2 } },
-	Maintenance = { { "workbench", 2 }, { "crates", 2 }, { "shelf", 1 } },
-	Restroom = { { "stall", 3 }, { "sink", 2 } },
-	BreakRoom = { { "table", 3 }, { "vending", 1 }, { "cooler", 1 } },
+	Office = { { "cubicle", 4 }, { "desk", 3 }, { "filingCabinet", 3 }, { "storageCabinet", 2 }, { "plant", 1 } },
+	Hallway = { { "cooler", 1 }, { "bench", 2 }, { "plant", 1 }, { "desk", 1 }, { "storageCabinet", 2 }, { "filingCabinet", 1 } },
+	Storage = { { "shelf", 3 }, { "crates", 2 }, { "storageCabinet", 3 } },
+	Maintenance = { { "workbench", 2 }, { "crates", 2 }, { "shelf", 1 }, { "storageCabinet", 2 }, { "filingCabinet", 1 } },
+	Restroom = { { "stall", 3 }, { "sink", 2 }, { "storageCabinet", 1 } },
+	BreakRoom = { { "table", 3 }, { "vending", 1 }, { "cooler", 1 }, { "storageCabinet", 2 } },
 	Anomaly = { { "desk", 1 } },
 }
 
@@ -553,6 +649,8 @@ function MapBuilder.build(layout, chainDef, rng, options)
 	self.falseDoors = {}
 	self.stations = {}
 	self.itemSpots = {}
+	self.containers = {}
+	self.containersByCell = {}
 	self.patrolPoints = {}
 	self.startSpawns = {}
 	self.cellLabels = {}
@@ -803,6 +901,8 @@ function MapBuilder.build(layout, chainDef, rng, options)
 		local spots = {}
 		self.itemSpots[index] = spots
 		if not cell.special and cell.kind ~= "Start" then
+			containerSink = self.containers
+			containerCell = index
 			for _, q in ipairs(MazeGen.Quadrants) do
 				local sx, sz = quadrantSign(q)
 				local qCenter = center + Vector3.new(sx * Q, 0, sz * Q)
@@ -829,7 +929,10 @@ function MapBuilder.build(layout, chainDef, rng, options)
 					elseif cell.variant == "InvertedRoom" then
 						local hTop = self:cellHeight(index)
 						local flipped = CFrame.new(qCenter + Vector3.new(0, hTop, 0)) * CFrame.Angles(0, 0, math.pi)
+						-- The upside-down desk's drawer is on the ceiling: not searchable.
+						containerSink = nil
 						Props.desk(propsFolder, flipped, rng)
+						containerSink = self.containers
 						table.insert(spots, qCenter + Vector3.new(0, 0.3, 0))
 					else
 						local propName = pickProp(rng, kind)
@@ -839,9 +942,16 @@ function MapBuilder.build(layout, chainDef, rng, options)
 						end
 					end
 				elseif content == "Empty" then
-					table.insert(spots, qCenter + Vector3.new(rng:range(-2, 2), 0.3, rng:range(-2, 2)))
+					-- Most open corners get a cabinet to search; the rest stay bare floor.
+					if cell.variant ~= "InvertedRoom" and rng:chance(MapConfig.EmptyCornerCabinetChance) then
+						local name = if rng:chance(0.5) then "storageCabinet" else "filingCabinet"
+						Props[name](propsFolder, cf, rng)
+					else
+						table.insert(spots, qCenter + Vector3.new(rng:range(-2, 2), 0.3, rng:range(-2, 2)))
+					end
 				end
 			end
+			containerSink = nil
 			if cell.kind == "Maintenance" then
 				Props.pipes(propsFolder, CFrame.lookAt(center + Vector3.new(-CS / 2 + 4, 0, -CS / 2 + 4.5), center + Vector3.new(-CS / 2 + 4, 0, 0)), self:cellHeight(index))
 			end
@@ -855,6 +965,11 @@ function MapBuilder.build(layout, chainDef, rng, options)
 				MapBuilder.buildFalseDoor(self, propsFolder, index)
 			end
 		end
+	end
+
+	for _, container in ipairs(self.containers) do
+		self.containersByCell[container.cell] = self.containersByCell[container.cell] or {}
+		table.insert(self.containersByCell[container.cell], container)
 	end
 
 	-- Special rooms ---------------------------------------------------------------------------

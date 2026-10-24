@@ -92,6 +92,8 @@ return {
 	Alarm = { Id = "rbxassetid://9119661709", Volume = 0.8, Looped = true, MaxDistance = 220 },
 	CanClatter = { Id = "rbxassetid://9116612715", Volume = 0.8, MaxDistance = 120 },
 	AlarmClockRing = { Id = "rbxassetid://9113087803", Volume = 0.7, MaxDistance = 120 },
+	FileDrawer = { Id = "rbxassetid://9114408065", Volume = 0.6 },
+	CabinetOpen = { Id = "rbxassetid://9120839364", Volume = 0.5, Pitch = 1.3 },
 	Locker = { Id = "rbxassetid://9119633070", Volume = 0.6 },
 	CardSwipe = { Id = "rbxassetid://9113722650", Volume = 0.6 },
 	FuelPour = { Id = "rbxassetid://9117864897", Volume = 0.6, Duration = 3, Fade = 0.8 },
