@@ -1,0 +1,58 @@
+{
+  "name": "MagnetMayhem",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "MagnetMayhem": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "MagnetMayhemServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 16,
+        "CharacterJumpPower": 50,
+        "CameraMaxZoomDistance": 60,
+        "CameraMinZoomDistance": 8,
+        "EnableMouseLockOption": false
+      },
+      "StarterPlayerScripts": {
+        "MagnetMayhemClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 2.6,
+        "ClockTime": 16.6,
+        "EnvironmentDiffuseScale": 0.55,
+        "EnvironmentSpecularScale": 0.6
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}

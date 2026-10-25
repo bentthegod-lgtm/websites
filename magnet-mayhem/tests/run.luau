@@ -1,15 +1,15 @@
 --[[
-	Lune test runner for Sprout Valley's pure gameplay logic.
-	Run from sprout-valley/:  lune run tests/run
+	Lune test runner for MAGNET MAYHEM's pure gameplay logic.
+	Run from magnet-mayhem/:  lune run tests/run
 ]]
 
 local process = require("@lune/process")
 
 local specs = {
 	require("./economy.spec"),
-	require("./growth.spec"),
-	require("./stock.spec"),
-	require("./rewards.spec"),
+	require("./attraction.spec"),
+	require("./pile.spec"),
+	require("./progress.spec"),
 	require("./config.spec"),
 }
 

@@ -1,6 +1,6 @@
 --[[
-	Minimal synchronous signal used for server-side service events
-	(status changes, objective completion, power changes...).
+	Minimal synchronous signal used by client controllers
+	(profile updates, popups, settings changes).
 ]]
 
 local Signal = {}
@@ -28,7 +28,7 @@ function Signal:Fire(...)
 	for _, handler in ipairs(table.clone(self.handlers)) do
 		local ok, err = pcall(handler, ...)
 		if not ok then
-			warn("[SproutValley] Signal handler error: " .. tostring(err))
+			warn("[MagnetMayhem] Signal handler error: " .. tostring(err))
 		end
 	end
 end

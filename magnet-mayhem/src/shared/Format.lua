@@ -1,62 +1,64 @@
 --[[
-	Number / time formatting shared by server messages and client UI.
+	Number / time formatting for the HUD and messages.
 ]]
 
 local Format = {}
 
-local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi" }
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx" }
 
--- 1234 -> "1,234"; 1234567 -> "1.23M"
-function Format.coins(n)
-	n = math.floor(tonumber(n) or 0)
-	if math.abs(n) < 100000 then
-		local s = tostring(math.abs(n))
-		local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
-		if out:sub(1, 1) == "," then
-			out = out:sub(2)
-		end
-		return (if n < 0 then "-" else "") .. out
+-- 999 -> "999", 1234 -> "1.2K", 3456789 -> "3.46M"
+function Format.short(n)
+	n = tonumber(n) or 0
+	local sign = if n < 0 then "-" else ""
+	local v = math.abs(n)
+	if v < 1000 then
+		return sign .. tostring(math.floor(v))
 	end
 	local index = 1
-	local v = math.abs(n)
 	while v >= 1000 and index < #SUFFIXES do
 		v /= 1000
 		index += 1
 	end
-	local text = if v >= 100 then string.format("%d", math.floor(v)) else string.format("%.2f", math.floor(v * 100) / 100)
+	local text
+	if v >= 100 then
+		text = tostring(math.floor(v))
+	elseif v >= 10 then
+		text = string.format("%.1f", math.floor(v * 10) / 10)
+	else
+		text = string.format("%.2f", math.floor(v * 100) / 100)
+	end
 	if string.find(text, ".", 1, true) then
 		text = text:gsub("0+$", ""):gsub("%.$", "")
 	end
-	return (if n < 0 then "-" else "") .. text .. SUFFIXES[index]
+	return sign .. text .. SUFFIXES[index]
 end
 
--- seconds -> "4m 05s", "1h 12m", "35s"
-function Format.duration(seconds)
-	seconds = math.max(0, math.floor(tonumber(seconds) or 0))
-	if seconds >= 3600 then
-		return string.format("%dh %02dm", seconds // 3600, (seconds % 3600) // 60)
-	elseif seconds >= 60 then
-		return string.format("%dm %02ds", seconds // 60, seconds % 60)
+-- Exact value with thousands separators, for tooltips: 1234567 -> "1,234,567"
+function Format.exact(n)
+	n = math.floor(tonumber(n) or 0)
+	local s = tostring(math.abs(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if out:sub(1, 1) == "," then
+		out = out:sub(2)
 	end
-	return string.format("%ds", seconds)
+	return (if n < 0 then "-" else "") .. out
 end
 
--- seconds -> "4:05"
 function Format.clock(seconds)
 	seconds = math.max(0, math.floor(tonumber(seconds) or 0))
+	if seconds >= 3600 then
+		return string.format("%d:%02d:%02d", seconds // 3600, (seconds % 3600) // 60, seconds % 60)
+	end
 	return string.format("%d:%02d", seconds // 60, seconds % 60)
 end
 
-function Format.kg(kg)
-	kg = tonumber(kg) or 0
-	if kg >= 100 then
-		return string.format("%dkg", math.floor(kg))
+-- Stat value for upgrade cards: trims trailing zeros (2.50 -> 2.5).
+function Format.stat(v)
+	if math.abs(v - math.floor(v)) < 1e-6 then
+		return tostring(math.floor(v))
 	end
-	return string.format("%.2fkg", kg)
-end
-
-function Format.percent(p)
-	return string.format("%d%%", math.floor((tonumber(p) or 0) * 100 + 0.5))
+	local text = string.format("%.2f", v)
+	return (text:gsub("0+$", ""):gsub("%.$", ""))
 end
 
 return Format
