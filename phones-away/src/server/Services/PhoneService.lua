@@ -123,6 +123,9 @@ function PhoneService.teardown(player)
 	if p and p.model then
 		p.model:Destroy()
 	end
+	if p and p.confiscatedModel then
+		p.confiscatedModel:Destroy()
+	end
 	phones[player] = nil
 	if player.Parent then
 		player:SetAttribute("PA_PhoneUp", false)
@@ -162,14 +165,18 @@ function PhoneService.request(player, up, now)
 	if type(up) ~= "boolean" or not p then
 		return false
 	end
-	-- Toggle spam protection: 6 toggles per second max.
-	if now - p.lastToggle > 1 then
-		p.toggles = 0
-		p.lastToggle = now
-	end
-	p.toggles += 1
-	if p.toggles > 6 then
-		return false
+	-- Toggle spam protection: 6 phone-UP requests per second max. "Down" is never dropped:
+	-- the client has already hidden its phone, so a dropped hide would leave it out on the
+	-- server (and visible to the teacher) while the player thinks it's away.
+	if up then
+		if now - p.lastToggle > 1 then
+			p.toggles = 0
+			p.lastToggle = now
+		end
+		p.toggles += 1
+		if p.toggles > 6 then
+			return false
+		end
 	end
 	if up then
 		if p.confiscated or now < p.cooldownUntil or not services.RoundService.canUsePhone(player) then

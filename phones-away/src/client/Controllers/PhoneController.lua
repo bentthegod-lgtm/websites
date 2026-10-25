@@ -284,6 +284,7 @@ local function slide(up)
 	local target = if up then UDim2.new(0.5, 0, 1, -12) else UDim2.new(0.5, 0, 1, 600)
 	local hide = ClientState.phone and ClientState.phone.hide or 0.45
 	TweenService:Create(phoneFrame, TweenInfo.new(if up then 0.18 else hide, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = target }):Play()
+	camera = workspace.CurrentCamera or camera -- the current camera can be replaced
 	if camera then
 		TweenService:Create(camera, TweenInfo.new(0.25), { FieldOfView = if up then 52 else 70 }):Play()
 	end
@@ -381,6 +382,15 @@ local function build()
 	holdButton.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 			PhoneController.press()
+			-- The button's InputEnded doesn't fire when the finger / mouse slides off it before
+			-- letting go, which left the phone stuck out. Watch this input itself instead.
+			local connection
+			connection = input:GetPropertyChangedSignal("UserInputState"):Connect(function()
+				if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
+					connection:Disconnect()
+					PhoneController.release()
+				end
+			end)
 		end
 	end)
 	holdButton.InputEnded:Connect(function(input)
@@ -471,6 +481,11 @@ function PhoneController.init()
 		end
 		return Enum.ContextActionResult.Pass
 	end, false, Enum.KeyCode.F, Enum.KeyCode.ButtonL2)
+
+	-- Alt-tab / app switch while holding: the key-up never arrives, so hide the phone.
+	UserInputService.WindowFocusReleased:Connect(function()
+		PhoneController.release()
+	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if processed or not localUp then

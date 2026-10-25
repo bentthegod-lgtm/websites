@@ -164,6 +164,41 @@ test("lesson: contiguous phases, board first, a quiz, enough walks, for many see
 	end
 end)
 
+test("she walks around the desks, never through them (door, back aisle -> board, 200 seeds)", function()
+	-- Real footprint of a desk + its chair (ClassroomBuilder), plus her half-width.
+	local function insideDesk(x, z)
+		for _, row in ipairs(L.DeskRows) do
+			for _, col in ipairs(L.DeskColumns) do
+				if math.abs(x - col) < 2 + 0.9 and z > row - 1.3 - 0.9 and z < row + 3.45 + 0.9 then
+					return true
+				end
+			end
+		end
+		return false
+	end
+	local phases = { "Board", "LunchCheck", "Lecture", "Walk", "LunchCheck", "Walk", "Board", "FireDrill", "Walk", "Quiz" }
+	for seed = 1, 200 do
+		local rng = Rng.new(seed)
+		local brain = TeacherBrain.new(TeacherConfig, L, rng)
+		local t = 0
+		for _, phase in ipairs(phases) do
+			brain:setPhase(phase, t)
+			for _ = 1, math.floor(rng:range(4, 14) * 10) do
+				t += 0.1
+				brain:update(0.1, t)
+				assert(not insideDesk(brain.x, brain.z), string.format("seed %d: walked through a desk at (%.1f, %.1f) in %s", seed, brain.x, brain.z, phase))
+				assert(brain.x == brain.x and brain.heading == brain.heading, "NaN position / heading")
+			end
+		end
+	end
+	-- And she still gets to the door during the early lunch bell.
+	local brain = TeacherBrain.new(TeacherConfig, L, Rng.new(1))
+	brain:setPhase("LunchCheck", 0)
+	run(brain, 20, 0)
+	assert(math.abs(brain.x - (L.DoorSpot[1] - 2)) < 0.1 and math.abs(brain.z - L.DoorSpot[2]) < 0.1, "never reached the door")
+	assert(brain.pose == "Door")
+end)
+
 test("school clock runs 10:05 -> 10:55", function()
 	assert(Lesson.schoolClock(0, 200, GameConfig.SchoolClockStart, GameConfig.SchoolClockEnd) == "10:05")
 	assert(Lesson.schoolClock(200, 200, GameConfig.SchoolClockStart, GameConfig.SchoolClockEnd) == "10:55")

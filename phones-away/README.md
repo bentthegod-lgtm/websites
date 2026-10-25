@@ -263,13 +263,13 @@ This is a lighthearted school comedy for **all ages**. Expect **Minimal** (at mo
 **Verified here** (Linux sandbox, no Roblox Studio):
 
 * `selene src` reports 0 errors and 0 warnings. `lune run tests/compile` compiles every file.
-* 49 unit tests cover:
+* 50 unit tests cover:
   * detection maths, the teacher brain in every phase, lesson schedules over 200 seeds, and
     the school clock
   * minigame validation and caps
   * the economy, crates and odds, and seating
   * config sanity, including "no invented audio IDs"
-* The Lune harness (34 checks) loads the **built .rbxlx**, builds the whole school and every
+* The Lune harness (35 checks) loads the **built .rbxlx**, builds the whole school and every
   rig and prop against Lune's reflection-checked Instance API, and runs the real services with
   stubbed engine services. It covers:
   * board phase vs. walking phase with the same phone use: board stays safe, the walk gets

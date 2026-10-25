@@ -34,7 +34,8 @@ local services
 local productsByKey, productsById = {}, {}
 local passesByKey, passesById = {}, {}
 local passCache = {} -- [player] = { [key] = true }
-local randomRestricted = {} -- [player] = true when paid random items are not allowed
+local randomRestricted = {} -- [player] = false once PolicyService said paid random items are allowed
+local inFlight = {} -- [PurchaseId] = true while that receipt's save is still running
 local lastRequest = {}
 
 function ShopService.init(registry)
@@ -119,8 +120,9 @@ local function loadPolicy(player)
 end
 ShopService._loadPolicy = loadPolicy
 
+-- Fail safe: not allowed until the policy lookup has actually come back and said so.
 function ShopService.randomItemsAllowed(player)
-	return randomRestricted[player] ~= true
+	return randomRestricted[player] == false
 end
 
 function ShopService.onProfileLoaded(player)
@@ -212,6 +214,10 @@ function ShopService.processReceipt(receipt)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local id = tostring(receipt.PurchaseId)
+	if inFlight[id] then
+		-- The first call for this receipt is still saving (and may yet fail and undo).
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	if profile.Receipts[id] then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
@@ -220,10 +226,18 @@ function ShopService.processReceipt(receipt)
 	if not services.DataService.isPersistent(player) and not RunService:IsStudio() then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
+	-- Pizza queue full (bought from another prompt that was already open): don't take the
+	-- Robux for a party that would never happen; Roblox retries the receipt later.
+	if product.Grants.PizzaParty and services.RoundService and not services.RoundService.canAddPizza() then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	local undo, after = prepareGrant(player, profile, product)
 	profile.Receipts[id] = os.time()
 	trimReceipts(profile)
-	if services.DataService.isPersistent(player) and not services.DataService.save(player) then
+	inFlight[id] = true
+	local saved = not services.DataService.isPersistent(player) or services.DataService.save(player)
+	inFlight[id] = nil
+	if not saved then
 		undo()
 		profile.Receipts[id] = nil
 		return Enum.ProductPurchaseDecision.NotProcessedYet
@@ -261,6 +275,10 @@ function ShopService.buy(player, key)
 	if product then
 		if product.Random and not ShopService.randomItemsAllowed(player) then
 			services.Remotes.Notify:FireClient(player, "Crates aren't available in your region.", "warn")
+			return false
+		end
+		if product.Grants.PizzaParty and services.RoundService and not services.RoundService.canAddPizza() then
+			services.Remotes.Notify:FireClient(player, "The pizza queue is full! Try again after the next class.", "warn")
 			return false
 		end
 		if product.ProductId > 0 then

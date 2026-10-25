@@ -84,6 +84,10 @@ function ClassmateService.throwPlane(player, deskIndex, now)
 	if not target or not myDesk or not R.canUsePhone(player) then
 		return false, "notseated"
 	end
+	if target == myDesk then
+		-- A zero-length flight (CFrame.lookAt(a, a)) gives every client a NaN plane.
+		return false, "invalid"
+	end
 	local s = stateFor(player)
 	if s.planes >= cfg.MaxPerClass then
 		return false, "max"

@@ -56,7 +56,7 @@ local function stubObject(name, extra)
 	local obj = extra or {}
 	return setmetatable(obj, {
 		__index = function(_, key)
-			if string.match(key, "Added$") or string.match(key, "Removing$") or string.match(key, "Finished$") or key == "Heartbeat" or key == "Stepped" or key == "RenderStepped" or key == "InputBegan" or key == "InputChanged" or key == "InputEnded" then
+			if string.match(key, "Added$") or string.match(key, "Removing$") or string.match(key, "Finished$") or string.match(key, "Released$") or key == "Heartbeat" or key == "Stepped" or key == "RenderStepped" or key == "InputBegan" or key == "InputChanged" or key == "InputEnded" then
 				local s = signal()
 				rawset(obj, key, s)
 				return s
@@ -190,8 +190,44 @@ roblox.implementMethod("Instance", "WaitForChild", function(self, name)
 	assert(child, "WaitForChild would hang: " .. self:GetFullName() .. "." .. tostring(name))
 	return child
 end)
+-- Seats: Seat:Sit welds the character to the (anchored) seat like Roblox does, and a pivot
+-- of a character that is still welded drags the seat along (one rigid assembly).
+local seatOf = {} -- [humanoid] = { seat, weld }
+local NO_SEAT = roblox.Instance.new("Part")
+roblox.implementMethod("Seat", "Sit", function(seat, humanoid)
+	local character = humanoid.Parent
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	for _, entry in pairs(seatOf) do
+		-- Occupied (a destroyed character frees its seat, like a respawn does in Roblox).
+		if entry.seat == seat and entry.weld.Parent and entry.weld.Part1 and entry.weld.Part1:IsDescendantOf(workspaceService) then
+			return
+		end
+	end
+	local weld = roblox.Instance.new("Weld")
+	weld.Name = "SeatWeld"
+	weld.Part0 = seat
+	weld.Part1 = root
+	weld.Parent = seat
+	seatOf[humanoid] = { seat = seat, weld = weld }
+	humanoid.SeatPart = seat -- (Lune can't clear it when the weld goes: tests use seatedIn)
+end)
+-- The seat a humanoid is really welded to right now (nil once its SeatWeld is gone).
+local function seatedIn(humanoid)
+	local entry = seatOf[humanoid]
+	return if entry and entry.weld.Parent then entry.seat else nil
+end
 roblox.implementMethod("Model", "PivotTo", function(self, cf)
 	if self.PrimaryPart then
+		local humanoid = self:FindFirstChildOfClass("Humanoid")
+		local entry = humanoid and seatOf[humanoid]
+		if entry and entry.weld.Parent then
+			entry.seat.CFrame = cf * (self.PrimaryPart.CFrame:Inverse() * entry.seat.CFrame)
+		elseif entry then
+			humanoid.SeatPart = NO_SEAT -- the weld is gone: no longer seated (Lune can't set nil)
+		end
 		self.PrimaryPart.CFrame = cf
 	end
 	self:SetAttribute("HarnessPivot", cf.Position)
@@ -199,7 +235,6 @@ end)
 roblox.implementMethod("Model", "GetPivot", function(self)
 	return if self.PrimaryPart then self.PrimaryPart.CFrame else CFrame.new()
 end)
-roblox.implementMethod("Seat", "Sit", function() end)
 roblox.implementMethod("Workspace", "GetServerTimeNow", function()
 	return os.clock()
 end)
@@ -422,7 +457,7 @@ check("school builds: 12 desks (2 VIP), seats, detention corner, board, clock, h
 		end
 	end
 	assert(vip == 2, "vip desks " .. vip)
-	assert(#world.detentionSeats == 2 and world.detentionSeats[1]:IsA("Seat"))
+	assert(#world.detentionSeats == 6 and world.detentionSeats[1]:IsA("Seat"))
 	assert(#world.board.rows == 10)
 	world.board.setRows({ { rank = 1, name = "Ace", text = "100 Clout" } }, nil)
 	assert(string.find(world.board.rows[1].Text, "Ace", 1, true))
@@ -600,6 +635,9 @@ local function leave(player)
 		table.remove(playerList, i)
 	end
 	fakePlayers.PlayerRemoving:Fire(player)
+	if player.Character then
+		player.Character:Destroy() -- Roblox removes a leaving player's character
+	end
 	player.Parent = nil
 end
 
@@ -1033,6 +1071,9 @@ check("Pizza Party: queued from the hallway, announced with the buyer, lenient 2
 		RS_.startPizza(alice)
 	end
 	assert(workspaceService:GetAttribute("PA_PizzaQueued") == GameConfig.PizzaMaxQueued)
+	-- Queue full: not sold, and a late receipt isn't granted for a party that never happens.
+	assert(not SS.buy(alice, "PizzaParty"), "pizza sold with a full queue")
+	assert(receipt(alice, "PizzaParty", "pizza-full") == Decision.NotProcessedYet, "pizza receipt granted with a full queue")
 	workspaceService:SetAttribute("PA_PizzaQueued", 0)
 end)
 
@@ -1062,6 +1103,105 @@ check("leaving mid-class banks pending Clout and frees the desk", function()
 	simTime += GameConfig.ResultsSeconds + 1
 	RS_.step(0.1)
 	assert(RS_.state() == "Hallway")
+end)
+
+check("seating: seats never move, reset mid-class reseats, nobody stuck seated in the hallway", function()
+	local seatCFrames = {}
+	for _, desk in ipairs(world.desks) do
+		seatCFrames[desk.seat] = desk.seat.CFrame
+	end
+	for _, seat in ipairs(world.detentionSeats) do
+		seatCFrames[seat] = seat.CFrame
+	end
+	local function seatsUnmoved()
+		for seat, cf in pairs(seatCFrames) do
+			assert((seat.CFrame.Position - cf.Position).Magnitude < 1e-3, seat:GetFullName() .. " was dragged along with a player")
+		end
+	end
+	assert(RS_.beginBell())
+	simTime += GameConfig.BellSeconds
+	RS_.beginClass({ event = "None", seed = 5, lesson = only("Board") })
+	TS.brain().nextGlance = math.huge
+	for _, p in ipairs({ alice, bob, carol }) do
+		local humanoid = p.Character:FindFirstChildOfClass("Humanoid")
+		assert(seatedIn(humanoid) == RS_.deskOf(p).seat, p.Name .. " not in their desk seat")
+		assert(humanoid.JumpPower == 0, "jump not locked")
+	end
+	-- Caught: desk seat -> detention stool. Released: back again.
+	local aliceDesk = RS_.deskOf(alice)
+	DS.getProfile(alice).Tokens.HallPass = 0
+	RS_.addSuspicion(alice, 1)
+	assert(RS_.inDetention(alice))
+	local aliceHumanoid = alice.Character:FindFirstChildOfClass("Humanoid")
+	assert(seatedIn(aliceHumanoid) == RS_.student(alice).detentionSeat, "not on a detention stool")
+	assert(not aliceDesk.seat:FindFirstChild("SeatWeld"), "still welded to the desk seat")
+	seatsUnmoved()
+	DS.addClout(alice, 1000, false)
+	assert(RS_.bail(alice))
+	assert(seatedIn(aliceHumanoid) == aliceDesk.seat)
+	seatsUnmoved()
+	-- Phone mashing: a hide request is never dropped by the toggle limit.
+	simTime += 2
+	assert(PS.request(bob, true, simTime))
+	run(0.5)
+	for _ = 1, 3 do
+		PS.request(bob, false, simTime)
+		PS.request(bob, true, simTime)
+	end
+	assert(PS.request(bob, false, simTime), "hide request dropped by the toggle limit")
+	run(1)
+	assert(not PS.isOut(bob), "phone stuck out after mashing")
+	-- Reset mid-class: the new character goes straight back to the desk, jump locked.
+	local old = bob.Character
+	local character = roblox.Instance.new("Model")
+	character.Name = "Bob"
+	local root = roblox.Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Parent = character
+	character.PrimaryPart = root
+	local head = roblox.Instance.new("Part")
+	head.Name = "Head"
+	head.Parent = character
+	local humanoid = roblox.Instance.new("Humanoid")
+	humanoid.JumpPower = 50
+	humanoid.Parent = character
+	old:Destroy()
+	character.Parent = workspaceService
+	bob.Character = character
+	bob.CharacterAdded:Fire(character)
+	assert(seatedIn(humanoid) == RS_.deskOf(bob).seat and humanoid.JumpPower == 0, "respawned student not reseated")
+	seatsUnmoved()
+	-- Bell -> hallway: everyone unwelded, jump restored, seats where they were.
+	RS_.endClass(simTime)
+	simTime += GameConfig.ResultsSeconds + 1
+	RS_.step(0.1)
+	assert(RS_.state() == "Hallway")
+	for _, p in ipairs({ alice, bob, carol }) do
+		local h = p.Character:FindFirstChildOfClass("Humanoid")
+		assert(seatedIn(h) == nil and h.JumpPower > 0, p.Name .. " stuck seated / frozen in the hallway")
+	end
+	for seat in pairs(seatCFrames) do
+		local weld = seat:FindFirstChild("SeatWeld")
+		assert(not (weld and weld.Part1 and weld.Part1:IsDescendantOf(workspaceService)), "a SeatWeld survived the bell: " .. (weld and weld.Part1 and weld.Part1.Parent.Name or ""))
+	end
+	seatsUnmoved()
+	-- Everyone in detention with their escape used: the bell rings early (no soft-lock).
+	assert(RS_.beginBell())
+	simTime += GameConfig.BellSeconds
+	RS_.beginClass({ event = "None", seed = 6, lesson = only("Board") })
+	for _, p in ipairs({ alice, bob, carol }) do
+		local st = RS_.student(p)
+		DS.getProfile(p).Tokens.HallPass = 0
+		st.escapeUsed = true
+		RS_.addSuspicion(p, 1)
+		assert(st.detention)
+	end
+	run(0.2)
+	assert(RS_.state() == "Results", "class kept going with nobody able to play")
+	simTime += GameConfig.ResultsSeconds + 1
+	RS_.step(0.1)
+	assert(RS_.state() == "Hallway")
+	seatsUnmoved()
 end)
 
 check("Clout upgrades and cosmetics: buy, equip, maxed, not enough Clout", function()
@@ -1095,6 +1235,9 @@ check("crates: Locker Crate for Clout; Robux Skin Crate hidden when PolicyServic
 	assert(ok and result and result.rarity, "locker crate failed")
 	assert(profile.Clout <= 5000 - CosmeticConfig.Crates.Locker.CloutPrice + (result.refund or 0))
 	assert(count("CrateResult", nil, alice) >= 1)
+	-- No policy answer yet (fresh player): fail safe, no paid random items.
+	local stranger = roblox.Instance.new("Player")
+	assert(not SS.randomItemsAllowed(stranger), "paid random items allowed before the policy lookup")
 	-- Restricted region
 	policyRestricted = true
 	SS._loadPolicy(alice)

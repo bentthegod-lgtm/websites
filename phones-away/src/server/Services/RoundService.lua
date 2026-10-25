@@ -166,18 +166,44 @@ local function humanoidOf(player)
 	return character and character:FindFirstChildOfClass("Humanoid")
 end
 
+-- Breaks the SeatWeld holding this character. The desk / detention seats are anchored, so
+-- pivoting a character that is still welded to one drags the seat along (and the welded
+-- character stays frozen wherever it lands). Humanoid.Sit = false alone is not reliable
+-- from the server, so the weld itself is destroyed before any move.
+local function unseat(player)
+	local character = player.Character
+	local humanoid = humanoidOf(player)
+	local seat = humanoid and humanoid.SeatPart
+	if seat and character then
+		for _, child in ipairs(seat:GetChildren()) do
+			if child.Name == "SeatWeld" and child:IsA("JointInstance") and child.Part1 and child.Part1:IsDescendantOf(character) then
+				child:Destroy()
+			end
+		end
+	end
+	if humanoid then
+		humanoid.Sit = false
+	end
+end
+
 local function seatPlayer(player, seat)
 	local character = player.Character
 	if not character or not seat then
 		return
 	end
-	pcall(function()
-		character:PivotTo(seat.CFrame * CFrame.new(0, 2.5, 0))
-	end)
 	local humanoid = humanoidOf(player)
 	if humanoid then
 		humanoid.UseJumpPower = true
 		humanoid.JumpPower = 0
+		if humanoid.SeatPart == seat then
+			return -- already there (re-pivoting would drag the anchored seat)
+		end
+	end
+	unseat(player)
+	pcall(function()
+		character:PivotTo(seat.CFrame * CFrame.new(0, 2.5, 0))
+	end)
+	if humanoid then
 		pcall(function()
 			seat:Sit(humanoid)
 		end)
@@ -185,9 +211,9 @@ local function seatPlayer(player, seat)
 end
 
 local function freePlayer(player, spot)
+	unseat(player)
 	local humanoid = humanoidOf(player)
 	if humanoid then
-		humanoid.Sit = false
 		humanoid.UseJumpPower = true
 		humanoid.JumpPower = 50
 	end
@@ -336,6 +362,14 @@ for _, product in ipairs(ShopConfig.Products) do
 	if product.Key == "PizzaParty" then
 		PIZZA_COLOR = product.Color
 	end
+end
+
+-- Can another Pizza Party be bought right now (starts now, or fits in the queue)?
+function RoundService.canAddPizza()
+	if state == "Class" and round and not round.pizza then
+		return true
+	end
+	return (workspace:GetAttribute("PA_PizzaQueued") or 0) < GameConfig.PizzaMaxQueued
 end
 
 -- Returns true when it started right away (bought during class), false when queued.
@@ -820,7 +854,16 @@ function RoundService.tickClass(dt, now)
 	if services.World.detentionTimer then
 		services.World.detentionTimer.Text = Format.clock(round.duration - t)
 	end
-	if t >= round.duration then
+	-- Nobody left who can still play (everyone left, or everyone is in detention with their
+	-- one escape used): ring the bell now instead of making the hallway wait out the clock.
+	local anyoneLeft = false
+	for player, st in pairs(students) do
+		if player.Parent and (not st.detention or not st.escapeUsed) then
+			anyoneLeft = true
+			break
+		end
+	end
+	if t >= round.duration or not anyoneLeft then
 		RoundService.endClass(now)
 	end
 end
@@ -986,6 +1029,9 @@ function RoundService.onPlayerRemoving(player)
 		services.DataService.addClout(player, math.floor(st.pending), true)
 		st.pending = 0
 		students[player] = nil
+		if st.desk and st.desk.cardLabel then
+			st.desk.cardLabel.Text = ""
+		end
 	end
 	if decorModels[player] then
 		decorModels[player]:Destroy()

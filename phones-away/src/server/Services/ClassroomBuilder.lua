@@ -229,8 +229,13 @@ local function buildFront(room)
 	local board = model("Whiteboard", room)
 	deco(board, "Frame", Vector3.new(30, 9.4, 0.3), CFrame.new(0, 7.6, zWall + 0.15), COLORS.BoardFrame, { Material = Enum.Material.Metal })
 	local surface = deco(board, "Surface", Vector3.new(29, 8.6, 0.12), CFrame.new(0, 7.6, zWall + 0.36), COLORS.Board)
-	local text, textGui = surfaceText(surface, Enum.NormalId.Back, "", { TextScaled = false, TextSize = 64, TextColor3 = rgb(40, 70, 170), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Font = Enum.Font.PatrickHand })
+	-- TextScaled (capped at 64) so all 6 lesson lines fit: at a fixed TextSize 64 only about
+	-- 3 lines fit the 8.6-stud board and the rest of the lesson was clipped off its bottom.
+	local text, textGui = surfaceText(surface, Enum.NormalId.Back, "", { TextScaled = true, TextColor3 = rgb(40, 70, 170), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Font = Enum.Font.PatrickHand })
 	textGui.PixelsPerStud = 30
+	local maxSize = Instance.new("UITextSizeConstraint")
+	maxSize.MaxTextSize = 64
+	maxSize.Parent = text
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 40)
 	pad.PaddingTop = UDim.new(0, 24)
@@ -286,7 +291,8 @@ local function buildFront(room)
 		deco(desk, "Knob", Vector3.new(0.3, 0.2, 0.2), dcf * CFrame.new(2.5, 0.8 + i * 0.85, -1.85), COLORS.Metal)
 	end
 	deco(desk, "Monitor", Vector3.new(2.4, 1.6, 0.2), dcf * CFrame.new(-2, 4.4, -0.8), rgb(30, 30, 35))
-	deco(desk, "MonitorScreen", Vector3.new(2.2, 1.4, 0.05), dcf * CFrame.new(-2, 4.4, -0.68), rgb(90, 160, 255), { Material = Enum.Material.Neon, Transparency = 0.2 })
+	-- Screen on the chair side (she sits between the desk and the wall), not facing the class.
+	deco(desk, "MonitorScreen", Vector3.new(2.2, 1.4, 0.05), dcf * CFrame.new(-2, 4.4, -0.92), rgb(90, 160, 255), { Material = Enum.Material.Neon, Transparency = 0.2 })
 	deco(desk, "Stand", Vector3.new(0.3, 0.6, 0.3), dcf * CFrame.new(-2, 3.6, -0.8), rgb(30, 30, 35))
 	deco(desk, "Mug", Vector3.new(0.5, 0.6, 0.5), dcf * CFrame.new(0.6, 3.7, 0.6), rgb(255, 120, 90), { Shape = Enum.PartType.Cylinder, CFrame = dcf * CFrame.new(0.6, 3.7, 0.6) * CFrame.Angles(0, 0, math.rad(90)) })
 	deco(desk, "Apple", Vector3.new(0.6, 0.6, 0.6), dcf * CFrame.new(1.4, 3.7, 0.9), rgb(220, 40, 50), { Shape = Enum.PartType.Ball })
@@ -309,7 +315,8 @@ local function buildFront(room)
 	for row = 0, 2 do
 		for i = 0, 8 do
 			local h = 1.3 + ((i * 7 + row * 3) % 4) * 0.15
-			deco(shelf, "Book", Vector3.new(0.5, h, 1.4), scf * CFrame.new(-2.3 + i * 0.58, 1.1 + row * 2.6 + h / 2 - 0.3, -0.75), Color3.fromHSV(((i * 3 + row * 5) % 11) / 11, 0.6, 0.85))
+			-- On the class side of the (solid) frame: at -Z they were buried in it, facing the wall.
+			deco(shelf, "Book", Vector3.new(0.5, h, 1.4), scf * CFrame.new(-2.3 + i * 0.58, 1.1 + row * 2.6 + h / 2 - 0.3, 0.75), Color3.fromHSV(((i * 3 + row * 5) % 11) / 11, 0.6, 0.85))
 		end
 	end
 	deco(shelf, "GlobeStand", Vector3.new(0.8, 0.2, 0.8), scf * CFrame.new(0, 8.1, 0), rgb(90, 60, 40))
@@ -364,12 +371,18 @@ local function buildBack(room)
 	surfaceText(sign, Enum.NormalId.Front, "DETENTION\nthink about what you did", { TextColor3 = rgb(255, 255, 255) })
 	local timer = deco(det, "Timer", Vector3.new(2, 1, 0.1), CFrame.new(dx, 5.6, zWall - 0.1), rgb(30, 30, 40))
 	local timerLabel = surfaceText(timer, Enum.NormalId.Front, "", { TextColor3 = rgb(255, 80, 80), Font = Enum.Font.Code })
-	-- A second seat for when two students are in detention at once.
-	local seat2 = seat:Clone()
-	seat2.Name = "DetentionSeat2"
-	seat2.CFrame = seat.CFrame * CFrame.new(-3.2, 0, 0)
-	seat2.Parent = det
-	return { seats = { seat, seat2 }, timerLabel = timerLabel }
+	-- More stools for when several students are in detention at once (a Seat holds one
+	-- occupant): two rows of three on the rug, each with its own leg.
+	local seats = { seat }
+	for i, offset in ipairs({ Vector3.new(-3.2, 0, 0), Vector3.new(3.2, 0, 0), Vector3.new(0, 0, 2.6), Vector3.new(-3.2, 0, 2.6), Vector3.new(3.2, 0, 2.6) }) do
+		local extra = seat:Clone()
+		extra.Name = "DetentionSeat" .. (i + 1)
+		extra.CFrame = seat.CFrame * CFrame.new(offset)
+		extra.Parent = det
+		deco(det, "StoolLeg", Vector3.new(0.3, 1.2, 0.3), CFrame.new(extra.Position.X, 0.6, extra.Position.Z), COLORS.Metal)
+		table.insert(seats, extra)
+	end
+	return { seats = seats, timerLabel = timerLabel }
 end
 
 ---------------------------------------------------------------------------------------------

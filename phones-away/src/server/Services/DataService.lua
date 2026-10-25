@@ -331,6 +331,8 @@ function DataService.load(player)
 			local locked = false
 			local ok, result = pcall(function()
 				return store:UpdateAsync(key(player), function(old)
+					-- UpdateAsync may run this transform more than once: only the last call counts.
+					locked = false
 					local lock = type(old) == "table" and old.Lock
 					-- Another server still holds the profile (leave save in flight): wait for it.
 					-- After the last attempt the lock is taken over; the other server's writes are then refused.
@@ -403,6 +405,7 @@ function DataService.save(player)
 		lost = false
 		ok, err = pcall(function()
 			store:UpdateAsync(key(player), function(old)
+				lost = false -- the transform can be retried: only the last call counts
 				local lock = type(old) == "table" and old.Lock
 				if type(lock) ~= "table" or lock.Session ~= entry.session then
 					-- No lock: our own leave save already released it. Otherwise another server owns it.

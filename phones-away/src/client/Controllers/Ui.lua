@@ -127,11 +127,14 @@ function Ui.button(text, props, color)
 	return button
 end
 
-function Ui.screen(name, playerGui, displayOrder)
+-- `fullScreen` = true covers the Roblox top bar too (flashes, tints). Everything else stays
+-- below it: the UIScale also shrinks offsets, so on a phone a "52 px from the top" HUD would
+-- otherwise slide up under the top bar's menu / chat buttons.
+function Ui.screen(name, playerGui, displayOrder, fullScreen)
 	local gui = Ui.new("ScreenGui", {
 		Name = name,
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
+		IgnoreGuiInset = fullScreen == true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = displayOrder or 1,
 		Parent = playerGui,

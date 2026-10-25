@@ -240,7 +240,7 @@ end
 
 function EffectsController.init()
 	camera = workspace.CurrentCamera
-	gui = Ui.screen("PA_FX", player:WaitForChild("PlayerGui"), 8)
+	gui = Ui.screen("PA_FX", player:WaitForChild("PlayerGui"), 8, true)
 	flashFrame = Ui.new("Frame", { Name = "Flash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, ZIndex = 50, Parent = gui })
 	alarmFrame = Ui.new("Frame", { Name = "Alarm", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 40, 20), BackgroundTransparency = 0.85, Visible = false, ZIndex = 2, Parent = gui })
 	ClientState.Effect:Connect(EffectsController.handle)

@@ -26,6 +26,55 @@ TeacherBrain.__index = TeacherBrain
 
 local rad = math.rad
 
+---------------------------------------------------------------------------------------------
+-- Navigation: the 12 desks (+ chairs) are obstacles. A straight line from the board to the
+-- door, or from the back aisle to the board, cuts right through them, so when the direct
+-- line is blocked she routes through the aisles (shortest path over a few lane nodes).
+---------------------------------------------------------------------------------------------
+
+local DESK_HALF_X, DESK_FRONT, DESK_BACK = 2, 1.3, 3.45 -- desk top + chair, around (column, row)
+local BODY = 1.2 -- her half-width (+ a little room)
+
+local function deskRects(L)
+	local rects = {}
+	for _, z in ipairs(L.DeskRows) do
+		for _, x in ipairs(L.DeskColumns) do
+			table.insert(rects, { x - DESK_HALF_X - BODY, z - DESK_FRONT - BODY, x + DESK_HALF_X + BODY, z + DESK_BACK + BODY })
+		end
+	end
+	return rects
+end
+
+local function inside(r, x, z)
+	return x > r[1] and x < r[3] and z > r[2] and z < r[4]
+end
+
+-- Slab test: does the segment (x0, z0) -> (x1, z1) pass through rectangle r?
+local function segmentHits(r, x0, z0, x1, z1)
+	local t0, t1 = 0, 1
+	local d = { x1 - x0, z1 - z0 }
+	local o = { x0, z0 }
+	local lo, hi = { r[1], r[2] }, { r[3], r[4] }
+	for axis = 1, 2 do
+		if math.abs(d[axis]) < 1e-9 then
+			if o[axis] <= lo[axis] or o[axis] >= hi[axis] then
+				return false
+			end
+		else
+			local a = (lo[axis] - o[axis]) / d[axis]
+			local b = (hi[axis] - o[axis]) / d[axis]
+			if a > b then
+				a, b = b, a
+			end
+			t0, t1 = math.max(t0, a), math.min(t1, b)
+			if t0 >= t1 then
+				return false
+			end
+		end
+	end
+	return true
+end
+
 --[[
 	cfg = TeacherConfig, layout = GameConfig.Classroom, rng = Rng
 	opts = { substitute = bool, detection = number (global multiplier), turnScale = number }
@@ -56,6 +105,20 @@ function TeacherBrain.new(cfg, layout, rng, opts)
 	self.glanceState = nil
 	self.napUntil = 0
 	self.nextNap = math.huge
+	self._rects = deskRects(layout)
+	-- Lane nodes: where each aisle meets the front / back aisle, plus a lane down the right
+	-- side of the room (toward the door).
+	local laneX = table.clone(layout.Aisles)
+	local maxColumn = -math.huge
+	for _, x in ipairs(layout.DeskColumns) do
+		maxColumn = math.max(maxColumn, x)
+	end
+	table.insert(laneX, maxColumn + DESK_HALF_X + BODY + 2.8)
+	self._nodes = {}
+	for _, x in ipairs(laneX) do
+		table.insert(self._nodes, { x, layout.FrontAisleZ })
+		table.insert(self._nodes, { x, layout.BackAisleZ })
+	end
 	return self
 end
 
@@ -133,6 +196,81 @@ function TeacherBrain:_moveToward(tx, tz, speed, dt)
 	return dist - step < 0.05, math.atan2(dx, dz)
 end
 
+function TeacherBrain:_clear(x0, z0, x1, z1)
+	for _, r in ipairs(self._rects) do
+		-- A rectangle she is already standing in can't block her way out of it.
+		if not inside(r, x0, z0) and segmentHits(r, x0, z0, x1, z1) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Next point to walk to on the way to (tx, tz): the target itself when the way is clear.
+function TeacherBrain:_nextWaypoint(tx, tz)
+	if self:_clear(self.x, self.z, tx, tz) then
+		return tx, tz
+	end
+	local nodes = { { self.x, self.z } }
+	for _, n in ipairs(self._nodes) do
+		table.insert(nodes, n)
+	end
+	table.insert(nodes, { tx, tz })
+	local goal = #nodes
+	local dist, prev, done = { [1] = 0 }, {}, {}
+	while true do
+		local best, bestD = nil, math.huge
+		for i = 1, #nodes do
+			if not done[i] and dist[i] and dist[i] < bestD then
+				best, bestD = i, dist[i]
+			end
+		end
+		if not best or best == goal then
+			break
+		end
+		done[best] = true
+		local a = nodes[best]
+		for i = 2, #nodes do
+			if not done[i] and i ~= best then
+				local b = nodes[i]
+				if self:_clear(a[1], a[2], b[1], b[2]) then
+					local d = bestD + math.sqrt((b[1] - a[1]) ^ 2 + (b[2] - a[2]) ^ 2)
+					if d < (dist[i] or math.huge) then
+						dist[i], prev[i] = d, best
+					end
+				end
+			end
+		end
+	end
+	if not dist[goal] then
+		return tx, tz -- no route found: fall back to the straight line
+	end
+	-- Walk back from the goal to the first step that actually moves her.
+	local path = {}
+	local i = goal
+	while i and i ~= 1 do
+		table.insert(path, 1, i)
+		i = prev[i]
+	end
+	for _, index in ipairs(path) do
+		local n = nodes[index]
+		if (n[1] - self.x) ^ 2 + (n[2] - self.z) ^ 2 > 0.01 then
+			return n[1], n[2]
+		end
+	end
+	return tx, tz
+end
+
+-- Like _moveToward, but around the desks. Returns arrived (at the target), heading.
+function TeacherBrain:_navTo(tx, tz, speed, dt)
+	local wx, wz = self:_nextWaypoint(tx, tz)
+	local arrived, heading = self:_moveToward(wx, wz, speed, dt)
+	if wx ~= tx or wz ~= tz then
+		return false, heading
+	end
+	return arrived, heading
+end
+
 --[[
 	ctx = { focus = { x, z } or nil } (the most suspicious student, from the service)
 	Returns self for chaining.
@@ -149,7 +287,7 @@ function TeacherBrain:update(dt, now, ctx)
 
 	if self.phase == "Board" then
 		self.pose = "Write"
-		self:_moveToward(L.BoardSpot[1], L.BoardSpot[2], cfg.WalkSpeed, dt)
+		self:_navTo(L.BoardSpot[1], L.BoardSpot[2], cfg.WalkSpeed, dt)
 		self.targetHeading = math.pi
 		local g = self.glanceState
 		if not g and now >= self.nextGlance then
@@ -188,7 +326,7 @@ function TeacherBrain:update(dt, now, ctx)
 	elseif self.phase == "Lecture" or self.phase == "Quiz" then
 		self.pose = if self.phase == "Quiz" then "Quiz" else "Lecture"
 		local tx = L.LectureSpot[1] + (if self.phase == "Lecture" then math.sin(now * 0.3) * cfg.LecturePace else 0)
-		self:_moveToward(tx, L.LectureSpot[2], cfg.WalkSpeed * 0.4, dt)
+		self:_navTo(tx, L.LectureSpot[2], cfg.WalkSpeed * 0.4, dt)
 		self.targetHeading = rad(math.sin(now * 0.45) * cfg.LectureSweep)
 		if ctx.focus then
 			self.targetHeading = Detection.headingTo(self.x, self.z, ctx.focus[1], ctx.focus[2])
@@ -201,7 +339,7 @@ function TeacherBrain:update(dt, now, ctx)
 		self.path = path
 		local wp = path[self.pathIndex]
 		if wp then
-			local arrived, moveHeading = self:_moveToward(wp[1], wp[2], cfg.WalkSpeed, dt)
+			local arrived, moveHeading = self:_navTo(wp[1], wp[2], cfg.WalkSpeed, dt)
 			if moveHeading then
 				if now >= self.nextLookFlip then
 					self.lookFlip = -self.lookFlip
@@ -225,10 +363,10 @@ function TeacherBrain:update(dt, now, ctx)
 	elseif self.phase == "FireDrill" then
 		self.pose = "Panic"
 		turn = cfg.Turn.Distract
-		self:_moveToward(L.LectureSpot[1] + math.sin(now * 1.3) * 10, L.LectureSpot[2] + 3, cfg.WalkSpeed, dt)
+		self:_navTo(L.LectureSpot[1] + math.sin(now * 1.3) * 10, L.LectureSpot[2] + 3, cfg.WalkSpeed, dt)
 		self.targetHeading = Detection.wrap(now * 2.6)
 	elseif self.phase == "LunchCheck" then
-		local arrived = self:_moveToward(L.DoorSpot[1] - 2, L.DoorSpot[2], cfg.WalkSpeed * 1.2, dt)
+		local arrived = self:_navTo(L.DoorSpot[1] - 2, L.DoorSpot[2], cfg.WalkSpeed * 1.2, dt)
 		self.pose = if arrived then "Door" else "Walk"
 		turn = cfg.Turn.Walk
 		self.targetHeading = if arrived then math.pi / 2 else Detection.headingTo(self.x, self.z, L.DoorSpot[1], L.DoorSpot[2])
