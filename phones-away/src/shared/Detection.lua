@@ -5,7 +5,8 @@
 	  * SIGHT: a field-of-view cone with a soft edge. A phone that is out (or coming out, or
 	    still going away, or still glowing in the desk for a moment) is visible inside the
 	    cone. Closer = worse. Phone case dims glow, hood / textbook cover blocks some of it.
-	    Selfie flashes are 5x brighter.
+	    A screenshot flash is much brighter (dimmed by the Dim Screen case). A smart-watch
+	    glance is a small, dim glow.
 	  * DESK CHECK: while walking the rows she checks desks up close; cover barely helps.
 	  * HEARING: screen taps make noise (earbuds reduce it) heard in every direction.
 
@@ -51,10 +52,15 @@ function Detection.visibility(student, sightCfg)
 	elseif phone == "raising" then
 		return sightCfg.RaiseVisibility
 	end
+	local vis = 0
 	if (student.sinceHidden or math.huge) < (student.linger or 0) then
-		return sightCfg.LingerVisibility
+		vis = sightCfg.LingerVisibility
 	end
-	return 0
+	-- Glancing at a smart watch: a small, dim screen on your wrist.
+	if student.watch then
+		vis = math.max(vis, student.watchVisibility or 0.3)
+	end
+	return vis
 end
 
 -- 0..1 inside the cone (soft edge), plus the angle (deg) and distance.
@@ -91,7 +97,8 @@ function Detection.gain(observer, student, cfg)
 			local near = sightCfg.NearBonus * math.clamp(1 - dist / sightCfg.Range, 0, 1)
 			local glow = student.glow or 1
 			if student.flash then
-				glow = math.max(glow, 1) * sightCfg.FlashMultiplier
+				-- A screenshot flash is dimmed by the Dim Screen case (glow), never below 1x.
+				glow = math.max(glow * (student.flashMultiplier or sightCfg.FlashMultiplier), 1)
 				seenFlash = true
 			end
 			sightGain = sightCfg.Rate * (1 + near) * vis * cone * glow * (student.cover or 1) * sightMult
@@ -104,7 +111,7 @@ function Detection.gain(observer, student, cfg)
 	end
 	local noise = student.noise or 0
 	if student.flash then
-		noise += hearCfg.FlashNoise
+		noise += (student.flashNoise or hearCfg.FlashNoise)
 	end
 	local hearMult = observer.hearing or 1
 	if noise > (hearCfg.MinNoise or 0) and hearMult > 0 then

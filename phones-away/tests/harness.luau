@@ -529,6 +529,7 @@ check("every phone tier / skin and every desk decoration builds", function()
 		end
 	end
 	assert(Props.plane(CFrame.new()).PrimaryPart)
+	assert(Props.testPaper(CFrame.new(), "B").PrimaryPart and countParts(Props.rippedPaper(CFrame.new())) >= 4, "test paper props")
 end)
 
 -- Remote stubs that record traffic.
@@ -573,8 +574,8 @@ local function lastFor(name, player)
 end
 
 local registry
-local ORDER = { "DataService", "ShopService", "CosmeticService", "PhoneService", "TeacherService", "ClassmateService", "RewardService", "RoundService", "LeaderboardService" }
-local DS, RS_, PS, TS, CS, SS
+local ORDER = { "DataService", "ShopService", "CosmeticService", "PhoneService", "TestService", "TeacherService", "ClassmateService", "RewardService", "RoundService", "LeaderboardService" }
+local DS, RS_, PS, TS, CS, SS, TestS
 check("services initialise and start", function()
 	registry = { Remotes = remotes, World = world }
 	for _, name in ipairs(ORDER) do
@@ -585,10 +586,10 @@ check("services initialise and start", function()
 	end
 	registry.TeacherService.setup()
 	registry.LeaderboardService.setBoard(world.board)
-	for _, name in ipairs({ "ShopService", "CosmeticService", "PhoneService", "ClassmateService", "RewardService", "RoundService", "LeaderboardService", "DataService" }) do
+	for _, name in ipairs({ "ShopService", "CosmeticService", "PhoneService", "TestService", "ClassmateService", "RewardService", "RoundService", "LeaderboardService", "DataService" }) do
 		registry[name].start()
 	end
-	DS, RS_, PS, TS, CS, SS = registry.DataService, registry.RoundService, registry.PhoneService, registry.TeacherService, registry.ClassmateService, registry.ShopService
+	DS, RS_, PS, TS, CS, SS, TestS = registry.DataService, registry.RoundService, registry.PhoneService, registry.TeacherService, registry.ClassmateService, registry.ShopService, registry.TestService
 	CS.instantPlanes = true
 	assert(type(stubServices.MarketplaceService.ProcessReceipt) == "function", "ProcessReceipt not bound")
 	assert(RS_.state() == "Hallway")
@@ -665,21 +666,22 @@ local function forcePhase(phase)
 	round.phaseIndex = 0 -- the next tick enters the new phase
 end
 
-local alice, bob, carol, dave
+local alice, bob, carol, dave, eve
 check("players join: default profiles (memory), leaderstats, 'saving unavailable' notice", function()
 	alice = makePlayer("Alice")
 	bob = makePlayer("Bob")
 	carol = makePlayer("Carol")
 	dave = makePlayer("Dave")
+	eve = makePlayer("Eve")
 	friendPairs[alice.UserId .. ":" .. bob.UserId] = true
-	for _, p in ipairs({ alice, bob, carol, dave }) do
+	for _, p in ipairs({ alice, bob, carol, dave, eve }) do
 		local profile = DS.getProfile(p)
 		assert(profile and profile.Clout == 0 and profile.Level == 1, "no default profile")
 		assert(not DS.isPersistent(p))
 		assert(p.leaderstats.Clout.Value == 0 and p.leaderstats.Rank.Value == "Freshman")
 		assert(p:GetAttribute("PA_Status") == "Hallway")
 	end
-	assert(count("Notify", "saving is unavailable") >= 4)
+	assert(count("Notify", "saving is unavailable") >= 5)
 end)
 
 check("passes (Studio grants): VIP tag + VIP desk, 2x Clout multiplier", function()
@@ -720,48 +722,143 @@ check("bell: everyone seated at distinct desks, friends together, VIP in a VIP d
 end)
 
 local boardRate, walkRate
-check("board phase: phone out while she writes = Clout, almost no suspicion", function()
+local Bank = requireModule(SSS:FindFirstChild("PhonesAwayServer"):FindFirstChild("Data"):FindFirstChild("QuestionBank"))
+local TestPaper = requireModule(Shared.TestPaper)
+local LEAK_KEYS = { correct = true, answer = true, answers = true, perms = true, order = true, revealed = true }
+
+-- Recursively makes sure a payload has no answer key in it.
+local function assertNoAnswerKey(value, path, allowAnswers)
+	if type(value) ~= "table" then
+		return
+	end
+	for k, v in pairs(value) do
+		local key = string.lower(tostring(k))
+		if LEAK_KEYS[key] and not (allowAnswers and key == "answers") then
+			error("answer key leaked at " .. path .. "." .. tostring(k))
+		end
+		assertNoAnswerKey(v, path .. "." .. tostring(k), allowAnswers)
+	end
+end
+
+local function holdPhoneUp(player)
+	PS.request(player, true, simTime)
+	run(0.4)
+	assert(PS.isFullyUp(player), player.Name .. "'s phone never came up")
+end
+
+check("test: every student gets a version (friends share one), payload has NO answers", function()
 	class = RS_.beginClass({ event = "None", seed = 7, lesson = only("Board"), duration = 2000 })
 	assert(RS_.state() == "Class" and RS_.currentPhase() == "Board")
-	TS.brain().nextGlance = math.huge -- no surprise glances for this comparison
-	assert(PS.request(alice, true, simTime), "phone up refused")
-	assert(not PS.isFullyUp(alice), "phone was instantly up (no raise time)")
-	run(0.5)
-	assert(PS.isFullyUp(alice), "phone never came up")
-	local st = RS_.student(alice)
-	local before = st.susp.value
-	-- Scroll the feed: like posts while she writes
-	for _ = 1, 20 do
-		local p = PS.get(alice)
-		PS.action(alice, "like", p.session.post.id, simTime)
-		run(0.3)
-		PS.action(alice, "scroll", nil, simTime)
-		run(0.2)
+	assert(TestS.active())
+	for _, p in ipairs({ alice, bob, carol, dave, eve }) do
+		local view = TestS.viewFor(p)
+		assert(view and #view.questions == 10 and (view.version == "A" or view.version == "B"), p.Name .. " has no test")
+		assert(p:GetAttribute("PA_Version") == view.version)
 	end
-	run(5)
-	boardRate = (st.susp.value - before) / 15
-	assert(st.susp.value < TeacherConfig.Suspicion.Question, "suspicious while she faces the board: " .. st.susp.value)
-	assert(not st.detention)
-	assert(st.pending > 10, "earned only " .. st.pending)
-	assert(count("PhoneResult", nil, alice) >= 20)
-	-- Goal progress: phone time while she writes on the board.
-	assert(st.boardSecs > 10, "board seconds " .. st.boardSecs)
+	assert(TestS.paper(alice).version == TestS.paper(bob).version, "friends got different versions")
+	-- Every "view" ever sent to a client: questions + options only.
+	local sent = 0
+	for _, entry in ipairs(log.Test or {}) do
+		if entry.args[1] == "view" then
+			sent += 1
+			local data = entry.args[2]
+			for _, q in ipairs(data.questions) do
+				assert(#q.options == 4 and type(q.text) == "string")
+				for k in pairs(q) do
+					assert(k == "slot" or k == "subject" or k == "tier" or k == "text" or k == "options", "unexpected field " .. tostring(k))
+				end
+			end
+			-- `answers` here are the student's OWN picks (empty at the start), never the key.
+			assert(next(data.answers) == nil, "answers pre-filled")
+			assertNoAnswerKey(data.questions, "view.questions")
+		end
+	end
+	assert(sent >= 5, "views sent: " .. sent)
+	-- The bank lives in ServerScriptService only.
+	assert(not RS:FindFirstChild("QuestionBank", true), "question bank replicated to clients")
+	-- A desk paper with the version letter.
+	assert(world.props:FindFirstChild("Paper_" .. dave.UserId), "no test paper on the desk")
+	-- Nothing revealed yet: no PhoneResult "reveal" has been sent.
+	assert(count("PhoneResult", "reveal") == 0)
+	assert(#TestS.revealedList(dave) == 0)
 end)
 
-check("walking the rows: same phone use gets her CAUGHT -> confiscated -> detention", function()
+check("board phase: snap -> scan -> 2 answers revealed -> answered correctly (almost no suspicion)", function()
+	TS.brain().nextGlance = math.huge -- no surprise glances for this comparison
+	assert(PS.request(dave, true, simTime), "phone up refused")
+	assert(not PS.isFullyUp(dave), "phone was instantly up (no raise time)")
+	assert(not PS.action(dave, "snap", simTime), "snapped before the phone was fully out")
+	run(0.4)
+	assert(PS.isFullyUp(dave))
+	local st = RS_.student(dave)
+	local before = st.susp.value
+	assert(PS.action(dave, "snap", simTime), "snap refused")
+	assert(not PS.action(dave, "snap", simTime), "second snap while scanning")
+	-- Aim -> shutter -> scan: the server runs the clock; nothing is revealed until it's done.
+	local stats = PS.get(dave).stats
+	assert(stats.answers == 2, "default phone should reveal 2")
+	run(PhoneConfig.Snap.AimSeconds + 0.15)
+	assert(PS.get(dave).scan and PS.get(dave).scan.stage == "process", "no shutter")
+	assert(count("PhoneResult", "shutter", dave) >= 1 and count("Effect", "Flash") >= 1)
+	run(stats.scan - 0.5)
+	assert(count("PhoneResult", "reveal", dave) == 0, "answers before the scan finished")
+	run(0.8)
+	local res = lastFor("PhoneResult", dave)
+	assert(res and res[1] == "reveal", "no reveal")
+	local revealed = res[2].answers
+	assert(#revealed == 2, "revealed " .. #revealed)
+	-- The reveal went ONLY to Dave.
+	for _, entry in ipairs(log.PhoneResult) do
+		if entry.args[1] == "reveal" then
+			assert(entry.player == dave and not entry.all, "reveal broadcast")
+		end
+	end
+	-- And they are right.
+	local version = TestS.version(dave)
+	for _, r in ipairs(revealed) do
+		assert(r.option == TestPaper.correctOption(Bank, version, r.slot), "revealed a wrong answer")
+	end
+	-- Put the phone away, then answer (answering is safe).
+	PS.request(dave, false, simTime)
+	run(1)
+	for _, r in ipairs(revealed) do
+		assert(TestS.answer(dave, r.slot, r.option, simTime), "answer refused")
+	end
+	local correct = TestPaper.grade(Bank, version, TestS.paper(dave).answers)
+	assert(correct == 2, "graded " .. correct)
+	assert(count("Test", "ack", dave) >= 2)
+	boardRate = (st.susp.value - before) / 10
+	assert(st.susp.value < TeacherConfig.Suspicion.Question, "suspicious while she faces the board: " .. st.susp.value)
+	assert(not st.detention)
+	-- Hiding mid-scan loses the screenshot.
+	holdPhoneUp(dave)
+	assert(PS.action(dave, "snap", simTime))
+	run(PhoneConfig.Snap.AimSeconds + 0.3)
+	PS.request(dave, false, simTime)
+	run(0.3)
+	assert(PS.get(dave).scan == nil and count("PhoneResult", "scanFailed", dave) >= 1, "hidden scan still finished")
+	assert(#TestS.revealedList(dave) == 2, "a cancelled scan revealed answers")
+	run(1)
+end)
+
+check("walking the rows: a snap during the walk gets her CAUGHT -> test ripped -> detention", function()
 	forcePhase("Walk")
 	local st = RS_.student(alice)
-	local pendingBefore = st.pending
+	-- Alice answers 3 questions honestly first, so there's something to rip up.
+	for slot = 1, 3 do
+		assert(TestS.answer(alice, slot, 1, simTime))
+	end
 	local before = st.susp.value
 	local caughtAt
 	local t0 = simTime
+	PS.request(alice, true, simTime)
 	run(45, function()
 		if not caughtAt and st.detention then
 			caughtAt = simTime
 		end
 		local p = PS.get(alice)
-		if p and p.state == "up" and p.app == "Feed" then
-			PS.action(alice, "like", p.session.post.id, simTime)
+		if p and p.state == "up" and not p.scan then
+			PS.action(alice, "snap", simTime)
 		end
 	end)
 	assert(caughtAt, "never caught during a 45 s walk (suspicion " .. st.susp.value .. ")")
@@ -771,13 +868,18 @@ check("walking the rows: same phone use gets her CAUGHT -> confiscated -> detent
 	assert(alice:GetAttribute("PA_Status") == "Detention" and RS_.inDetention(alice))
 	assert(PS.get(alice).confiscated and not PS.isOut(alice))
 	assert(PS.get(alice).confiscatedModel and (PS.get(alice).confiscatedModel.PrimaryPart.CFrame.Position - world.basket.CFrame.Position).Magnitude < 3, "phone not in the CONFISCATED basket")
-	assert(st.lost > 0 and math.abs(st.lost - st.pending) <= 2, string.format("pending not halved (lost %.1f, kept %.1f)", st.lost, st.pending))
-	assert(st.pending + st.lost >= pendingBefore, "pending shrank before the catch")
+	-- The test is ripped up: no answers, no revealed answers, graded F / 0.
+	local paper = TestS.paper(alice)
+	assert(paper.ripped and next(paper.answers) == nil and next(paper.revealed) == nil, "test not zeroed")
+	local grade = TestS.grade(alice, { multiplier = 1 })
+	assert(grade.letter == "F" and grade.clout == 0 and grade.percent == 0, "ripped test still scores")
+	assert(count("Test", "ripped", alice) >= 1)
+	assert(world.props:FindFirstChild("Paper_" .. alice.UserId).Name == "Paper_" .. alice.UserId)
+	assert(not TestS.answer(alice, 4, 1, simTime), "answered from detention")
 	assert(count("Effect", "Caught") >= 1 and count("Chat", nil) >= 1)
 	assert(DS.getProfile(alice).Stats.Caught == 1)
 	assert(not PS.request(alice, true, simTime), "phone came back out in detention")
 	assert(RS_.deskOf(alice) == nil)
-	-- Teacher pointed at her
 	assert(TS.model():GetAttribute("Pose") ~= nil)
 end)
 
@@ -795,6 +897,7 @@ check("detention: bail needs Clout, works once, phone back after a cooldown", fu
 	assert(RS_.bail(alice), "bail failed")
 	assert(alice:GetAttribute("PA_Status") == "Seated" and not RS_.inDetention(alice))
 	assert(not PS.get(alice).confiscated)
+	assert(not TestS.paper(alice).ripped, "no fresh test copy after escaping")
 	assert(not PS.request(alice, true, simTime), "phone allowed during the cooldown")
 	assert(RS_.student(alice).susp.value == GameConfig.DetentionReturnSuspicion)
 	-- Caught again: no second escape.
@@ -933,73 +1036,126 @@ check("Teacher's Pet: a true report raises suspicion, a false one backfires, lim
 	run(0.1)
 end)
 
-check("remote validation: phone + minigame inputs are type-checked, rate limited and capped", function()
+check("remote validation: phone + answer inputs are type-checked and rate limited; no answers without a scan", function()
 	local onPhone = remotes.Phone.OnServerEvent
 	local onAction = remotes.PhoneAction.OnServerEvent
-	local onApp = remotes.PhoneApp.OnServerEvent
-	onPhone:Fire(dave, "yes")
-	onPhone:Fire(dave, 1)
-	assert(not PS.isOut(dave), "non-boolean accepted")
-	onApp:Fire(dave, "Hack")
-	assert(PS.get(dave).app == "Feed")
-	onApp:Fire(dave, "Text")
-	assert(PS.get(dave).app == "Text")
-	onPhone:Fire(dave, true)
-	run(0.5)
-	assert(PS.isFullyUp(dave))
-	onAction:Fire(dave, "text", string.rep("a", 500))
-	onAction:Fire(dave, "text", { "table" })
-	onAction:Fire(dave, "like", 0 / 0)
-	onAction:Fire(dave, "nuke", 1)
-	-- Correct text answer (after a human delay) pays; wrong app actions don't.
-	simTime += 1
-	local word = PS.get(dave).session.text.word
-	local ok, amount = PS.action(dave, "text", word, simTime)
-	assert(ok and amount > 0, "valid text reply rejected")
-	assert(not PS.action(dave, "like", PS.get(dave).session.post.id, simTime), "feed action while in the text app")
-	-- Burst: at most ActionsPerSecond accepted in the same instant.
-	PS.setApp(dave, "Game")
+	local onAnswer = remotes.Answer.OnServerEvent
+	onPhone:Fire(bob, "yes")
+	onPhone:Fire(bob, 1)
+	assert(not PS.isOut(bob), "non-boolean accepted")
+	-- Answers: slot / option must be integers in range on the student's own paper.
+	local paper = TestS.paper(bob)
+	paper.tokens = 100
+	onAnswer:Fire(bob, 0 / 0, 1)
+	onAnswer:Fire(bob, 1, 0 / 0)
+	onAnswer:Fire(bob, 11, 1)
+	onAnswer:Fire(bob, 1, 5)
+	onAnswer:Fire(bob, 1.5, 2)
+	onAnswer:Fire(bob, "1", "2")
+	onAnswer:Fire(bob, { 1 }, 2)
+	assert(next(paper.answers) == nil, "invalid answer stored")
+	onAnswer:Fire(bob, 2, 3)
+	assert(paper.answers[2] == 3)
+	-- Answer clicks are rate limited.
+	paper.tokens = GameConfig.Test.AnswerRate
 	local accepted = 0
-	for _ = 1, 50 do
-		local okTap, _, info = PS.action(dave, "tap", simTime, simTime)
-		if okTap or info ~= "rate" then
+	for i = 1, 40 do
+		if TestS.answer(bob, (i % 10) + 1, 1, simTime) then
 			accepted += 1
 		end
 	end
-	assert(accepted <= PhoneConfig.ActionsPerSecond, "rate limit: " .. accepted)
-	-- Class cap
-	local p = PS.get(dave)
-	p.session.total = PhoneConfig.Caps.Total
-	PS.setApp(dave, "Selfie")
-	simTime += 20
-	local okSelfie, amountSelfie = PS.action(dave, "selfie", nil, simTime)
-	assert(okSelfie and amountSelfie == 0, "Clout past the class cap")
-	PS.request(dave, false, simTime)
+	assert(accepted <= GameConfig.Test.AnswerRate, "answer rate limit: " .. accepted)
+	-- Phone actions: unknown kinds and junk args do nothing; a snap needs the phone OUT.
+	local reveals = count("PhoneResult", "reveal")
+	onAction:Fire(bob, "reveal")
+	onAction:Fire(bob, "answers")
+	onAction:Fire(bob, { "snap" })
+	onAction:Fire(bob, string.rep("x", 200))
+	onAction:Fire(bob, "snap")
+	assert(PS.get(bob).scan == nil, "snap with the phone down")
+	onAction:Fire(bob, "watch")
+	assert(PS.get(bob).watchUntil == nil, "watch without the upgrade")
+	onAction:Fire(bob, "peek")
+	assert(count("PhoneResult", "reveal") == reveals, "an answer leaked without a server-side scan")
+	-- Burst: at most ActionsPerSecond actions in the same instant.
+	onPhone:Fire(bob, true)
+	run(0.4)
+	assert(PS.isFullyUp(bob))
+	local p = PS.get(bob)
+	p.actionTokens = PhoneConfig.ActionsPerSecond
+	local okCount = 0
+	for _ = 1, 30 do
+		local _, reason = PS.action(bob, "watch", simTime)
+		if reason ~= "rate" then
+			okCount += 1
+		end
+	end
+	assert(okCount <= PhoneConfig.ActionsPerSecond, "action rate limit: " .. okCount)
+	PS.request(bob, false, simTime)
 	run(1)
+	-- No answers once the test is over (checked again after the bell below).
 end)
 
-check("selfie flash she can see = instant big suspicion", function()
+check("smart watch: 1 answer with the phone AWAY, then a long cooldown", function()
+	local profile = DS.getProfile(carol)
+	-- carol is in detention: use eve instead
+	profile = DS.getProfile(eve)
+	profile.Upgrades.Watch = 1
+	PS.refreshStats(eve)
+	local p = PS.get(eve)
+	assert(p.stats.watch, "watch stats missing")
+	assert(not PS.isOut(eve))
+	assert(PS.action(eve, "watch", simTime), "watch refused")
+	assert(not PS.action(eve, "watch", simTime + 0.1), "watch spam allowed")
+	run(p.stats.watch.glance + 0.2)
+	local res = lastFor("PhoneResult", eve)
+	assert(res and res[1] == "reveal" and #res[2].answers == 1 and res[2].source == "watch", "watch did not reveal 1")
+	simTime += 2
+	assert(not PS.action(eve, "watch", simTime), "watch ignored its cooldown")
+	assert(TestS.paper(eve).cheated, "watch use should count as cheating (Ghost)")
+end)
+
+check("Answer Key Peek receipt (twice): 1 answer, max 1 per test, then saved", function()
+	local before = #TestS.revealedList(eve)
+	assert(receipt(eve, "AnswerPeek", "peek-1") == Decision.PurchaseGranted)
+	assert(receipt(eve, "AnswerPeek", "peek-1") == Decision.PurchaseGranted)
+	assert(#TestS.revealedList(eve) == before + 1, "peek did not reveal exactly 1")
+	assert(TestS.paper(eve).peekUsed and DS.getProfile(eve).Tokens.Peek == 0)
+	assert(receipt(eve, "AnswerPeek", "peek-2") == Decision.PurchaseGranted)
+	assert(#TestS.revealedList(eve) == before + 1, "second peek in one test")
+	assert(DS.getProfile(eve).Tokens.Peek == 1, "second peek not saved")
+end)
+
+check("screenshot flash she can see = instant suspicion", function()
 	forcePhase("Lecture")
 	run(0.5)
-	local p = PS.get(dave)
-	p.session.total = 0
-	p.session.used.Selfie = 0
-	PS.setApp(dave, "Selfie")
-	PS.request(dave, true, simTime)
-	run(0.4)
-	local st = RS_.student(dave)
+	holdPhoneUp(eve)
+	local st = RS_.student(eve)
 	st.susp.value = 0
-	-- Point her straight at Dave.
+	-- Point her straight at Eve.
 	local b = TS.brain()
 	local Detection = requireModule(Shared.Detection)
 	b.heading = Detection.headingTo(b.x, b.z, st.desk.x, st.desk.z)
 	b.distractUntil = nil
-	simTime += 20
-	PS.action(dave, "selfie", nil, simTime)
-	run(0.1)
-	assert(st.susp.value >= TeacherConfig.Sight.FlashInstant or st.detention, "flash not noticed: " .. st.susp.value)
-	PS.request(dave, false, simTime)
+	assert(PS.action(eve, "snap", simTime))
+	run(PhoneConfig.Snap.AimSeconds + 0.1)
+	assert(st.susp.value >= PhoneConfig.Snap.FlashInstant or st.detention, "flash not noticed: " .. st.susp.value)
+	PS.request(eve, false, simTime)
 	run(2)
+end)
+
+check("an honest + cheating student: all 10 right = A+", function()
+	forcePhase("Board")
+	TS.brain().nextGlance = math.huge
+	local version = TestS.version(dave)
+	local paper = TestS.paper(dave)
+	paper.tokens = 100
+	for slot = 1, #version.order do
+		-- (Dave studied: he knows the rest.)
+		assert(TestS.answer(dave, slot, TestPaper.correctOption(Bank, version, slot), simTime))
+	end
+	local grade = TestS.grade(dave, { multiplier = 1 })
+	assert(grade.correct == 10 and grade.letter == "A+" and grade.aplus == GameConfig.Test.APlusBonus)
 end)
 
 local banked
@@ -1014,7 +1170,14 @@ check("bell: pending Clout is banked, results sent, back to the hallway", functi
 	assert(DS.getProfile(alice).Clout >= before + expectAlice, "not banked")
 	assert(DS.getProfile(dave).TotalClout >= totalBefore + davePending)
 	local res = lastFor("Results", alice)
-	assert(res and res[1].caught == true)
+	assert(res and res[1].caught == true and res[1].grade and res[1].grade.letter == "F" and res[1].grade.clout == 0, "caught student not zeroed")
+	local daveRes = lastFor("Results", dave)
+	local dg = daveRes and daveRes[1].grade
+	assert(dg and dg.letter == "A+" and dg.correct == 10, "dave's A+ missing")
+	assert(dg.clout >= GameConfig.Test.Grades[1].Clout + GameConfig.Test.APlusBonus, "A+ not paid")
+	assert(DS.getProfile(dave).Stats.APlus == 1 and DS.getProfile(dave).Stats.Tests == 1)
+	-- After the bell no more answers count.
+	assert(not TestS.answer(dave, 1, 1, simTime), "answered after the bell")
 	assert(DS.getProfile(dave).Stats.Classes == 1)
 	assert(DS.getProfile(bob).Stats.CleanClasses == 0, "bob was caught")
 	assert(DS.getProfile(dave).Stats.CleanClasses == (if stD.caught then 0 else 1))
@@ -1022,9 +1185,10 @@ check("bell: pending Clout is banked, results sent, back to the hallway", functi
 	simTime += GameConfig.ResultsSeconds + 1
 	RS_.step(0.1)
 	assert(RS_.state() == "Hallway")
-	for _, p in ipairs({ alice, bob, carol, dave }) do
+	for _, p in ipairs({ alice, bob, carol, dave, eve }) do
 		assert(p:GetAttribute("PA_Status") == "Hallway" and RS_.deskOf(p) == nil and PS.get(p) == nil)
 	end
+	assert(not TestS.active() and count("Test", "clear") >= 5, "test not cleared")
 	assert(world.desks[1].cardLabel.Text == "")
 	assert(not world.door.CanCollide)
 	assert(#world.props:GetChildren() == 0, "props left behind")
@@ -1056,14 +1220,15 @@ check("Pizza Party: queued from the hallway, announced with the buyer, lenient 2
 	assert(workspaceService:GetAttribute("PA_PizzaQueued") == 0)
 	assert(RS_.cloutMultiplier() == GameConfig.PizzaCloutMultiplier)
 	assert(math.abs(TS.brain().detection - GameConfig.PizzaDetectionMultiplier) < 1e-9, "teacher not lenient")
-	-- Everyone (not just the buyer) earns double.
-	PS.request(carol, true, simTime)
-	run(0.5)
-	local p = PS.get(carol)
-	local _, amount = PS.action(carol, "like", p.session.post.id, simTime)
-	local base = PhoneConfig.Feed.LikeClout * (if p.session.post.viral then PhoneConfig.Feed.ViralMultiplier else 1)
-	assert(math.abs(amount - base * 2 * SS.cloutMultiplier(carol)) < 1e-6, "pizza 2x not applied: " .. tostring(amount))
-	PS.request(carol, false, simTime)
+	-- Everyone (not just the buyer) gets double Clout for their grade: Carol aces it.
+	local version = TestS.version(carol)
+	TestS.paper(carol).tokens = 100
+	for slot = 1, #version.order do
+		TestS.answer(carol, slot, TestPaper.correctOption(Bank, version, slot), simTime)
+	end
+	local carolPizzaGrade = TestS.grade(carol, { multiplier = SS.cloutMultiplier(carol) * GameConfig.PizzaCloutMultiplier })
+	local carolPlainGrade = TestS.grade(carol, { multiplier = SS.cloutMultiplier(carol) })
+	assert(carolPizzaGrade.clout >= carolPlainGrade.clout * 2 - 1, "pizza 2x not applied")
 	-- Bought during class: starts right away; queue is capped.
 	RS_.round().pizza = false
 	assert(RS_.startPizza(alice) == true and RS_.round().pizza)
@@ -1075,6 +1240,19 @@ check("Pizza Party: queued from the hallway, announced with the buyer, lenient 2
 	assert(not SS.buy(alice, "PizzaParty"), "pizza sold with a full queue")
 	assert(receipt(alice, "PizzaParty", "pizza-full") == Decision.NotProcessedYet, "pizza receipt granted with a full queue")
 	workspaceService:SetAttribute("PA_PizzaQueued", 0)
+	-- The bell pays Carol's A+ at 2x (pizza class).
+	local carolBefore = DS.getProfile(carol).Clout
+	local pendingCarol = math.floor(RS_.student(carol).pending)
+	RS_.endClass(simTime)
+	local res = lastFor("Results", carol)
+	assert(res and res[1].pizza and res[1].grade.letter == "A+", "pizza results")
+	assert(res[1].grade.clout == carolPizzaGrade.clout, string.format("pizza grade paid %d, expected %d", res[1].grade.clout, carolPizzaGrade.clout))
+	assert(DS.getProfile(carol).Clout >= carolBefore + pendingCarol + carolPizzaGrade.clout)
+	simTime += GameConfig.ResultsSeconds + 1
+	RS_.step(0.1)
+	assert(RS_.beginBell())
+	simTime += GameConfig.BellSeconds
+	RS_.beginClass({ event = "None", seed = 5, lesson = only("Lecture") })
 end)
 
 check("principal event: second observer + double detection while in the room", function()
@@ -1189,7 +1367,7 @@ check("seating: seats never move, reset mid-class reseats, nobody stuck seated i
 	assert(RS_.beginBell())
 	simTime += GameConfig.BellSeconds
 	RS_.beginClass({ event = "None", seed = 6, lesson = only("Board") })
-	for _, p in ipairs({ alice, bob, carol }) do
+	for _, p in ipairs({ alice, bob, carol, eve }) do
 		local st = RS_.student(p)
 		DS.getProfile(p).Tokens.HallPass = 0
 		st.escapeUsed = true
@@ -1207,9 +1385,9 @@ end)
 check("Clout upgrades and cosmetics: buy, equip, maxed, not enough Clout", function()
 	local CSv = registry.CosmeticService
 	local profile = DS.getProfile(alice)
-	profile.Clout = 300
+	profile.Clout = 700
 	assert(CSv.buyUpgrade(alice, "Phone"))
-	assert(profile.Upgrades.Phone == 2 and profile.Clout == 50)
+	assert(profile.Upgrades.Phone == 2 and profile.Clout == 100)
 	assert(not CSv.buyUpgrade(alice, "Phone"), "bought without enough Clout")
 	assert(not CSv.buyUpgrade(alice, "Rocket"))
 	assert(not CSv.buyUpgrade(alice, 5))
@@ -1387,8 +1565,10 @@ check("a full class runs start to finish on the real schedule (every phase + eve
 				seen[phase] = true
 			end
 			local p = PS.get(bob)
-			if p and p.state == "up" and p.app == "Feed" then
-				PS.action(bob, "like", p.session.post.id, simTime)
+			if p and p.state == "up" and not p.scan then
+				PS.action(bob, "snap", simTime)
+			elseif p and p.state == "down" and not p.confiscated then
+				PS.request(bob, true, simTime)
 			end
 		end)
 		assert(RS_.state() == "Results", event .. ": class did not end (" .. RS_.state() .. ")")
@@ -1401,6 +1581,7 @@ check("a full class runs start to finish on the real schedule (every phase + eve
 		assert(seen[phase], "never saw phase " .. phase)
 	end
 	assert(DS.getProfile(bob).Stats.Classes >= 5)
+	assert((DS.getProfile(bob).Stats.Revealed or 0) > 0, "bob never revealed anything in 5 classes")
 	assert(world.boardText.Text ~= "", "nothing written on the board")
 end)
 
@@ -1435,7 +1616,7 @@ check("client controllers initialise and render a real profile snapshot", functi
 
 	local folder = place:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts"):FindFirstChild("PhonesAwayClient"):FindFirstChild("Controllers")
 	local controllers = {}
-	for _, name in ipairs({ "ClientState", "HudController", "PhoneController", "TeacherController", "MenuController", "EffectsController" }) do
+	for _, name in ipairs({ "ClientState", "HudController", "PhoneController", "TeacherController", "TestController", "MenuController", "EffectsController" }) do
 		controllers[name] = requireModule(folder[name])
 		controllers[name].init()
 	end
@@ -1448,26 +1629,42 @@ check("client controllers initialise and render a real profile snapshot", functi
 	CSt.PhaseChanged:Fire(CSt.phase)
 	CSt.SuspicionChanged:Fire(0.5, "?", 42)
 	CSt.SuspicionChanged:Fire(0.8, "!", 42)
-	-- Phone: every app renders with a real server view.
-	local Minigames = requireModule(Shared.Minigames)
+	-- Test paper UI with a real server-made view.
 	local Rng = requireModule(Shared.Rng)
-	local session = Minigames.newSession(PhoneConfig, Rng.new(5), Clock.now())
-	CSt.phone = { state = "down", app = "Feed", confiscated = false, cooldownUntil = 0, hide = 0.4, view = Minigames.view(session), caps = { used = 0, total = 900 } }
+	local built = TestPaper.build(Bank, GameConfig.Test, Rng.new(5))
+	local view = TestPaper.clientView(Bank, built.versions.B, 200)
+	view.answers = {}
+	CSt.test = view
+	CSt.TestChanged:Fire("view", view)
+	local Test = controllers.TestController
+	Test.select(3)
+	Test.answer(2)
+	assert(view.answers[3] == 2, "answer not recorded locally")
+	CSt.TestChanged:Fire("ack", view)
+	-- Phone scanner: idle, aiming, scanning, revealed, failed.
+	CSt.phone = { state = "down", confiscated = false, cooldownUntil = 0, hide = 0.4, answersPerSnap = 2, scanSeconds = 6, revealed = {}, remaining = 10, watch = { cooldownUntil = 0, cooldown = 45, glance = 3 } }
 	CSt.PhoneChanged:Fire(CSt.phone)
 	local Phone = controllers.PhoneController
 	Phone.press()
 	assert(Phone.isUp(), "phone did not come up")
-	for _, app in ipairs(PhoneConfig.AppOrder) do
-		Phone.setApp(app)
-		Phone._primary()
-	end
-	CSt.PhoneResult:Fire("tap", { ok = true, amount = 4, info = "Perfect", view = Minigames.view(session) })
-	CSt.PhoneResult:Fire("text", { ok = false, amount = 0, info = "wrong", view = Minigames.view(session), capped = true })
+	Phone._primary()
+	CSt.phone.scan = { stage = "aim", untilT = Clock.now() + 0.6 }
+	CSt.PhoneResult:Fire("aim", { untilT = Clock.now() + 0.6 })
+	CSt.phone.scan = { stage = "process", untilT = Clock.now() + 5 }
+	CSt.PhoneResult:Fire("shutter", { untilT = Clock.now() + 5 })
+	stubServices.RunService.RenderStepped:Fire(1 / 60)
+	CSt.phone.scan = nil
+	CSt.PhoneResult:Fire("reveal", { answers = { { slot = 1, option = 3 }, { slot = 4, option = 1 } }, source = "snap", all = { { slot = 1, option = 3 }, { slot = 4, option = 1 } } })
+	CSt.PhoneResult:Fire("scanFailed", {})
+	CSt.PhoneResult:Fire("watch", { untilT = Clock.now() + 3 })
+	Phone.watch()
 	Phone.release()
 	assert(not Phone.isUp())
+	CSt.TestChanged:Fire("ripped", view)
+	CSt.TestChanged:Fire("clear", nil)
 	-- HUD
 	local Hud = controllers.HudController
-	CSt.QuizChanged:Fire({ question = "7 x 8 = ?", options = { "54", "56", "64" }, seconds = 9, endsAt = Clock.now() + 9 })
+	CSt.QuizChanged:Fire({ question = "7 x 8 = ?", options = { "54", "56", "64", "48" }, seconds = 9, endsAt = Clock.now() + 9 })
 	CSt.QuizResult:Fire({ correct = false, distracted = true, answer = "56", reward = 0 })
 	CSt.QuizChanged:Fire(nil)
 	CSt.Chat:Fire("front_row_fiona", "rip Alice's phone (2024-2024)", { 255, 120, 120 })
@@ -1476,7 +1673,8 @@ check("client controllers initialise and render a real profile snapshot", functi
 	end
 	CSt.Notified:Fire("Hello class", "good")
 	CSt.Announced:Fire("Bob bought a PIZZA PARTY!", { 255, 150, 60 })
-	CSt.Results:Fire({ clout = 123, lost = 20, caught = true, quiz = "phone", walkSecs = 12, pizza = true, legend = "Bob", top = { { name = "Bob", clout = 300, caught = false }, { name = "Alice", clout = 123, caught = true } } })
+	CSt.Results:Fire({ clout = 123, lost = 20, caught = true, quiz = "phone", walkSecs = 12, snaps = 3, pizza = true, legend = "Bob", grade = { correct = 0, count = 10, percent = 0, letter = "F", base = 0, aplus = 0, ghost = 0, clout = 0, ripped = true, version = "A" }, top = { { name = "Bob", clout = 300, caught = false, letter = "A+" }, { name = "Alice", clout = 123, caught = true, letter = "F" } } })
+	CSt.Results:Fire({ clout = 400, lost = 0, caught = false, snaps = 2, grade = { correct = 10, count = 10, percent = 100, letter = "A+", base = 150, aplus = 50, ghost = 60, clout = 260, ripped = false, version = "B" }, top = {} })
 	for _, mode in ipairs({ "plane", "note", "report" }) do
 		Hud._openChart(mode)
 	end
@@ -1542,7 +1740,7 @@ check("client controllers initialise and render a real profile snapshot", functi
 	end
 	assert(rigCount == 2, "rigs tracked: " .. rigCount)
 	assert(workspaceService:FindFirstChild("PA_VisionCones") and #workspaceService.PA_VisionCones:GetChildren() == 4, "vision cones missing")
-	for _, name in ipairs({ "PA_HUD", "PA_Phone", "PA_Menu", "PA_FX" }) do
+	for _, name in ipairs({ "PA_HUD", "PA_Phone", "PA_Test", "PA_Menu", "PA_FX" }) do
 		assert(playerGui:FindFirstChild(name), name .. " missing")
 	end
 end)

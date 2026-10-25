@@ -16,7 +16,7 @@ return {
 	PhoneOut = { Id = "rbxassetid://9125756882", Volume = 0.35, Pitch = 1.4 }, -- dead-air DrawerOpen
 	PhoneAway = { Id = "rbxassetid://9125757128", Volume = 0.35, Pitch = 1.5 }, -- dead-air DrawerClose
 	CloutGain = { Id = "rbxassetid://9116173869", Volume = 0.3, Pitch = 1.3 }, -- dead-air Pickup
-	SelfieShutter = { Id = "", Volume = 0.6 }, -- add your own camera shutter
+	SelfieShutter = { Id = "rbxassetid://9114480271", Volume = 0.6, Pitch = 1.4 }, -- reused click from DEAD AIR; swap for a real shutter
 	Notification = { Id = "", Volume = 0.4 }, -- add your own message ping
 
 	-- Classroom

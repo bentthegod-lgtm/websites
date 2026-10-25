@@ -1,8 +1,14 @@
 # PHONES AWAY!: polish to-do (for the PC Claude with Blender and ComfyUI)
 
 The game works fully with its procedural part models. This list covers the meshes to replace,
-the art to generate, the sounds to add and the balance to tune. No renders were made in the
-sandbox. Open `build/PhonesAway.rbxlx` in Studio first to see the current look.
+the art to generate, the sounds to add and the balance to tune. A rough three.js render of the
+current room (with the test papers) is `build/classroom-preview.png`; re-render it with
+`tools/export_classroom.luau` + `tools/render_preview.mjs` (commands at the top of each file).
+Open `build/PhonesAway.rbxlx` in Studio to see the real look.
+
+**Core loop reminder:** every class is a test. Students screenshot the test with their phone,
+the scanner app processes while the phone stays out, and it reveals answers. The test paper,
+the phone and the smart watch are the hero props.
 
 **Style for everything:** bright, friendly "cartoon school". Chunky, rounded, slightly
 oversized props (think toy classroom), with saturated but warm colours: teal, coral, sunny
@@ -74,13 +80,14 @@ with the PointLight `Glow`) and the PointLight `Flash` on Body.
 
 | Model | Size (W×H×D studs) | Look |
 |---|---|---|
-| Hand-me-down Brick | 0.62 × 1.15 × 0.22 | Chunky old grey phone with an antenna nub |
-| Flip Classic | 0.6 × 1.1 × 0.16 | Blue flip phone, visible hinge |
-| Slab S | 0.6 × 1.2 × 0.1 | Black modern slab |
-| Slab S Plus | 0.66 × 1.3 × 0.09 | White, bigger |
-| Fold Z | 0.85 × 1.3 × 0.09 | Purple foldable, crease line |
-| Ultra Max 12 | 0.72 × 1.45 × 0.08 | Gold-trimmed flagship, triple camera |
-| Prism Pro (pass) | 0.7 × 1.4 × 0.07 | Iridescent teal-to-pink glassy back, glowing edges |
+| Hand-me-down Brick (2 answers / snap) | 0.62 × 1.15 × 0.22 | Chunky old grey phone, antenna nub, one tiny camera |
+| Flip Classic (3) | 0.6 × 1.1 × 0.16 | Blue flip phone, visible hinge |
+| Slab S (4) | 0.6 × 1.2 × 0.1 | Black modern slab, dual camera |
+| Ultra Max 12 (5) | 0.72 × 1.45 × 0.08 | Gold-trimmed flagship, big triple camera bump |
+| Prism Pro (pass, +1 capped at 5) | 0.7 × 1.4 × 0.07 | Iridescent teal-to-pink glassy back, glowing edges |
+
+The camera bump matters now (the phone takes screenshots): make it readable from across the
+room. A **screen glow** variant for "scanning" (a pulsing green scan line) would sell the risk.
 
 Skins recolour the body: Bubblegum, Mint, Camo (wood), Denim (fabric), Marble, Lava (neon
 stripe), Gold (foil), Galaxy, Hologram. A small skin texture atlas would look great.
@@ -96,6 +103,21 @@ Desk decor, each about 0.6 × 1 stud and placed on the desk top:
 * Class Crown
 
 Paper airplane: about 0.5 × 0.15 × 1.1, folded white paper.
+
+### Test paper (`Props.testPaper`, `Props.rippedPaper`) - hero prop
+
+| Model | Size | Notes |
+|---|---|---|
+| Test paper | 1.7 × 0.03 × 2.2 on the desk top | Slightly curled printer paper: title line, 8 question lines with answer bubbles, a name line, a round **VERSION** badge (A = blue, B = pink; keep the `Version` part and its SurfaceGui letter), a yellow pencil. Keep `Sheet` as PrimaryPart |
+| Ripped test | scraps in a 1.2 radius | 6 torn scraps with jagged edges, a few question lines visible, maybe a big red "F" on one |
+| (optional) Red-pen grade | 0.5 | A circled letter grade that could stamp onto the paper at the bell |
+
+### Smart watch (late upgrade) - new prop
+
+Shown on the student's wrist when owned (not built yet: add it to the character in
+`RoundService.refreshDesk`). About 0.35 × 0.1 × 0.4: a chunky square watch with a bright
+screen and a coloured band; "Smart Watch Pro" is sleeker with a glowing edge. A dim screen
+glow while glancing would match the gameplay (the server already treats it as a small glow).
 
 ## 5. Hallway (lobby)
 
@@ -131,12 +153,13 @@ not in the generation.
 
 1. **"Don't get caught"**
    > wide cartoon classroom scene in Roblox 3D style, rows of blocky students at desks secretly
-   > using glowing phones under their desks, a friendly teacher with a teal cardigan writing on
-   > a whiteboard with her back turned, one student taking a selfie with a bright flash, comedic
+   > photographing their test papers with glowing phones under their desks, a friendly teacher
+   > with a teal cardigan writing on a whiteboard with her back turned, one phone flashing as it
+   > snaps a test paper, a progress bar glowing on its screen, comedic
    > tension, warm sunny light from big windows, vibrant colors, dynamic angle, high detail
 2. **"CONFISCATED!"**
    > cartoon Roblox style, a teacher pointing dramatically at a shocked blocky student, a red
-   > exclamation mark above her head, a phone flying into a basket labelled box, classmates gasping
+   > exclamation mark above her head, a test paper torn into confetti, a phone flying into a basket, classmates gasping
    > and laughing, bright classroom, exaggerated expressions, comic energy, vibrant colors,
    > motion lines
 3. **"PIZZA PARTY"**
@@ -156,7 +179,10 @@ not in the generation.
 * Silent Mode: earbuds with a "shh" mute symbol
 * Extra Hide Speed: a phone with speed lines and a lightning bolt
 * Pro Phone: an iridescent teal-pink phone with glowing edges
-* App icons: Feed (heart), Text (chat bubble), Tap Dash (lightning tap), Selfie (camera)
+* Answer Key Peek: a golden key over a test paper with one glowing checkmark
+* Scanner app icon ("ScanBuddy"): a friendly scanning-eye mascot inside a phone
+* Smart watch: a chunky smart watch with a glowing answer letter on its screen
+* Letter grade stamps: A+, A, B, C, D, F in red marker, and a "GHOST" stamp (cute ghost)
 * Rank badges: Freshman, Sophomore, Junior, Senior and Legend, as school-crest shields in green,
   blue, purple, orange and pink
 
@@ -168,7 +194,8 @@ separately.
 
 Fill these with audio you own or Creator Store audio that is marked usable:
 
-* **SelfieShutter:** short camera click
+* **SelfieShutter:** the screenshot shutter click (short camera click)
+* (new idea) a soft scanner "processing" beep loop for the scan window
 * **Notification:** soft message ping for the group chat
 * **MarkerSqueak:** whiteboard marker loop. It stops when she pauses, which is the audio tell
 * **Suspicious:** a quizzical "hm?" sting for "?"
@@ -193,8 +220,12 @@ school better.
 | Desk check | `Sight.DeskCheckRange/Rate` | 8 studs, 1.3/s | Walks should be the scariest phase |
 | Board glance | `TeacherConfig.Board` | every 7–12 s, 55%, 0.9 s warning | The pause tell must be readable |
 | Hearing | `Hearing.Rate`, `MinNoise` | 0.3, 0.08 | Earbuds should matter for front-row students |
-| Rewards / caps | `PhoneConfig` | 900 base Clout per class cap | A good player earns about 150–400 per class |
-| Upgrade prices | `UpgradeConfig` | 120 → 12,000 | First upgrade after 1–2 classes |
+| Snap timing | `PhoneConfig.Snap`, `UpgradeConfig.Scanner` | 0.6 s aim + 6 s scan (2.5 s best) | The scan should feel like a risky hold, not a free win |
+| Flash / shutter | `PhoneConfig.Snap` | 2.5x glow, +0.22 if seen, 0.9 noise | A snap in her cone should be a real "!" moment |
+| Answers per snap | `UpgradeConfig.Phone` | 2 / 3 / 4 / 5 | 2 snaps + honest knowledge ≈ B; A+ needs skill or upgrades |
+| Test difficulty | `GameConfig.Test.Mix`, `QuestionBank` | 3 easy / 4 medium / 3 hard | Honest players should still reach C–B |
+| Grade rewards | `GameConfig.Test.Grades` | A+ 150 … F 15, A+ +50, Ghost +60 | A good class ≈ 150–300 Clout |
+| Upgrade prices | `UpgradeConfig` | 120 → 9,000 | First upgrade after 1–2 classes |
 | Bail cost | `GameConfig.DetentionBail*` | 60 + 6/level | Should sting but be possible |
 | Pet | `GameConfig.Pet` | +22% suspicion per report, 3 per class | Must not dominate a class |
 

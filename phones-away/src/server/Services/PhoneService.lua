@@ -1,11 +1,14 @@
 --[[
-	PhoneService - each student's phone: up / down state, hide delay, the four phone apps
-	(server-validated minigames), passive Clout, noise and the phone model on the desk.
+	PhoneService - each student's phone: up / down state, hide delay, the ANSWER SCANNER
+	(the cheat), the smart watch, noise and the phone model on the desk.
 
-	The client sends ONLY: Phone(up), PhoneApp(appId), PhoneAction(kind, value). Everything
-	is validated here (types, NaN, rate limits, state) and rewards are capped per class
-	(PhoneConfig.Caps). Clout earned in class goes to RoundService's "pending" pot and is
-	banked when the bell rings (half is lost if the teacher catches you).
+	The client sends ONLY: Phone(up) and PhoneAction("snap" | "watch" | "peek"). Every timer
+	runs here:
+	  snap:    phone fully out -> aim (AimSeconds) -> shutter (noise + flash) -> scan
+	           (Scanner seconds; hiding the phone cancels it) -> TestService.reveal(N)
+	  watch:   glance (watch seconds, dim wrist glow) -> 1 answer -> long cooldown
+	  peek:    Answer Key Peek token -> 1 answer (TestService.usePeek)
+	There is no other path to an answer, so a modified client can't skip the risk.
 
 	Phone states: down -> raising (RaiseSeconds) -> up -> hiding (hide seconds) -> down
 	Detection sees raising / up / hiding, and a short glow "linger" after it's down.
@@ -18,7 +21,6 @@ local PhoneConfig = require(Shared.Config.PhoneConfig)
 local TeacherConfig = require(Shared.Config.TeacherConfig)
 local UpgradeConfig = require(Shared.Config.UpgradeConfig)
 local CosmeticConfig = require(Shared.Config.CosmeticConfig)
-local Minigames = require(Shared.Minigames)
 local Detection = require(Shared.Detection)
 local Economy = require(Shared.Economy)
 local CrateRoll = require(Shared.CrateRoll)
@@ -31,10 +33,6 @@ local PhoneService = {}
 local services
 local phones = {} -- [player] = state
 local rng = Rng.new(os.time() % 99991 + 3)
-local AppIds = {}
-for _, id in ipairs(PhoneConfig.AppOrder) do
-	AppIds[id] = true
-end
 
 function PhoneService.init(registry)
 	services = registry
@@ -100,8 +98,10 @@ function PhoneService.setup(player, desk)
 		state = "down",
 		changedAt = now,
 		hiddenAt = -math.huge,
-		app = "Feed",
-		session = Minigames.newSession(PhoneConfig, rng, now),
+		scan = nil, -- { stage = "aim" | "process", untilT, nextBeep }
+		watchUntil = nil,
+		watchCooldownUntil = 0,
+		snaps = 0,
 		noise = 0,
 		flash = false,
 		confiscated = false,
@@ -110,7 +110,6 @@ function PhoneService.setup(player, desk)
 		toggles = 0,
 		actionTokens = PhoneConfig.ActionsPerSecond,
 		actionAt = now,
-		passiveCarry = 0,
 		stats = (statsFor(player)),
 		quizDistracted = false,
 	}
@@ -139,12 +138,15 @@ function PhoneService.sendState(player)
 	end
 	services.Remotes.PhoneState:FireClient(player, {
 		state = p.state,
-		app = p.app,
 		confiscated = p.confiscated,
 		cooldownUntil = p.cooldownUntil,
 		hide = p.stats.hide,
-		view = Minigames.view(p.session),
-		caps = { used = p.session.total, total = PhoneConfig.Caps.Total },
+		answersPerSnap = p.stats.answers,
+		scanSeconds = p.stats.scan,
+		scan = p.scan and { stage = p.scan.stage, untilT = p.scan.untilT } or nil,
+		watch = if p.stats.watch then { untilT = p.watchUntil, cooldownUntil = p.watchCooldownUntil, cooldown = p.stats.watch.cooldown, glance = p.stats.watch.glance } else nil,
+		revealed = services.TestService.revealedList(player), -- only this player's own
+		remaining = services.TestService.remaining(player),
 	})
 end
 
@@ -219,6 +221,8 @@ function PhoneService.confiscate(player)
 	if not p then
 		return
 	end
+	p.scan = nil
+	p.watchUntil = nil
 	PhoneService.forceDown(player)
 	p.confiscated = true
 	if p.model then
@@ -265,6 +269,10 @@ function PhoneService.detectState(player, now)
 		cover = p.stats.cover,
 		noise = p.noise,
 		flash = p.flash,
+		flashMultiplier = PhoneConfig.Snap.FlashMultiplier,
+		flashNoise = 0, -- the shutter's noise is added to p.noise (Silent Shutter applies)
+		watch = p.watchUntil ~= nil and now < p.watchUntil,
+		watchVisibility = PhoneConfig.Watch.Visibility,
 	}
 end
 
@@ -278,33 +286,17 @@ function PhoneService.isFullyUp(player)
 	return p ~= nil and p.state == "up"
 end
 
-local function multiplier(player)
-	return services.ShopService.cloutMultiplier(player) * services.RoundService.cloutMultiplier()
+local function result(player, kind, data)
+	services.Remotes.PhoneResult:FireClient(player, kind, data)
 end
 
-local function award(player, p, app, base, taps)
-	if taps and taps > 0 then
-		p.noise = Detection.addNoise(p.noise, taps, p.stats.noise, TeacherConfig.Hearing)
-	end
-	local granted = Minigames.grant(p.session, app, base, PhoneConfig.Caps)
-	if granted <= 0 then
-		return 0
-	end
-	local amount = granted * multiplier(player)
-	services.RoundService.addPending(player, amount)
-	return amount
-end
-
--- Per-tick update from RoundService (state transitions, passive Clout, noise decay).
+-- Per-tick update from RoundService (state transitions, scanner / watch timers, noise).
 function PhoneService.update(player, dt, now)
 	local p = phones[player]
 	if not p then
 		return
 	end
-	p.flash = false
-	if p.flashUntil and now < p.flashUntil then
-		p.flash = true
-	end
+	p.flash = p.flashUntil ~= nil and now < p.flashUntil
 	if p.state == "raising" and now - p.changedAt >= PhoneConfig.RaiseSeconds then
 		setState(player, p, "up", now)
 		PhoneService.sendState(player)
@@ -313,101 +305,113 @@ function PhoneService.update(player, dt, now)
 		PhoneService.sendState(player)
 	end
 	p.noise = Detection.decayNoise(p.noise, dt, TeacherConfig.Hearing)
-	if p.state == "up" then
-		p.passiveCarry += PhoneConfig.PassivePerSecond * p.stats.rate * dt
-		if p.passiveCarry >= 1 then
-			local whole = math.floor(p.passiveCarry)
-			p.passiveCarry -= whole
-			award(player, p, "Passive", whole)
-		end
-	end
-end
-
--- Minigame input. Returns ok, amount, info.
-function PhoneService.action(player, kind, value, now)
-	now = now or Clock.now()
-	local p = phones[player]
-	if not p or type(kind) ~= "string" or p.state ~= "up" or p.confiscated then
-		return false, 0
-	end
-	-- Global action budget (token bucket).
-	p.actionTokens = math.min(PhoneConfig.ActionsPerSecond, p.actionTokens + (now - p.actionAt) * PhoneConfig.ActionsPerSecond)
-	p.actionAt = now
-	if p.actionTokens < 1 then
-		return false, 0, "rate"
-	end
-	p.actionTokens -= 1
-	local s = p.session
-	local ok, base, taps, info = false, 0, 0, nil
-	local app
-	if kind == "like" and p.app == "Feed" then
-		app = "Feed"
-		ok, base, taps = Minigames.like(s, value, PhoneConfig)
-	elseif kind == "scroll" and p.app == "Feed" then
-		app = "Feed"
-		ok, taps = Minigames.scroll(s, now, PhoneConfig, rng)
-	elseif kind == "text" and p.app == "Text" then
-		app = "Text"
-		ok, base, taps, info = Minigames.submitText(s, value, now, PhoneConfig, rng)
-		if ok then
-			services.RewardService.track(player, "Texts", 1)
-		end
-	elseif kind == "tap" and p.app == "Game" then
-		app = "Game"
-		ok, base, taps, info = Minigames.tap(s, value, now, PhoneConfig)
-		if info == "Perfect" then
-			services.RewardService.track(player, "Perfects", 1)
-		end
-	elseif kind == "selfie" and p.app == "Selfie" then
-		app = "Selfie"
-		ok, base, taps = Minigames.selfie(s, now, PhoneConfig)
-		if ok then
-			p.flashUntil = now + 0.35
-			services.RoundService.selfieFlash(player)
-			services.RewardService.track(player, "Selfies", 1)
+	local scan = p.scan
+	if scan then
+		if p.state ~= "up" or p.confiscated or not services.RoundService.canUsePhone(player) then
+			-- The phone went away mid-scan: the screenshot is lost.
+			p.scan = nil
+			result(player, "scanFailed", {})
+			PhoneService.sendState(player)
+		elseif scan.stage == "aim" and now >= scan.untilT then
+			-- Shutter: click + flash, then the scanner app starts processing.
+			p.flashUntil = now + PhoneConfig.Snap.FlashSeconds
+			p.flash = true
+			p.noise = Detection.addNoise(p.noise, PhoneConfig.Snap.ShutterNoise / TeacherConfig.Hearing.NoisePerTap, p.stats.noise, TeacherConfig.Hearing)
+			scan.stage = "process"
+			scan.untilT = now + p.stats.scan
+			scan.nextBeep = now + 1
+			p.snaps += 1
+			services.RoundService.onSnap(player)
 			if p.model then
 				local flash = p.model.PrimaryPart and p.model.PrimaryPart:FindFirstChild("Flash")
 				if flash then
 					flash.Enabled = true
-					task.delay(0.3, function()
+					task.delay(PhoneConfig.Snap.FlashSeconds, function()
 						if flash.Parent then
 							flash.Enabled = false
 						end
 					end)
 				end
 			end
+			result(player, "shutter", { untilT = scan.untilT })
+			PhoneService.sendState(player)
+		elseif scan.stage == "process" then
+			if now >= scan.nextBeep then
+				scan.nextBeep = now + 1
+				p.noise = Detection.addNoise(p.noise, PhoneConfig.Snap.ScanTapNoise / TeacherConfig.Hearing.NoisePerTap, p.stats.noise, TeacherConfig.Hearing)
+			end
+			if now >= scan.untilT then
+				p.scan = nil
+				local answers = services.TestService.reveal(player, p.stats.answers, "snap")
+				result(player, "reveal", { answers = answers, source = "snap", all = services.TestService.revealedList(player) })
+				PhoneService.sendState(player)
+			end
 		end
-	else
-		return false, 0, "badkind"
 	end
-	local amount = 0
-	if base and base > 0 then
-		amount = award(player, p, app, base, taps)
-	elseif taps and taps > 0 then
-		p.noise = Detection.addNoise(p.noise, taps, p.stats.noise, TeacherConfig.Hearing)
+	if p.watchUntil and now >= p.watchUntil then
+		p.watchUntil = nil
+		if services.RoundService.canUsePhone(player) then
+			local answers = services.TestService.reveal(player, 1, "watch")
+			result(player, "reveal", { answers = answers, source = "watch", all = services.TestService.revealedList(player) })
+		end
+		PhoneService.sendState(player)
 	end
-	services.Remotes.PhoneResult:FireClient(player, kind, { ok = ok, amount = amount, info = info, view = Minigames.view(s), capped = s.total >= PhoneConfig.Caps.Total })
-	return ok, amount, info
 end
 
-function PhoneService.setApp(player, appId)
+-- Phone action from the client. Returns ok, reason.
+function PhoneService.action(player, kind, now)
+	now = now or Clock.now()
 	local p = phones[player]
-	if not p or type(appId) ~= "string" or not AppIds[appId] then
-		return false
+	if not p or type(kind) ~= "string" or p.confiscated or not services.RoundService.canUsePhone(player) then
+		return false, "unavailable"
 	end
-	p.app = appId
-	if appId == "Game" then
-		Minigames.resetGame(p.session, Clock.now())
-	elseif appId == "Text" then
-		Minigames.nextText(p.session, PhoneConfig, rng, Clock.now())
+	-- Global action budget (token bucket).
+	p.actionTokens = math.min(PhoneConfig.ActionsPerSecond, p.actionTokens + (now - p.actionAt) * PhoneConfig.ActionsPerSecond)
+	p.actionAt = now
+	if p.actionTokens < 1 then
+		return false, "rate"
 	end
-	PhoneService.sendState(player)
-	return true
+	p.actionTokens -= 1
+	if kind == "snap" then
+		if p.state ~= "up" then
+			return false, "notup"
+		elseif p.scan then
+			return false, "busy"
+		elseif services.TestService.remaining(player) <= 0 then
+			return false, "nothing"
+		end
+		p.scan = { stage = "aim", untilT = now + PhoneConfig.Snap.AimSeconds }
+		result(player, "aim", { untilT = p.scan.untilT })
+		PhoneService.sendState(player)
+		return true
+	elseif kind == "watch" then
+		local watch = p.stats.watch
+		if not watch then
+			return false, "nowatch"
+		elseif p.watchUntil or now < p.watchCooldownUntil then
+			return false, "cooldown"
+		elseif services.TestService.remaining(player) <= 0 then
+			return false, "nothing"
+		end
+		p.watchUntil = now + watch.glance
+		p.watchCooldownUntil = now + watch.glance + watch.cooldown
+		p.noise = Detection.addNoise(p.noise, PhoneConfig.Watch.Noise / TeacherConfig.Hearing.NoisePerTap, p.stats.noise, TeacherConfig.Hearing)
+		result(player, "watch", { untilT = p.watchUntil })
+		PhoneService.sendState(player)
+		return true
+	elseif kind == "peek" then
+		local ok, message = services.TestService.usePeek(player)
+		if not ok and message then
+			services.Remotes.Notify:FireClient(player, message, "warn")
+		end
+		return ok, message
+	end
+	return false, "badkind"
 end
 
-function PhoneService.sessionStats(player)
+function PhoneService.snapCount(player)
 	local p = phones[player]
-	return p and p.session.stats or nil
+	return p and p.snaps or 0
 end
 
 function PhoneService.markQuizStart()
@@ -442,20 +446,11 @@ function PhoneService.start()
 	remotes.Phone.OnServerEvent:Connect(function(player, up)
 		PhoneService.request(player, up)
 	end)
-	remotes.PhoneApp.OnServerEvent:Connect(function(player, appId)
-		PhoneService.setApp(player, appId)
-	end)
-	remotes.PhoneAction.OnServerEvent:Connect(function(player, kind, value)
-		if type(value) == "string" and #value > 24 then
+	remotes.PhoneAction.OnServerEvent:Connect(function(player, kind)
+		if type(kind) ~= "string" or #kind > 12 then
 			return
 		end
-		if type(value) == "number" and (value ~= value or math.abs(value) == math.huge) then
-			value = nil
-		end
-		if type(value) ~= "string" and type(value) ~= "number" and value ~= nil then
-			return
-		end
-		PhoneService.action(player, kind, value)
+		PhoneService.action(player, kind)
 	end)
 end
 

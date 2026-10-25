@@ -1,11 +1,16 @@
 # PHONES AWAY!
 
-A funny, tense high-school stealth game for Roblox (up to 12 players in one classroom). Everyone
-sits at a desk while **Ms. Bellweather** teaches. Sneak your phone out to scroll, text, play and
-take selfies for **Clout**. Hide it before she sees you. If her suspicion of you fills up, she
-**CONFISCATES** your phone and you go to the detention corner. The class goes on without you.
+A funny, tense high-school cheating-on-a-test stealth game for Roblox (up to 12 players in one
+classroom). **Every class period is a TEST.** A 10-question multiple-choice paper lands on every
+desk and on screen, and the exam timer starts. The questions are hard on purpose. So you sneak
+your phone out, **SNAP a screenshot** of your test, and keep the phone out while the scanner app
+processes. Then it shows you the correct answers to 2 questions (more with upgrades). Put the phone
+away and click those answers. Answering is safe; phone use is not. If **Ms. Bellweather**'s
+suspicion of you fills up, she **CONFISCATES** your phone, **rips up your test** (F, 0 points) and
+sends you to the detention corner. The class goes on without you.
 
-The genre is "using your phone in class without the teacher catching you". The game is original:
+The genre is "cheating during a test without the teacher catching you". Names, characters,
+questions, wording, UI and art are all our own; no assets or text from other games. The game is original:
 original names, characters, rules, UI and art. Everything is built from code: the school, the
 teacher rigs, the phones, the desk decorations, the effects and all the UI. There are no imported
 models and no uploaded images.
@@ -44,43 +49,61 @@ In Studio:
    upgrades and cosmetics, check the leaderboard, claim your daily reward, redeem codes.
 2. **Bell:** you're seated at your desk. Friends sit next to each other. VIPs get the gold desks
    in the back row.
-3. **Class (3:20, the wall clock runs from 10:05 to 10:55):** hold your phone button to use it.
-   Let go to hide it. Watch the teacher:
+3. **Class = TEST (3:20, the wall clock runs from 10:05 to 10:55):** your test paper shows
+   10 questions (3 easy, 4 medium, 3 hard, from 5 subjects) with 4 options each, a **VERSION A/B**
+   badge and the exam timer. Friends get the **same version** (and sit together) so they can help
+   each other; neighbouring groups get the other version. To cheat, hold your phone button and
+   SNAP. Watch the teacher:
 
 | Phase | What she does | Risk |
 |---|---|---|
 | Writing on the board | Back to the class. Every few seconds she **pauses** ("..." bubble), then glances over her shoulder | SAFE (watch for the pause) |
 | Lecturing | Faces the class and sweeps her gaze slowly. She drifts toward suspicious students | RISKY |
 | Walking the rows | Walks the aisles, scans desks left and right, checks desks up close | VERY RISKY |
-| Pop Quiz | Everyone answers a simple question in 9 s. **Anyone with a phone out gets it wrong** | Phones = wrong |
+| Bonus Question | She reads out one extra (easy) question, 9 s to answer. **Anyone with a phone out gets it wrong** | Phones = wrong |
 
 4. **The teacher AI** keeps a **suspicion meter for each student**. The server alone decides what
    she sees:
    * **Sight:** a field-of-view cone that turns slowly. You can see it on the floor, tinted by your
      own suspicion. A phone that is out, coming out, being hidden, or still glowing in the desk is
-     visible in the cone. The closer she is, the worse. A phone case dims the glow, a hood or a
-     textbook stand covers part of it, and a selfie flash is 5x brighter.
+     visible in the cone. The closer she is, the worse. A Dim Screen case dims the glow, a hood or
+     a textbook stand covers part of it, and the screenshot flash is 2.5x brighter (if she sees the
+     flash: instant suspicion). A smart-watch glance is a small, dim glow.
    * **Desk checks:** while she walks the rows she checks desks up close, and cover barely helps.
-   * **Hearing:** every screen tap makes noise, which she hears in all directions. Earbuds make
-     you quieter.
+   * **Hearing:** the screenshot shutter clicks and the scanner app beeps while it works. She
+     hears that in all directions. Silent Shutter (earbuds) makes you quieter.
    * A **"?"** over her head means she's suspicious of you. **"!"** means she's about to catch
-     you. At full suspicion: *CONFISCATED!* You lose half the Clout you earned this class, your
-     phone goes into the basket on her desk, and you sit in the detention corner until the bell.
+     you. At full suspicion: *CONFISCATED!* Your **test is ripped up** (answers and revealed answers
+     gone), you lose half your side Clout (airplanes, notes, bonus question), your phone goes into
+     the basket on her desk, and you sit in the detention corner until the bell.
 5. **Escape detention once per class:** talk your way out (Clout, scales with level) or use a
-   *Get Out of Detention* pass. You return with suspicion at 45% and an 8 s phone cooldown.
-6. **Bell:** the Clout you earned this class is banked. The results show the class's top three,
-   and the **Phone Legend** (most Clout without getting caught) is announced.
+   *Get Out of Detention* pass. You get a **fresh blank copy** of your test and return with
+   suspicion at 45% and an 8 s phone cooldown. Stay in detention and your grade is F.
+6. **Bell (or the timer runs out): pencils down, the test is graded.** Score %, a letter grade
+   (A+ = 10/10, A ≥ 90%, B ≥ 80%, C ≥ 70%, D ≥ 60%, F) and Clout by grade (150 / 120 / 90 / 65 /
+   40 / 15), plus **+50 for an A+** and **+60 GHOST bonus** for cheating (phone or watch) without
+   her ever getting to "?". Pass and Pizza multipliers apply. The results show the class's top
+   three with grades, and the **Phone Legend** is announced. No answers count after the bell.
 
-### Phone apps (tiny minigames, all validated on the server)
+### The phone: screenshot, scan, reveal (all timed by the server)
 
-| App | How | Reward |
+| Step | What happens | Risk |
 |---|---|---|
-| Scroll Feed | LIKE posts, NEXT for a new one. 8% of posts are VIRAL (x4) | 1.5 Clout per like |
-| Text Bestie | Reply with the word your bestie asks for: tap a quick reply (1/2/3) or type it | 6 + up to 6 for speed |
-| Tap Dash | Tap when the marker is in the zone: gold = Perfect, green = Good. Combos up to x2 | 2–4 + combo |
-| Selfie | SNAP. 9 s cooldown. The flash is very risky | 22 |
+| 1. Phone out | Hold F / L2 / PHONE. 0.25 s to raise it | visible while out |
+| 2. SNAP | Space / E / R2 / the SNAP button. 0.6 s lining up the camera over your paper | visible |
+| 3. Shutter | A click (noise) and a screen flash (2.5x glow, dimmed by Dim Screen) | she can SEE the flash and HEAR the click |
+| 4. Scan | The scanner app processes for 6 s (2.5 s with the best Scanner). **Keep the phone out**: hiding it cancels the scan | the long risk window |
+| 5. Reveal | The correct answers to 2 questions (Phone upgrade: 3 / 4 / 5) appear on YOUR phone only: "Q3: C" | — |
+| 6. Answer | Put the phone away and click the answers on the test | safe |
 
-You also earn passive Clout every second the phone is out (0.8/s × your phone's rate).
+* **Smart Watch** (late upgrade): press W / Y / WATCH with the phone **away**. A 3 s (2.2 s Pro)
+  glance at your wrist reveals 1 answer. Very low visibility, but a 45 s (30 s) cooldown.
+* **Answer Key Peek** (Robux): 1 answer instantly, max 1 per test. P / the PEEK flow, or used
+  automatically when bought during a test.
+* The client never has the answer key. The **question bank lives in ServerScriptService**
+  (`src/server/Data/QuestionBank.lua`, 162 original questions), not in shared code, so an
+  exploiter can't read it from ReplicatedStorage. Clients get question text and options only,
+  and an answer only after the server-side snap + scan (or watch / peek).
 
 ### Social
 
@@ -94,7 +117,7 @@ You also earn passive Clout every second the phone is out (0.8/s × your phone's
   +25% quiz rewards. Limits: 3 reports per class, 20 s cooldown, and a false report gives you
   15% suspicion. This keeps it a fun twist without ruining the round.
 * **Class group chat:** funny auto messages from invented classmate handles when someone gets
-  caught, escapes, takes a selfie, buys pizza, and so on. Real players are never quoted.
+  caught, escapes, screenshots the test, buys pizza, and so on. Real players are never quoted.
 * **Party seating:** friends (`IsFriendsWith`) sit in neighbouring desks.
 
 ### Random class events (one per class, or none)
@@ -103,7 +126,7 @@ You also earn passive Clout every second the phone is out (0.8/s × your phone's
 |---|---|
 | Substitute Teacher | Mr. Dozely subs. He is lenient (0.55x detection), turns slower and naps (sees nothing for 6 s) |
 | The Principal walks in | Principal Granite stands in the doorway for 24 s: **double detection** plus a second pair of eyes |
-| Fire Drill | 16 s of chaos. The alarm rings, the teacher spins around, detection drops, Clout x1.5 |
+| Fire Drill | 16 s of chaos. The alarm rings, the teacher spins around, detection drops: a great time to snap |
 | Early Lunch Bell | She walks to the door and checks the hallway with her back to the class for 12 s. Clout x1.25 |
 
 ### Controls
@@ -111,10 +134,11 @@ You also earn passive Clout every second the phone is out (0.8/s × your phone's
 | Action | Keyboard / mouse | Gamepad | Touch |
 |---|---|---|---|
 | Use phone (hold) | Hold **F** (or hold the PHONE button) | Hold **L2** | Hold the big PHONE button |
-| App action (like / tap / snap) | Space / E / click | R2 / A | tap the button |
-| Next post (feed) | S | – | NEXT |
-| Quick reply (text) | 1 / 2 / 3 | D-pad left / up / right | tap |
-| Switch app | Q / Tab, or the tabs | R1 / L1 | tabs |
+| SNAP the test (phone out) | Space / E / click SNAP | R2 / A | tap SNAP |
+| Smart watch | W / click WATCH | Y | WATCH button |
+| Answer Key Peek | P | – | – |
+| Answer the test | click an option, or 1 / 2 / 3 / 4 | UI selection | tap |
+| Previous / next question | Left / Right arrows, PREV / NEXT, the 1–10 grid | D-pad left / right | buttons |
 | Airplane / note / report | buttons → seating chart | UI selection | buttons |
 | Menus | buttons | Select focuses the menu | buttons |
 
@@ -125,11 +149,12 @@ is disabled during class.
 
 | System | Where | Notes |
 |---|---|---|
-| Round flow | `RoundService` | Hallway → Bell → Class → Results. 10 Hz authoritative tick. Late joiners wait in the hallway |
-| Lesson schedule | `shared/Lesson` | Seeded. It always opens with the board, has one pop quiz near the middle, at least 2 walks, and at most one event |
+| Round flow | `RoundService` | Hallway → Bell → Class (a test) → Results (graded). 10 Hz authoritative tick. Late joiners wait in the hallway |
+| Test | `TestService`, `shared/TestPaper`, `server/Data/QuestionBank` | 162 original questions (Math 40, Science 32, History 30, Geography 30, English 30; 3 tiers). 3/4/3 tier mix spread over subjects, versions A/B with shuffled question AND option order, friends share a version. Answers validated (own version's slots, 1–4, before the bell, 10/s). Grading A+..F, A+ and Ghost bonuses. Caught = ripped (F/0), escape = fresh copy |
+| Lesson schedule | `shared/Lesson` | Seeded. It always opens with the board, has one bonus question near the middle, at least 2 walks, and at most one event |
 | Teacher AI | `shared/TeacherBrain`, `TeacherService` | Pure state machine: board glances with a telegraphed pause, lecture sweep and focus drift, aisle walking with desk scans, distract, point/caught, nap, panic, door check |
 | Detection | `shared/Detection` | Pure sight cone (soft edge, distance), visibility states, desk checks, noise and hearing, flash, suspicion rise/decay. It adapts the sight + noise split of DEAD AIR's MonsterBrain |
-| Phones | `PhoneService`, `shared/Minigames` | Up/down states with raise and hide delays, glow linger, server-side minigames, per-class caps (900 base Clout total, per-app caps), 8 actions/s budget, toggle spam limit |
+| Phones | `PhoneService` | Up/down states with raise and hide delays, glow linger; the server-timed snap (aim → shutter flash/noise → scan, cancelled if hidden) and smart watch; 6 actions/s budget; up-toggle spam limit (hides are never dropped) |
 | Social | `ClassmateService` | Airplanes, notes, Teacher's Pet, group chat |
 | Seating | `shared/Seating` | VIP desks first, friend groups placed contiguously, then the rest shuffled |
 | Economy | `shared/Economy` | Pass multipliers add up and are capped at 2.2x. Upgrade stats, levels and ranks, daily streak, codes, bail cost |
@@ -138,27 +163,29 @@ is disabled during class.
 | Cosmetics / upgrades | `CosmeticService`, `shared/CrateRoll` | Clout upgrades, phone skins, desk decor, wallpapers, crates with published odds, pity at 30, duplicate refunds, server-wide announcement for Legendary and Mythic pulls |
 | Leaderboard | `LeaderboardService` | OrderedDataStore "Most Clout Ever" in the hallway. Every call is in pcall and it refreshes every 60 s. It falls back to this server's players |
 | World | `ClassroomBuilder`, `shared/TeacherRig`, `shared/Props` | About 640 parts for the school. The teacher rigs use Motor6D joints and 42–52 parts each |
-| Client | `HudController`, `PhoneController`, `TeacherController`, `MenuController`, `EffectsController` | HUD, the phone UI and apps, procedural teacher animation, vision cones, "?"/"!" marks, menus, juice |
+| Client | `HudController`, `PhoneController`, `TestController`, `TeacherController`, `MenuController`, `EffectsController` | HUD, the phone scanner UI, the test paper UI, procedural teacher animation, vision cones, "?"/"!" marks, menus, juice |
 
 ### Progression and retention
 
 * **Clout** is the currency. **Upgrades** (all buyable with Clout):
-  * phone model: 6 tiers, 1.0x → 3.3x Clout/s
-  * phone case: dimmer glow, down to 58%
-  * earbuds: quieter taps, down to 38% noise
+  * phone model: answers per screenshot 2 → 3 → 4 → 5
+  * scanner app: scan time 6 s → 2.5 s
+  * silent shutter (earbuds): quieter click and beeps, down to 38% noise
+  * dim screen (phone case): dimmer glow and flash, down to 58%
   * cover (hood → textbook stand → textbook fort): down to 64% visible
   * hide speed: 0.45 s → 0.20 s
   * backpack spot: the glow lingers 1.0 s → 0.2 s after you hide the phone
+  * smart watch: 1 answer per glance with the phone away (45 s / 30 s cooldown)
 * **Cosmetics:** 10 phone skins, 9 desk decorations, 8 wallpapers, from Common to Mythic.
   Classmates see your skin when your phone is out.
-* **Levels and ranks:** XP from earned Clout, finished classes and quizzes.
+* **Levels and ranks:** XP from earned Clout, test scores, finished classes and bonus questions.
   Freshman (1) → Sophomore (5) → Junior (10) → Senior (16) → Legend (25). Each level-up gives
   +40 Clout, and new ranks are announced.
 * **Daily streak:** 7 days (50 → 500 Clout). VIP gets +50%.
 * **Codes:** `RELEASE` (250), `NOPHONES` (150), `SKIPCLASS` (100 + a Fake Hall Pass), `LIKE1K`
   (300, for the "like the game" poster in the hallway). Edit them in `ProgressionConfig.Codes`.
-* **Session goals:** 3 at a time, for example "Use your phone for 30s while she walks the rows",
-  "Earn 150 Clout in one class", "Ace a Pop Quiz", "Distract her with a paper airplane".
+* **Session goals:** 3 at a time, for example "Screenshot your test and reveal answers",
+  "Get a B or better", "Snap a screenshot while she walks the rows", "GHOST a test", "Get an A+".
 * **Invite:** "BRING YOUR CLASS" uses `SocialService:PromptGameInvite` after
   `CanSendGameInviteAsync` (pcall). +75 Clout once per session.
 * **Global leaderboard** for lifetime Clout in the hallway.
@@ -174,6 +201,7 @@ defined in `src/shared/Config/ShopConfig.lua`.
 | Pocket / Trending / Viral Clout | R$ 25 / 79 / 249 | +500 / +2,000 / +7,500 Clout |
 | Get Out of Detention | R$ 25 | Leave detention right away and get your phone back. Bought outside detention, it's saved as a token. Once per class |
 | Fake Hall Pass | R$ 35 | Your next catch is forgiven. Used automatically, once per class |
+| Answer Key Peek | R$ 29 | 1 answer revealed instantly, no phone needed. **Max 1 per test**; bought outside a test (or after peeking) it's saved |
 | PIZZA PARTY! | R$ 99 | The **whole server** gets a lenient teacher (0.5x detection) and **2x Clout** for one class. Bought during class it starts right away, otherwise the next class (queue capped at 3). The buyer is announced to everyone |
 | Phone Skin Crate | R$ 49 | A random phone skin, Rare or better. **The odds are shown** before buying. Hidden and refused when `PolicyService` says `ArePaidRandomItemsRestricted`, or when the policy lookup fails |
 
@@ -183,15 +211,16 @@ defined in `src/shared/Config/ShopConfig.lua`.
 | VIP | R$ 149 | VIP name and chat tag, +10% Clout, the gold VIP desk in the back row, +50% daily |
 | Silent Mode | R$ 99 | Permanent earbuds at tier 3 of 4 |
 | Extra Hide Speed | R$ 79 | Hide 0.05 s faster on top of your upgrades (minimum 0.15 s) |
-| Pro Phone | R$ 249 | Exclusive Prism Pro: 3.6x Clout/s (10% above the best Clout phone) |
+| Pro Phone | R$ 249 | Exclusive Prism Pro: +1 answer per screenshot, **capped at 5** (what the best Clout phone already reveals) |
 
 **Pay-to-win is bounded:**
 * Every gameplay upgrade can be bought with Clout.
 * Pass multipliers are capped at 2.2x.
+* The Pro Phone never reveals more than the free Ultra Max 12 (5 per snap). The Peek is 1 per
+  test. A free player who reads the teacher can still get an A+.
 * Silent Mode is below the best Clout earbuds.
 * The passes never touch suspicion rules.
 * Escapes work once per class.
-* Per-class Clout caps apply to everyone.
 * The Pizza Party helps the whole server.
 
 A skilled free player who reads the teacher wins classes.
@@ -199,8 +228,9 @@ A skilled free player who reads the teacher wins classes.
 ### Setting up the shop (Creator Hub)
 
 1. Publish the place. Then open create.roblox.com → your experience → **Monetization**.
-2. **Developer Products:** create one product for each entry in `ShopConfig.Products` (7
-   products: Clout500, Clout2000, Clout7500, DetentionPass, HallPass, PizzaParty, SkinCrate) and
+2. **Developer Products:** create one product for each entry in `ShopConfig.Products` (8
+   products: Clout500, Clout2000, Clout7500, DetentionPass, HallPass, AnswerPeek, PizzaParty,
+   SkinCrate) and
    set its price. Paste each numeric ID into that entry's `ProductId`.
 3. **Game Passes:** create the 5 passes (DoubleClout, VIP, SilentMode, ExtraHide, ProPhone) and
    paste each ID into `PassId`.
@@ -223,7 +253,7 @@ No asset IDs were invented. `src/shared/Config/AudioAssets.lua` has two kinds of
   * FailSting → caught
   * EscapeSting → class over
   * CardSwipe → purchase
-* **Empty slots** (`Id = ""`, skipped until you add your own): SelfieShutter, Notification,
+* **Empty slots** (`Id = ""`, skipped until you add your own): SelfieShutter (the screenshot click), Notification,
   MarkerSqueak, ClassMusic, HallwayMusic, Suspicious ("?"), Alert ("!"), QuizSting,
   PizzaFanfare, LevelUp, Click.
 
@@ -249,6 +279,8 @@ This is a lighthearted school comedy for **all ages**. Expect **Minimal** (at mo
 
 * **Violence / blood / gore:** none. "Caught" means the phone goes into a basket and you sit in
   a detention corner.
+* **Theme:** "cheating on a test" is the comedic premise (like a school cartoon). Getting caught
+  always backfires (F, detention) and honest answers also score.
 * **Fear:** none. The teacher is a friendly cartoon character with rosy cheeks, glasses and a
   pencil in her hair bun.
 * **Crude humour:** mild school jokes only ("F in the chat", "caught in 4K").
@@ -262,29 +294,35 @@ This is a lighthearted school comedy for **all ages**. Expect **Minimal** (at mo
 
 **Verified here** (Linux sandbox, no Roblox Studio):
 
-* `selene src` reports 0 errors and 0 warnings. `lune run tests/compile` compiles every file.
-* 50 unit tests cover:
-  * detection maths, the teacher brain in every phase, lesson schedules over 200 seeds, and
-    the school clock
-  * minigame validation and caps
-  * the economy, crates and odds, and seating
-  * config sanity, including "no invented audio IDs"
-* The Lune harness (35 checks) loads the **built .rbxlx**, builds the whole school and every
-  rig and prop against Lune's reflection-checked Instance API, and runs the real services with
-  stubbed engine services. It covers:
-  * board phase vs. walking phase with the same phone use: board stays safe, the walk gets
-    caught after about 5 s
-  * confiscation, detention, bail, the detention-pass receipt sent twice and granted once, and
-    the Fake Hall Pass
-  * the pop quiz (phone users wrong), the airplane distraction, notes and Teacher's Pet limits
-  * remote validation, rate limits and caps, and the selfie flash
-  * banking at the bell, the Pizza Party (queued, announced, 2x for everyone, lenient
-    teacher), the principal event and leaving mid-class
-  * upgrades and cosmetics, crates with PolicyService, daily rewards and codes, and the
-    leaderboard fallback
-  * live-game NotProcessedYet, the DataStore session lock, and `_Studio` vs. live store names
-  * five complete classes on the real schedule, one per event type
-  * initialising every client controller and rendering every panel, app, pose and effect
+* `selene src`: 0 errors, 0 warnings. `lune run tests/compile`: compiled 47 files, 0 failures.
+* `lune run tests/run`: 53 unit tests, covering:
+  * detection maths, the teacher brain in every phase, lesson schedules over 200 seeds, the
+    school clock
+  * the question bank (162 questions, 5 subjects, 3 tiers, no duplicates), test picking (3/4/3,
+    subject spread, 100 seeds), A/B versions (same questions, shuffled order and options, correct
+    answers still map), the client view containing no answer key, friends sharing a version,
+    answer validation, grading A+..F with A+ / Ghost / ripped rewards, reveal order
+  * a check that the answer key text is not in shared or client code
+  * the economy (answers per snap, Pro Phone capped at 5), crates and odds, seating, config
+* `lune run tests/harness build/PhonesAway.rbxlx`: 39 checks on the **built .rbxlx** with the
+  real services and stubbed engine services, covering:
+  * test start: every student has a version, friends share one, every "view" payload has
+    question text and options only, the bank isn't in ReplicatedStorage, a paper on each desk
+  * **board phase: snap → aim → shutter → scan → exactly 2 correct answers revealed, to that
+    player only → phone away → answered → graded**; hiding mid-scan cancels it
+  * **walk phase: snapping gets caught (~4–5 s) → phone confiscated → test ripped (F, 0) →
+    detention**; escaping gives a fresh copy
+  * remote validation (bad slots / options / NaN / types, answer and action rate limits, no
+    reveal without a server-side scan, no answers after the bell), smart watch, Answer Key Peek
+    receipt twice → granted once and max 1 per test, the screenshot flash
+  * an A+ paid with its bonus, the Pizza Party paying 2x for a non-buyer's grade, bonus
+    question, airplane, notes, Teacher's Pet, detention pass / hall pass receipts, the
+    principal, leaving mid-class, seating fixes
+  * upgrades and cosmetics, crates with PolicyService, daily / codes, the leaderboard fallback
+  * live-game NotProcessedYet, the DataStore session lock, `_Studio` vs. live store names
+  * five complete classes on the real schedule (one per event) with a cheating student
+  * every client controller, including the test paper UI and the phone scanner states
+* `build/classroom-preview.png` re-rendered with `tools/` (test papers on the desks).
 
 **Not verified** (no Studio playtest was possible):
 
@@ -295,6 +333,8 @@ This is a lighthearted school comedy for **all ages**. Expect **Minimal** (at mo
 * Mobile layouts on real devices.
 * Real DataStore, MarketplaceService and PolicyService behaviour.
 * Audio.
+* Whether the test is hard enough (or too hard) for real players: the tier mix and timer need
+  watching.
 
 Balance values come from a small offline simulation (smart vs. greedy players per phase) and
 need tuning with real players.

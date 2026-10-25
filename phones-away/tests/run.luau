@@ -8,7 +8,7 @@ local process = require("@lune/process")
 local specs = {
 	require("./detection.spec"),
 	require("./teacher.spec"),
-	require("./minigames.spec"),
+	require("./test.spec"),
 	require("./economy.spec"),
 	require("./crate.spec"),
 	require("./seating.spec"),

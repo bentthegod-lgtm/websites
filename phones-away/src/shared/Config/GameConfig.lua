@@ -46,7 +46,7 @@ return {
 	DetentionBailPerLevel = 6,
 	DetentionReturnSuspicion = 0.45,
 	DetentionPhoneCooldown = 8,
-	CatchPendingLoss = 0.5, -- caught: lose this share of the Clout earned this class
+	CatchPendingLoss = 0.5, -- caught: lose this share of the side Clout earned this class (and the test is ripped up)
 
 	-- Teacher's Pet
 	Pet = {
@@ -62,8 +62,26 @@ return {
 	Plane = { Cooldown = 18, MaxPerClass = 3, DistractSeconds = 3.2, ThrowSeenSuspicion = 0.3, Reward = 2 },
 	Note = { Cooldown = 15, MaxPerClass = 4, Reward = 8, Noise = 0.35 },
 
-	-- Pop quiz
+	-- Bonus question (the old "pop quiz" phase): she reads one out loud mid-test.
 	Quiz = { Seconds = 9, Reward = 25, XP = 20, WrongSuspicion = 0.18 },
+
+	-- The test (every class period is a test). 10 questions: 3 easy, 4 medium, 3 hard.
+	Test = {
+		Mix = { [1] = 3, [2] = 4, [3] = 3 },
+		AnswerRate = 10, -- answer clicks per second allowed (burst 10)
+		-- Letter grades, highest first. Clout before pass / pizza multipliers.
+		Grades = {
+			{ Letter = "A+", Min = 100, Clout = 150 },
+			{ Letter = "A", Min = 90, Clout = 120 },
+			{ Letter = "B", Min = 80, Clout = 90 },
+			{ Letter = "C", Min = 70, Clout = 65 },
+			{ Letter = "D", Min = 60, Clout = 40 },
+			{ Letter = "F", Min = 0, Clout = 15 },
+		},
+		APlusBonus = 50,
+		GhostBonus = 60, -- used the phone / watch and she never even got suspicious ("?")
+		XPPerPercent = 0.5,
+	},
 
 	-- Pizza Party (developer product): queued rounds are capped.
 	PizzaMaxQueued = 3,

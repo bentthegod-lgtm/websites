@@ -44,6 +44,7 @@ local ORDER = {
 	"ShopService",
 	"CosmeticService",
 	"PhoneService",
+	"TestService",
 	"TeacherService",
 	"ClassmateService",
 	"RewardService",
@@ -69,6 +70,7 @@ end)
 registry.ShopService.start()
 registry.CosmeticService.start()
 registry.PhoneService.start()
+registry.TestService.start()
 registry.ClassmateService.start()
 registry.RewardService.start()
 registry.RoundService.start()

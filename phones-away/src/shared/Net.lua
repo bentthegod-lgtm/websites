@@ -14,8 +14,8 @@ Net.Names = {
 	-- client -> server
 	"RequestState", -- ()
 	"Phone", -- (up: boolean)
-	"PhoneApp", -- (appId: string)
-	"PhoneAction", -- (kind: "like"|"scroll"|"text"|"tap"|"selfie", value: any)
+	"PhoneAction", -- (kind: "snap"|"watch"|"peek")  the server runs every timer
+	"Answer", -- (slot: number, option: number)  answer a question on your test
 	"QuizAnswer", -- (index: number)
 	"ThrowPlane", -- (deskIndex: number)
 	"PassNote", -- (targetUserId: number)
@@ -37,9 +37,10 @@ Net.Names = {
 	"RoundState", -- (state: string, data: table)
 	"PhaseChanged", -- (data: table)
 	"Suspicion", -- (value: number, mark: string)
-	"PhoneState", -- (data: table)  minigame view + phone flags
+	"PhoneState", -- (data: table)  phone + scanner flags, revealed answers (own only)
 	"PhoneResult", -- (kind: string, data: table)
-	"Quiz", -- (data: table | nil)
+	"Test", -- (kind: "view"|"ack"|"ripped"|"clear", data)  questions + options, NO answers
+	"Quiz", -- (data: table | nil)  bonus question
 	"QuizResult", -- (data: table)
 	"Chat", -- (author: string, text: string, color: {r,g,b}?)
 	"Results", -- (data: table)

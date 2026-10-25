@@ -29,17 +29,19 @@ function Economy.maxTier(upgradeCfg, key)
 end
 
 --[[
-	The stats that matter to detection and earning, from the profile's upgrade tiers and
+	The stats that matter to detection and cheating, from the profile's upgrade tiers and
 	owned passes. passes = { ProPhone, SilentMode, ExtraHide }.
+	answers = correct answers revealed per screenshot (capped at MaxAnswersPerSnap),
+	scan = seconds the scanner app needs, watch = { glance, cooldown } or nil.
 ]]
 function Economy.phoneStats(upgrades, passes, upgradeCfg)
 	upgrades = upgrades or {}
 	passes = passes or {}
 	local phone = tierDef(upgradeCfg, "Phone", upgrades.Phone)
-	local rate = phone.Rate
+	local answers = phone.Answers
 	local phoneName = phone.Name
 	if passes.ProPhone then
-		rate = math.max(rate, upgradeCfg.ProPhone.Rate)
+		answers = math.min(upgradeCfg.MaxAnswersPerSnap, answers + upgradeCfg.ProPhone.BonusAnswers)
 		phoneName = upgradeCfg.ProPhone.Name
 	end
 	local earbudsTier = upgrades.Earbuds or 0
@@ -50,14 +52,17 @@ function Economy.phoneStats(upgrades, passes, upgradeCfg)
 	if passes.ExtraHide then
 		hide = math.max(upgradeCfg.MinHideSeconds, hide - upgradeCfg.ExtraHideSpeedBonus)
 	end
+	local watchDef = tierDef(upgradeCfg, "Watch", upgrades.Watch)
 	return {
-		rate = rate,
+		answers = answers,
 		phoneName = phoneName,
+		scan = tierDef(upgradeCfg, "Scanner", upgrades.Scanner).Seconds,
 		glow = tierDef(upgradeCfg, "Case", upgrades.Case).Glow,
 		noise = tierDef(upgradeCfg, "Earbuds", earbudsTier).Noise,
 		cover = tierDef(upgradeCfg, "Cover", upgrades.Cover).Sight,
 		hide = hide,
 		linger = tierDef(upgradeCfg, "Backpack", upgrades.Backpack).Linger,
+		watch = if watchDef.Glance then { glance = watchDef.Glance, cooldown = watchDef.Cooldown, name = watchDef.Name } else nil,
 	}
 end
 

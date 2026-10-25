@@ -164,8 +164,9 @@ function renderers.Shop(body, profile)
 						elseif queued > 0 then
 							desc ..= string.format("  [%d pizza class(es) queued]", queued)
 						end
-					elseif product.Key == "DetentionPass" or product.Key == "HallPass" then
-						desc ..= string.format("  (you have %d)", profile and profile.tokens and profile.tokens[product.Key] or 0)
+					elseif product.Key == "DetentionPass" or product.Key == "HallPass" or product.Key == "AnswerPeek" then
+						local tokenKey = if product.Key == "AnswerPeek" then "Peek" else product.Key
+						desc ..= string.format("  (you have %d)", profile and profile.tokens and profile.tokens[tokenKey] or 0)
 					end
 					rowText(r, product.Name, desc, Ui.rgb(product.Color))
 					rowButton(r, "R$ " .. product.Robux, Ui.rgb(product.Color):Lerp(Color3.new(0, 0, 0), 0.35), function()
@@ -192,7 +193,7 @@ function renderers.Upgrades(body, profile)
 	local passes = profile and profile.passes or {}
 	local stats = profile and profile.phone
 	if stats then
-		Ui.label(string.format("Your phone: %s  |  %.2fx Clout/s  |  glow %d%%  |  noise %d%%  |  cover %d%%  |  hide %.2fs", stats.phoneName, stats.rate, stats.glow * 100, stats.noise * 100, stats.cover * 100, stats.hide), { TextSize = 13, TextColor3 = C.Gold, TextWrapped = true, Size = UDim2.new(1, -8, 0, 34), LayoutOrder = 0, ZIndex = 11, Parent = body })
+		Ui.label(string.format("Your phone: %s  |  %d answers/snap  |  scan %.1fs  |  glow %d%%  |  shutter %d%%  |  hide %.2fs%s", stats.phoneName, stats.answers or 2, stats.scan or 6, stats.glow * 100, stats.noise * 100, stats.hide, if stats.watch then "  |  " .. stats.watch.name else ""), { TextSize = 13, TextColor3 = C.Gold, TextWrapped = true, Size = UDim2.new(1, -8, 0, 34), LayoutOrder = 0, ZIndex = 11, Parent = body })
 	end
 	for i, key in ipairs(UpgradeConfig.Order) do
 		local def = UpgradeConfig[key]

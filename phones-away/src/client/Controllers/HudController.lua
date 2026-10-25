@@ -52,13 +52,14 @@ local shownCloutValue = 0
 local phaseLength = 20
 
 local TIPS = {
-	"Hold F (or the PHONE button) to sneak your phone out. Let go to hide it!",
+	"Every class is a TEST. Hold F (or the PHONE button), then SNAP to screenshot it.",
+	"Keep the phone out while ScanBuddy scans - hide it and the screenshot is lost!",
 	"She can't see you while she writes on the board... unless she glances back. Watch for the '...' pause!",
 	"Walking the rows = VERY RISKY. She checks desks up close.",
-	"Screen taps make noise. Earbuds make you quieter.",
-	"Throw a paper airplane to make her look the other way. Teamwork!",
-	"Pop quiz? Put the phone away - phone users always get it wrong.",
-	"Upgrades: better phone = more Clout, phone case = dimmer glow, hood = cover.",
+	"Answering is safe: memorise the answers, put the phone away, then click them.",
+	"Friends get the same test version. Help each other!",
+	"Caught = phone confiscated, test RIPPED UP, detention.",
+	"Upgrades: better phone = more answers per snap, Scanner = faster scans, Dim Screen = smaller flash.",
 	"Pizza Party gives the WHOLE server a chill class with 2x Clout.",
 }
 
@@ -226,11 +227,12 @@ end
 local function buildQuiz()
 	quiz.frame = Ui.panel({ Name = "Quiz", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(460, 280), BackgroundColor3 = C.Paper, BackgroundTransparency = 0, Visible = false, ZIndex = 30, Parent = gui })
 	Ui.stroke(quiz.frame, Color3.fromRGB(190, 120, 255), 0, 4)
-	Ui.label("POP QUIZ!", { Font = Ui.Fonts.Title, TextSize = 32, TextColor3 = Color3.fromRGB(150, 70, 220), Size = UDim2.new(1, 0, 0, 44), ZIndex = 31, Parent = quiz.frame })
+	Ui.label("BONUS QUESTION!", { Font = Ui.Fonts.Title, TextSize = 32, TextColor3 = Color3.fromRGB(150, 70, 220), Size = UDim2.new(1, 0, 0, 44), ZIndex = 31, Parent = quiz.frame })
 	quiz.question = Ui.label("", { Font = Ui.Fonts.Title, TextSize = 24, TextColor3 = C.Ink, Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 0, 40), TextWrapped = true, ZIndex = 31, Parent = quiz.frame })
 	quiz.buttons = {}
-	for i = 1, 3 do
-		local b = Ui.button("", { Position = UDim2.new((i - 1) / 3, 8, 0, 100), Size = UDim2.new(1 / 3, -16, 0, 70), TextSize = 22, ZIndex = 31, Parent = quiz.frame }, Color3.fromRGB(150, 90, 230))
+	for i = 1, 4 do
+		local b = Ui.button("", { Position = UDim2.new((i - 1) / 4, 6, 0, 100), Size = UDim2.new(1 / 4, -12, 0, 70), TextSize = 17, ZIndex = 31, Parent = quiz.frame }, Color3.fromRGB(150, 90, 230))
+		b.TextWrapped = true
 		b.Activated:Connect(function()
 			if quiz.answered then
 				return
@@ -271,30 +273,42 @@ function HudController.showResults(data)
 	if results then
 		results:Destroy()
 	end
-	results = Ui.panel({ Name = "Results", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(460, 340), BackgroundColor3 = C.Paper, BackgroundTransparency = 0, ZIndex = 40, Parent = gui })
+	results = Ui.panel({ Name = "Results", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(500, 380), BackgroundColor3 = C.Paper, BackgroundTransparency = 0, ZIndex = 40, Parent = gui })
 	Ui.stroke(results, C.Gold, 0, 4)
-	Ui.label("CLASS DISMISSED!", { Font = Ui.Fonts.Title, TextSize = 34, TextColor3 = C.Accent, Size = UDim2.new(1, 0, 0, 48), ZIndex = 41, Parent = results })
+	Ui.label("PENCILS DOWN!", { Font = Ui.Fonts.Title, TextSize = 32, TextColor3 = C.Accent, Size = UDim2.new(0.7, 0, 0, 48), ZIndex = 41, Parent = results })
+	local g = data.grade
+	-- Big red-pen grade in the corner.
+	local letter = Ui.label(g and g.letter or "-", { Font = Ui.Fonts.Title, TextSize = 64, TextColor3 = if g and (g.letter == "F" or g.ripped) then C.Danger else Color3.fromRGB(220, 40, 60), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 6), Size = UDim2.fromOffset(120, 80), Rotation = 8, ZIndex = 42, Parent = results })
+	Ui.stroke(letter, Color3.fromRGB(220, 40, 60), 0.2, 3)
+	local bonus = {}
+	if g and g.aplus > 0 then
+		table.insert(bonus, "A+ bonus")
+	end
+	if g and g.ghost > 0 then
+		table.insert(bonus, "GHOST bonus (never suspected!)")
+	end
 	local lines = {
-		string.format("Clout banked: +%s", Format.number(data.clout)),
-		if data.caught then string.format("CAUGHT! Lost %s Clout to the basket", Format.number(data.lost)) else "Never caught. Smooth.",
-		if data.quiz == "correct" then "Pop quiz: ACED" elseif data.quiz == "phone" then "Pop quiz: wrong (phone out!)" elseif data.quiz == "wrong" then "Pop quiz: wrong" else "",
-		string.format("Phone time during walk-bys: %ds", data.walkSecs or 0),
+		if g and g.ripped then "Your test was RIPPED UP: F, 0 points." elseif g then string.format("Score: %d / %d  (%d%%)  version %s", g.correct, g.count, g.percent, g.version) else "No test this class.",
+		string.format("Clout banked: +%s%s", Format.number(data.clout), if #bonus > 0 then "  (" .. table.concat(bonus, ", ") .. ")" else ""),
+		if data.caught then string.format("CAUGHT! Lost %s side Clout to the basket", Format.number(data.lost)) else "Never caught. Smooth.",
+		if data.quiz == "correct" then "Bonus question: correct" elseif data.quiz == "phone" then "Bonus question: wrong (phone out!)" elseif data.quiz == "wrong" then "Bonus question: wrong" else "",
+		string.format("Screenshots taken: %d", data.snaps or 0),
 	}
 	if data.pizza then
 		table.insert(lines, "Pizza party class: 2x Clout!")
 	end
 	for i, text in ipairs(lines) do
-		Ui.label(text, { Font = Ui.Fonts.Bold, TextSize = 18, TextColor3 = if i == 2 and data.caught then C.Danger else C.Ink, Position = UDim2.fromOffset(20, 50 + (i - 1) * 28), Size = UDim2.new(1, -40, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 41, Parent = results })
+		Ui.label(text, { Font = Ui.Fonts.Bold, TextSize = 17, TextColor3 = if (i == 3 and data.caught) or (i == 1 and g and g.ripped) then C.Danger else C.Ink, TextWrapped = true, Position = UDim2.fromOffset(20, 56 + (i - 1) * 28), Size = UDim2.new(1, -40, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 41, Parent = results })
 	end
-	Ui.label("TOP OF THE CLASS", { Font = Ui.Fonts.Title, TextSize = 18, TextColor3 = Color3.fromRGB(150, 70, 220), Position = UDim2.fromOffset(20, 200), Size = UDim2.new(1, -40, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 41, Parent = results })
+	Ui.label("TOP OF THE CLASS", { Font = Ui.Fonts.Title, TextSize = 18, TextColor3 = Color3.fromRGB(150, 70, 220), Position = UDim2.fromOffset(20, 240), Size = UDim2.new(1, -40, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 41, Parent = results })
 	for i = 1, 3 do
 		local row = data.top and data.top[i]
 		if row then
-			Ui.label(string.format("%d. %s  %s%s", i, row.name, Format.number(row.clout), if row.caught then "  (caught)" else ""), { TextSize = 16, TextColor3 = C.Ink, Position = UDim2.fromOffset(28, 224 + (i - 1) * 22), Size = UDim2.new(1, -56, 0, 22), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 41, Parent = results })
+			Ui.label(string.format("%d. %s  %s  %s%s", i, row.name, row.letter or "", Format.number(row.clout), if row.caught then "  (caught)" else ""), { TextSize = 16, TextColor3 = C.Ink, Position = UDim2.fromOffset(28, 264 + (i - 1) * 22), Size = UDim2.new(1, -56, 0, 22), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 41, Parent = results })
 		end
 	end
 	if data.legend then
-		Ui.label("PHONE LEGEND: " .. data.legend, { Font = Ui.Fonts.Title, TextSize = 18, TextColor3 = Color3.fromRGB(220, 150, 20), Position = UDim2.fromOffset(0, 300), Size = UDim2.new(1, 0, 0, 30), ZIndex = 41, Parent = results })
+		Ui.label("PHONE LEGEND: " .. data.legend, { Font = Ui.Fonts.Title, TextSize = 18, TextColor3 = Color3.fromRGB(220, 150, 20), Position = UDim2.fromOffset(0, 340), Size = UDim2.new(1, 0, 0, 30), ZIndex = 41, Parent = results })
 	end
 	AudioUtil.play(AudioAssets.ClassOver)
 	local frame = results
@@ -322,7 +336,7 @@ local function buildDetention()
 	detention.frame = Ui.panel({ Name = "Detention", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 160), Size = UDim2.fromOffset(440, 220), BackgroundColor3 = Color3.fromRGB(70, 20, 30), BackgroundTransparency = 0.05, Visible = false, ZIndex = 30, Parent = gui })
 	Ui.stroke(detention.frame, C.Danger, 0, 4)
 	Ui.label("DETENTION", { Font = Ui.Fonts.Title, TextSize = 38, TextColor3 = C.Danger, Size = UDim2.new(1, 0, 0, 48), ZIndex = 31, Parent = detention.frame })
-	detention.sub = Ui.label("Your phone is in the CONFISCATED basket. Sit tight until the bell... or escape:", { TextSize = 14, TextWrapped = true, Position = UDim2.fromOffset(16, 48), Size = UDim2.new(1, -32, 0, 40), ZIndex = 31, Parent = detention.frame })
+	detention.sub = Ui.label("Phone CONFISCATED, test RIPPED UP. Sit tight until the bell (F)... or escape for a fresh copy:", { TextSize = 14, TextWrapped = true, Position = UDim2.fromOffset(16, 48), Size = UDim2.new(1, -32, 0, 40), ZIndex = 31, Parent = detention.frame })
 	detention.bail = Ui.button("TALK YOUR WAY OUT", { Position = UDim2.fromOffset(16, 96), Size = UDim2.new(0.5, -20, 0, 54), TextSize = 16, ZIndex = 31, Parent = detention.frame }, C.Gold:Lerp(Color3.new(0, 0, 0), 0.25))
 	detention.bail.Activated:Connect(function()
 		Net.event("Bail"):FireServer()
@@ -390,7 +404,7 @@ local function openChart(mode)
 end
 
 local function buildActions()
-	actions.frame = Ui.new("Frame", { Name = "Actions", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -150, 1, -24), Size = UDim2.fromOffset(330, 50), BackgroundTransparency = 1, Visible = false, Parent = gui })
+	actions.frame = Ui.new("Frame", { Name = "Actions", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -150, 1, -24), Size = UDim2.fromOffset(300, 50), BackgroundTransparency = 1, Visible = false, Parent = gui })
 	local specs = { { "AIRPLANE", "plane", C.Accent2 }, { "NOTE", "note", C.Good }, { "REPORT", "report", C.Warn } }
 	for i, spec in ipairs(specs) do
 		local b = Ui.button(spec[1], { Position = UDim2.new((i - 1) / 3, 4, 0, 0), Size = UDim2.new(1 / 3, -8, 1, 0), TextSize = 16, Parent = actions.frame }, spec[3]:Lerp(Color3.new(0, 0, 0), 0.3))

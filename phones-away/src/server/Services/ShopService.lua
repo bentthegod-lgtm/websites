@@ -171,6 +171,20 @@ local function prepareGrant(player, profile, product)
 		after = function()
 			services.Remotes.Notify:FireClient(player, "Fake Hall Pass ready: your next catch is forgiven.", "good")
 		end
+	elseif g.Peek then
+		profile.Tokens.Peek = (profile.Tokens.Peek or 0) + g.Peek
+		undo = function()
+			profile.Tokens.Peek = math.max(0, profile.Tokens.Peek - g.Peek)
+		end
+		after = function()
+			-- Bought during a test: peek right away (max 1 per test, otherwise it's saved).
+			local paper = services.TestService and services.TestService.paper(player)
+			if paper and not paper.peekUsed and services.RoundService.canAnswer(player) then
+				services.TestService.usePeek(player)
+			else
+				services.Remotes.Notify:FireClient(player, "Answer Key Peek saved for your next test.", "good")
+			end
+		end
 	elseif g.PizzaParty then
 		after = function()
 			services.RoundService.startPizza(player)

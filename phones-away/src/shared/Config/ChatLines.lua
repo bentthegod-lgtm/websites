@@ -10,8 +10,9 @@ return {
 		"lunchline_lily", "bus_seat_ben", "quiet_quinn", "gym_class_gus", "snack_stash_sofia",
 	},
 	Caught = {
-		"NOOO %s got their phone taken",
-		"rip %s's phone (2024-2024)",
+		"NOOO %s got their phone taken AND their test ripped up",
+		"rip %s's test (2024-2024)",
+		"%s's test is confetti now",
 		"%s really thought she wasn't looking",
 		"F in the chat for %s",
 		"%s is in the detention corner lmaooo",
@@ -32,9 +33,11 @@ return {
 		"best classmate ever: %s",
 		"%s for class president",
 	},
-	Selfie = {
-		"did %s just take a selfie IN CLASS",
+	Snap = {
+		"did %s just screenshot the test",
 		"%s's flash was NOT subtle",
+		"%s send me the answers pls",
+		"bro %s's phone went *click* during a TEST",
 	},
 	Report = {
 		"%s is a teacher's pet now smh",
@@ -45,7 +48,7 @@ return {
 		"who threw that",
 	},
 	Quiz = {
-		"pop quiz?? i didn't study",
+		"BONUS QUESTION?? i didn't study",
 		"nobody look at your phone rn",
 	},
 	Principal = {
@@ -66,5 +69,6 @@ return {
 	},
 	Legend = {
 		"%s earned the most Clout without getting caught",
+		"how did %s get that score. HOW.",
 	},
 }

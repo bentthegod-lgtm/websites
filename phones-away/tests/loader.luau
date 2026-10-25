@@ -50,5 +50,9 @@ function loadPath(path)
 end
 
 return function(name)
+	-- "server/..." loads from src/server (e.g. the server-only QuestionBank).
+	if string.sub(name, 1, 7) == "server/" then
+		return loadPath("src/" .. name)
+	end
 	return loadPath("src/shared/" .. name)
 end

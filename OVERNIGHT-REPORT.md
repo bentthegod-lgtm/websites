@@ -8,7 +8,7 @@ Everything is on GitHub: `bentthegod-lgtm/websites`, branch `claude/new-game-yhh
 | **Snatch a Blobby** | `snatch-tycoon/` | steal-and-tycoon (Steal a Brainrot) | lint 0 · compile 41/41 · unit 37/37 · harness 26/26 |
 | **Sprout Valley** | `sprout-valley/` | real-time farming (Grow a Garden) | lint 0 · compile 42/42 · unit 43/43 · harness 25/25 |
 | **Rebound Rumble** | `rebound-rumble/` | parry-ball PvP (Blade Ball) | lint 0 · compile 41/41 · unit 34/34 · harness 22/22 |
-| **PHONES AWAY!** | `phones-away/` | high-school phone stealth (Cheating During Testing) | lint 0 · compile 44/44 · unit 50/50 · harness 35/35 |
+| **PHONES AWAY!** | `phones-away/` | high-school test cheating with your phone (Cheating During Testing) | lint 0 · compile 47/47 · unit 53/53 · harness 39/39 |
 
 I reran every check myself after each game was built, after its bug review, and after my
 own fixes.

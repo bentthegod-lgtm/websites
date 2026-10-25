@@ -25,7 +25,7 @@ test("every product / pass has a 0 placeholder id, a unique key and a display pr
 		assert(not keys[p.Key], "duplicate " .. p.Key)
 		keys[p.Key] = true
 	end
-	for _, key in ipairs({ "PizzaParty", "DetentionPass", "HallPass", "SkinCrate", "DoubleClout", "VIP", "SilentMode", "ExtraHide", "ProPhone" }) do
+	for _, key in ipairs({ "PizzaParty", "DetentionPass", "HallPass", "AnswerPeek", "SkinCrate", "DoubleClout", "VIP", "SilentMode", "ExtraHide", "ProPhone" }) do
 		assert(keys[key], key .. " missing")
 	end
 end)
@@ -55,19 +55,32 @@ test("cosmetics: one default per category, unique ids per category, known rariti
 	end
 end)
 
-test("phone apps, quiz questions and text prompts are well formed", function()
-	for _, id in ipairs(PhoneConfig.AppOrder) do
-		assert(PhoneConfig.Caps[id], id .. " has no cap")
+test("scanner config and grades are well formed", function()
+	local snap = PhoneConfig.Snap
+	assert(snap.AimSeconds > 0 and snap.FlashMultiplier > 1 and snap.FlashInstant > 0)
+	local GameConfig = load("Config/GameConfig")
+	local last = math.huge
+	for _, g in ipairs(GameConfig.Test.Grades) do
+		assert(g.Min < last and g.Clout > 0, g.Letter)
+		last = g.Min
 	end
-	for _, q in ipairs(PhoneConfig.Quiz) do
-		assert(#q.A == 3 and q.A[q.Correct], q.Q)
+	assert(GameConfig.Test.Grades[1].Letter == "A+" and GameConfig.Test.Grades[#GameConfig.Test.Grades].Min == 0)
+end)
+
+test("the answer key is not in shared (replicated) code", function()
+	local fs = require("@lune/fs")
+	local function walk(dir)
+		for _, name in ipairs(fs.readDir(dir)) do
+			local path = dir .. "/" .. name
+			if fs.isDir(path) then
+				walk(path)
+			else
+				assert(not string.find(fs.readFile(path), "The capital of Turkey is...", 1, true), "question bank found in " .. path)
+			end
+		end
 	end
-	for _, ask in ipairs(PhoneConfig.Text.Asks) do
-		assert(string.find(ask, "%s", 1, true), ask)
-	end
-	for _, w in ipairs(PhoneConfig.Text.Words) do
-		assert(string.match(w, "^%l+$"), w)
-	end
+	walk("src/shared")
+	walk("src/client")
 end)
 
 test("teacher phases and events are complete", function()
@@ -99,7 +112,7 @@ test("audio: no invented ids (only empty or reused dead-air ids)", function()
 		["rbxassetid://9116173869"] = true, ["rbxassetid://9113087803"] = true, ["rbxassetid://9119661709"] = true,
 		["rbxassetid://9120839599"] = true, ["rbxassetid://9119129301"] = true, ["rbxassetid://9119633070"] = true,
 		["rbxassetid://9120851227"] = true, ["rbxassetid://9043338697"] = true, ["rbxassetid://1837953706"] = true,
-		["rbxassetid://9113722650"] = true,
+		["rbxassetid://9113722650"] = true, ["rbxassetid://9114480271"] = true,
 	}
 	for name, def in pairs(AudioAssets) do
 		assert(def.Id == "" or allowed[def.Id], name .. " uses an unknown id " .. tostring(def.Id))

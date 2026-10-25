@@ -66,10 +66,10 @@ local function defaultProfile()
 		Upgrades = upgrades,
 		Owned = owned,
 		Equipped = equipped,
-		Tokens = { DetentionPass = 0, HallPass = 0 },
+		Tokens = { DetentionPass = 0, HallPass = 0, Peek = 0 },
 		Daily = { Last = 0, Streak = 0 },
 		Codes = {},
-		Stats = { Classes = 0, Caught = 0, CleanClasses = 0, Selfies = 0, Texts = 0, QuizCorrect = 0, Planes = 0, Reports = 0, BestClass = 0, Perfects = 0 },
+		Stats = { Classes = 0, Tests = 0, Caught = 0, CleanClasses = 0, QuizCorrect = 0, Planes = 0, Reports = 0, BestClass = 0, Revealed = 0, APlus = 0, Ghosts = 0 },
 		Pity = 0,
 		Settings = { Pet = false },
 		Receipts = {},
@@ -456,7 +456,7 @@ function DataService.start()
 		end
 		-- Let every service bank / clean up first (RoundService banks Clout earned this
 		-- class), then save and unlock.
-		for _, name in ipairs({ "RoundService", "PhoneService", "ClassmateService", "RewardService", "CosmeticService", "ShopService" }) do
+		for _, name in ipairs({ "RoundService", "PhoneService", "TestService", "ClassmateService", "RewardService", "CosmeticService", "ShopService" }) do
 			local service = services[name]
 			if service and service.onPlayerRemoving then
 				pcall(service.onPlayerRemoving, player)

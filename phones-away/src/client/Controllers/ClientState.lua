@@ -20,6 +20,7 @@ local ClientState = {
 	pending = 0,
 	phone = nil, -- PhoneState payload
 	quiz = nil,
+	test = nil, -- { version, questions = { { slot, subject, tier, text, options } }, answers, ripped }
 
 	ProfileChanged = Signal.new(),
 	RoundChanged = Signal.new(),
@@ -28,6 +29,8 @@ local ClientState = {
 	PhoneChanged = Signal.new(),
 	PhoneResult = Signal.new(),
 	QuizChanged = Signal.new(),
+	TestChanged = Signal.new(), -- (kind, test)
+	AnswersRevealed = Signal.new(), -- (all revealed { slot, option }, source)
 	QuizResult = Signal.new(),
 	Chat = Signal.new(),
 	Results = Signal.new(),
@@ -95,6 +98,22 @@ function ClientState.init()
 			ClientState.phone.view = data.view
 		end
 		ClientState.PhoneResult:Fire(kind, data or {})
+	end)
+	Net.event("Test").OnClientEvent:Connect(function(kind, data)
+		if kind == "view" then
+			ClientState.test = data
+			if data then
+				data.answers = data.answers or {}
+			end
+		elseif kind == "ack" and ClientState.test and data then
+			ClientState.test.answers[data.slot] = data.option
+		elseif kind == "ripped" and ClientState.test then
+			ClientState.test.ripped = true
+			ClientState.test.answers = {}
+		elseif kind == "clear" then
+			ClientState.test = nil
+		end
+		ClientState.TestChanged:Fire(kind, ClientState.test)
 	end)
 	Net.event("Quiz").OnClientEvent:Connect(function(data)
 		ClientState.quiz = data

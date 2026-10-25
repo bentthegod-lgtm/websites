@@ -2,8 +2,11 @@
 	RoundService - the class period loop and the stealth rules.
 
 	Hallway (intermission, shop, leaderboard) -> Bell (everyone to their desk, party seating,
-	VIP desks) -> Class (~3:20: lesson phases, pop quiz, one random event) -> Results ->
-	Hallway.
+	VIP desks) -> Class = a TEST (~3:20: 10 questions, lesson phases, a bonus question, one
+	random event) -> Results (graded A+ .. F) -> Hallway.
+
+	Students cheat by screenshotting the test with their phone (PhoneService runs the scan
+	timers, TestService reveals the answers). Answering is safe; phone use is risky.
 
 	Every tick in class (GameConfig.TickRate):
 	  * the teacher brain moves / turns (TeacherService),
@@ -12,9 +15,10 @@
 	    student (Detection) and raises / lowers each student's suspicion,
 	  * at full suspicion: CONFISCATED -> detention corner (unless a Fake Hall Pass saves you).
 
-	Clout earned during class is "pending" and banked at the bell. Getting caught loses
-	GameConfig.CatchPendingLoss of it. Detention lasts until the bell, unless you buy your way
-	out with Clout or a Get Out of Detention pass (once per class).
+	Getting caught rips up your test (F, 0 Clout) and sends you to detention until the bell,
+	unless you buy your way out with Clout or a Get Out of Detention pass (once per class),
+	which gets you a fresh blank copy. Side Clout (airplanes, notes, bonus question) is
+	"pending" and banked at the bell; a catch loses GameConfig.CatchPendingLoss of it.
 ]]
 
 local Players = game:GetService("Players")
@@ -50,11 +54,11 @@ local decorModels = {}
 local lastReseat = 0
 
 local TOPICS = {
-	{ "Today: THE WATER CYCLE", "1. Evaporation (water goes up)", "2. Condensation (clouds!)", "3. Precipitation (rain)", "4. Collection", "Quiz may happen. Just saying." },
-	{ "Today: FRACTIONS", "1/2 + 1/4 = 3/4", "Pizza = best fraction example", "Simplify! 4/8 = 1/2", "Homework: p. 42", "Phones away please :)" },
-	{ "Today: VOLCANOES", "Magma -> Lava", "Ring of Fire", "Shield vs Cone", "Baking soda project Fri", "No, you can't film it." },
-	{ "Today: POETRY", "Rhyme & rhythm", "Haiku: 5-7-5", "Similes are LIKE this", "Write 1 poem tonight", "Not about your phone." },
-	{ "Today: ANCIENT EGYPT", "Pyramids (old & pointy)", "Hieroglyphs", "The Nile river", "Mummies: not scary", "Test next week!" },
+	{ "TEST TODAY: THE WATER CYCLE", "1. Evaporation (water goes up)", "2. Condensation (clouds!)", "3. Precipitation (rain)", "4. Collection", "Quiz may happen. Just saying." },
+	{ "TEST TODAY: FRACTIONS", "1/2 + 1/4 = 3/4", "Pizza = best fraction example", "Simplify! 4/8 = 1/2", "Homework: p. 42", "Phones away please :)" },
+	{ "TEST TODAY: VOLCANOES", "Magma -> Lava", "Ring of Fire", "Shield vs Cone", "Baking soda project Fri", "No, you can't film it." },
+	{ "TEST TODAY: POETRY", "Rhyme & rhythm", "Haiku: 5-7-5", "Similes are LIKE this", "Write 1 poem tonight", "Not about your phone." },
+	{ "TEST TODAY: ANCIENT EGYPT", "Pyramids (old & pointy)", "Hieroglyphs", "The Nile river", "Mummies: not scary", "Test next week!" },
 }
 
 function RoundService.init(registry)
@@ -102,6 +106,12 @@ end
 
 function RoundService.currentPhase()
 	return round and round.phase or nil
+end
+
+-- Answers can be clicked while the test runs (not in detention, not after the bell).
+function RoundService.canAnswer(player)
+	local st = students[player]
+	return state == "Class" and st ~= nil and not st.detention and not (round and round.ended)
 end
 
 function RoundService.isQuiz()
@@ -310,7 +320,30 @@ function RoundService.refreshDesk(player)
 		m.Parent = services.World.props
 		decorModels[player] = m
 	end
+	RoundService.refreshPaper(player)
 	services.PhoneService.rebuildModel(player)
+end
+
+-- The test paper on the desk (version letter, or scraps once it's ripped up).
+local paperModels = {}
+function RoundService.refreshPaper(player)
+	local st = students[player]
+	if paperModels[player] then
+		paperModels[player]:Destroy()
+		paperModels[player] = nil
+	end
+	if not st or not st.desk.top then
+		return
+	end
+	local paper = services.TestService and services.TestService.paper(player)
+	if not paper then
+		return
+	end
+	local cf = st.desk.top.CFrame * CFrame.new(-0.2, st.desk.top.Size.Y / 2 + 0.02, 0.2)
+	local m = if paper.ripped then Props.rippedPaper(cf) else Props.testPaper(cf, paper.version)
+	m.Name = "Paper_" .. player.UserId
+	m.Parent = services.World.props
+	paperModels[player] = m
 end
 
 ---------------------------------------------------------------------------------------------
@@ -346,9 +379,17 @@ function RoundService.addNoise(player, amount)
 	end
 end
 
-function RoundService.selfieFlash(player)
-	if rng:chance(0.35) then
-		services.ClassmateService.chat("Selfie", player.DisplayName)
+-- A screenshot shutter went off (PhoneService).
+function RoundService.onSnap(player)
+	local st = students[player]
+	if st then
+		st.snaps = (st.snaps or 0) + 1
+		if round and round.phase == "Walk" then
+			services.RewardService.track(player, "WalkSnaps", 1)
+		end
+	end
+	if rng:chance(0.3) then
+		services.ClassmateService.chat("Snap", player.DisplayName)
 	end
 	services.Remotes.Effect:FireAllClients("Flash", { userId = player.UserId })
 end
@@ -436,6 +477,8 @@ function RoundService.handleCatch(player, now)
 	st.detention = true
 	st.caught = true
 	st.catches += 1
+	services.TestService.rip(player)
+	RoundService.refreshPaper(player)
 	local loss = math.floor(st.pending * GameConfig.CatchPendingLoss)
 	st.pending -= loss
 	st.lost += loss
@@ -465,6 +508,8 @@ local function release(player, how)
 	seatPlayer(player, st.desk.seat)
 	player:SetAttribute("PA_Status", "Seated")
 	services.PhoneService.returnPhone(player, GameConfig.DetentionPhoneCooldown)
+	services.TestService.freshCopy(player)
+	RoundService.refreshPaper(player)
 	services.Remotes.Effect:FireAllClients("Released", { userId = player.UserId, name = player.DisplayName, how = how })
 	services.ClassmateService.chat("Bailout", player.DisplayName)
 	sendSuspicion(player, st, true)
@@ -512,7 +557,7 @@ end
 ---------------------------------------------------------------------------------------------
 
 local function startQuiz(now)
-	local q = PhoneConfig.Quiz[rng:integer(1, #PhoneConfig.Quiz)]
+	local q = services.TestService.bonusQuestion()
 	round.quiz = { q = q, answers = {}, endsAt = now + GameConfig.Quiz.Seconds }
 	services.PhoneService.markQuizStart()
 	for player, st in pairs(students) do
@@ -526,7 +571,7 @@ end
 function RoundService.answerQuiz(player, index)
 	local st = students[player]
 	local quiz = round and round.quiz
-	if not quiz or not st or st.detention or type(index) ~= "number" or index ~= index or index % 1 ~= 0 or index < 1 or index > 3 then
+	if not quiz or not st or st.detention or type(index) ~= "number" or index ~= index or index % 1 ~= 0 or index < 1 or index > #quiz.q.A then
 		return false
 	end
 	if quiz.answers[player] then
@@ -748,6 +793,23 @@ function RoundService.beginClass(opts)
 		tickCount = 0,
 	}
 	services.ClassmateService.resetClass()
+	local testStudents = {}
+	for player in pairs(students) do
+		local friends = {}
+		for other in pairs(students) do
+			if other ~= player and areFriends(player, other) then
+				friends[other.UserId] = true
+			end
+		end
+		table.insert(testStudents, { player = player, id = player.UserId, friends = friends })
+	end
+	table.sort(testStudents, function(a, b)
+		return a.id < b.id
+	end)
+	services.TestService.begin(testStudents, { seed = opts.seed })
+	for player in pairs(students) do
+		RoundService.refreshPaper(player)
+	end
 	services.TeacherService.startClass({ substitute = event == "Substitute", detection = currentDetection() }, now)
 	writeBoard({ round.topic[1] })
 	round.boardLines = 1
@@ -823,18 +885,17 @@ function RoundService.tickClass(dt, now)
 						local p = services.PhoneService.get(player)
 						if p and st.flashToken ~= p.flashUntil then
 							st.flashToken = p.flashUntil
-							instant += cfg.Sight.FlashInstant
+							instant += PhoneConfig.Snap.FlashInstant
 						end
 					end
 				end
 				Detection.step(st.susp, gain, instant, dt, cfg.Suspicion)
+				st.maxSusp = math.max(st.maxSusp or 0, st.susp.value)
 				if services.PhoneService.isFullyUp(player) and dt > 0 then
 					if round.phase == "Walk" then
 						st.walkSecs += dt
-						services.RewardService.track(player, "WalkPhoneSeconds", dt)
 					elseif round.phase == "Board" then
 						st.boardSecs += dt
-						services.RewardService.track(player, "BoardPhoneSeconds", dt)
 					end
 				end
 				if st.susp.value >= cfg.Suspicion.Catch then
@@ -878,28 +939,52 @@ function RoundService.endClass(now)
 	if round.phase == "FireDrill" then
 		services.Remotes.Effect:FireAllClients("FireDrillEnd", {})
 	end
+	round.ended = true -- no more answers after the bell
 	local rows = {}
 	local legend, legendValue = nil, 0
+	local roundMultiplier = if round.pizza then GameConfig.PizzaCloutMultiplier else 1
 	for player, st in pairs(students) do
 		if player.Parent then
 			services.PhoneService.forceDown(player)
-			local bank = math.floor(st.pending)
+			-- Grade the test. Ghost = cheated (snap / watch) and she never even got a "?".
+			local paper = services.TestService.paper(player)
+			local ghost = paper ~= nil and paper.cheated and not st.caught and (st.maxSusp or 0) < TeacherConfig.Suspicion.Question
+			local grade = services.TestService.grade(player, { ghost = ghost, multiplier = services.ShopService.cloutMultiplier(player) * roundMultiplier })
+			st.grade = grade
+			local testClout = grade and grade.clout or 0
+			local bank = math.floor(st.pending) + testClout
 			services.DataService.addClout(player, bank, true)
-			services.DataService.addXP(player, ProgressionConfig.XPPerClass)
+			services.DataService.addXP(player, ProgressionConfig.XPPerClass + (if grade then grade.percent * GameConfig.Test.XPPerPercent else 0))
 			local profile = services.DataService.getProfile(player)
 			if profile then
 				profile.Stats.Classes += 1
+				profile.Stats.Tests = (profile.Stats.Tests or 0) + 1
 				profile.Stats.BestClass = math.max(profile.Stats.BestClass, bank)
 				if not st.caught then
 					profile.Stats.CleanClasses += 1
+				end
+				if grade and grade.letter == "A+" then
+					profile.Stats.APlus = (profile.Stats.APlus or 0) + 1
+				end
+				if ghost then
+					profile.Stats.Ghosts = (profile.Stats.Ghosts or 0) + 1
 				end
 			end
 			if not st.caught then
 				services.RewardService.track(player, "CleanClasses", 1)
 			end
+			if grade and grade.percent >= 80 and not grade.ripped then
+				services.RewardService.track(player, "GoodGrades", 1)
+			end
+			if grade and grade.letter == "A+" then
+				services.RewardService.track(player, "APlus", 1)
+			end
+			if ghost then
+				services.RewardService.track(player, "Ghosts", 1)
+			end
 			services.RewardService.track(player, "BestClass", bank, true)
 			services.LeaderboardService.submit(player)
-			table.insert(rows, { name = player.DisplayName, clout = bank, caught = st.caught, userId = player.UserId })
+			table.insert(rows, { name = player.DisplayName, clout = bank, caught = st.caught, userId = player.UserId, letter = grade and grade.letter or "F" })
 			if not st.caught and bank > legendValue then
 				legend, legendValue = player, bank
 			end
@@ -911,14 +996,14 @@ function RoundService.endClass(now)
 	end)
 	for player, st in pairs(students) do
 		if player.Parent then
-			local stats = services.PhoneService.sessionStats(player) or {}
 			services.Remotes.Results:FireClient(player, {
 				clout = st.bank or 0,
+				grade = st.grade,
+				snaps = st.snaps or 0,
 				lost = st.lost,
 				caught = st.caught,
 				quiz = st.quiz,
 				walkSecs = math.floor(st.walkSecs),
-				stats = stats,
 				pizza = round.pizza,
 				legend = legend and legend.DisplayName or nil,
 				top = { rows[1], rows[2], rows[3] },
@@ -930,6 +1015,12 @@ function RoundService.endClass(now)
 	if legend then
 		services.ClassmateService.chat("Legend", legend.DisplayName, { 255, 210, 80 })
 		services.Remotes.Announce:FireAllClients(string.format("%s is the PHONE LEGEND of the period: %s Clout without getting caught!", legend.DisplayName, Format.number(legendValue)), { 255, 210, 80 })
+	end
+	for _, row in ipairs(rows) do
+		if row.letter == "A+" then
+			services.Remotes.Announce:FireAllClients(string.format("%s got an A+ on the test!", row.name), { 120, 255, 160 })
+			break
+		end
 	end
 	if round.principalIn then
 		round.principalIn = false
@@ -964,6 +1055,7 @@ function RoundService.toHallway()
 		end
 	end
 	students = {}
+	services.TestService.finish()
 	services.PhoneService.clearAll()
 	for _, desk in ipairs(services.World.desks) do
 		desk.cardLabel.Text = ""

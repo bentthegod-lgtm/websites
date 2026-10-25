@@ -5,25 +5,38 @@
 ]]
 
 return {
-	Order = { "Phone", "Case", "Earbuds", "Cover", "Hide", "Backpack" },
+	Order = { "Phone", "Scanner", "Earbuds", "Case", "Hide", "Cover", "Backpack", "Watch" },
 
+	-- More answers revealed per screenshot.
 	Phone = {
 		Name = "Phone Model",
-		Description = "Better phone = more Clout per second.",
+		Description = "Better camera = more answers per screenshot.",
 		Start = 1,
 		Tiers = {
-			{ Name = "Hand-me-down Brick", Price = 0, Rate = 1.0, Color = { 120, 120, 130 }, Size = { 0.62, 1.15, 0.22 } },
-			{ Name = "Flip Classic", Price = 250, Rate = 1.35, Color = { 70, 160, 255 }, Size = { 0.6, 1.1, 0.16 } },
-			{ Name = "Slab S", Price = 800, Rate = 1.75, Color = { 40, 40, 48 }, Size = { 0.6, 1.2, 0.1 } },
-			{ Name = "Slab S Plus", Price = 2000, Rate = 2.2, Color = { 230, 230, 240 }, Size = { 0.66, 1.3, 0.09 } },
-			{ Name = "Fold Z", Price = 5000, Rate = 2.75, Color = { 90, 60, 160 }, Size = { 0.85, 1.3, 0.09 } },
-			{ Name = "Ultra Max 12", Price = 12000, Rate = 3.3, Color = { 255, 196, 70 }, Size = { 0.72, 1.45, 0.08 } },
+			{ Name = "Hand-me-down Brick", Price = 0, Answers = 2, Color = { 120, 120, 130 }, Size = { 0.62, 1.15, 0.22 } },
+			{ Name = "Flip Classic", Price = 600, Answers = 3, Color = { 70, 160, 255 }, Size = { 0.6, 1.1, 0.16 } },
+			{ Name = "Slab S", Price = 2500, Answers = 4, Color = { 40, 40, 48 }, Size = { 0.6, 1.2, 0.1 } },
+			{ Name = "Ultra Max 12", Price = 8000, Answers = 5, Color = { 255, 196, 70 }, Size = { 0.72, 1.45, 0.08 } },
+		},
+	},
+
+	-- How long the answer scanner app takes (the phone must stay out the whole time).
+	Scanner = {
+		Name = "Scanner App",
+		Description = "Faster answer scanning = less time with your phone out.",
+		Start = 0,
+		Tiers = {
+			[0] = { Name = "ScanBuddy Free (ads!)", Price = 0, Seconds = 6 },
+			{ Name = "ScanBuddy Plus", Price = 300, Seconds = 5 },
+			{ Name = "ScanBuddy Pro", Price = 1200, Seconds = 4 },
+			{ Name = "BrainBeam", Price = 3500, Seconds = 3.2 },
+			{ Name = "BrainBeam Turbo", Price = 7500, Seconds = 2.5 },
 		},
 	},
 
 	Case = {
-		Name = "Phone Case",
-		Description = "Dims your screen glow: harder to see.",
+		Name = "Dim Screen",
+		Description = "A privacy case dims your screen and the screenshot flash.",
 		Start = 0,
 		Tiers = {
 			[0] = { Name = "No case", Price = 0, Glow = 1 },
@@ -35,11 +48,11 @@ return {
 	},
 
 	Earbuds = {
-		Name = "Earbuds",
-		Description = "Silent taps: less noise for the teacher to hear.",
+		Name = "Silent Shutter",
+		Description = "Earbuds + silent mode: a quieter screenshot shutter and taps.",
 		Start = 0,
 		Tiers = {
-			[0] = { Name = "Loud speaker", Price = 0, Noise = 1 },
+			[0] = { Name = "LOUD shutter click", Price = 0, Noise = 1 },
 			{ Name = "Wired Buds", Price = 120, Noise = 0.8 },
 			{ Name = "Wireless Buds", Price = 500, Noise = 0.62 },
 			{ Name = "Noise-Cancel Pods", Price = 1500, Noise = 0.48 },
@@ -83,8 +96,23 @@ return {
 		},
 	},
 
-	-- Exclusive Pro Phone (game pass): 10% above the best Clout phone, nothing more.
-	ProPhone = { Name = "Prism Pro (exclusive)", Rate = 3.6, Color = { 120, 255, 230 }, Size = { 0.7, 1.4, 0.07 } },
+	-- Late-tier gadget: glance at your wrist for 1 answer. Much less visible than a phone,
+	-- but slow to recharge.
+	Watch = {
+		Name = "Smart Watch",
+		Description = "Glance at your wrist for 1 answer. Low risk, slow cooldown.",
+		Start = 0,
+		Tiers = {
+			[0] = { Name = "No watch", Price = 0 },
+			{ Name = "Smart Watch", Price = 4000, Glance = 3, Cooldown = 45 },
+			{ Name = "Smart Watch Pro", Price = 9000, Glance = 2.2, Cooldown = 30 },
+		},
+	},
+
+	-- Exclusive Pro Phone (game pass): +1 answer per screenshot, but never past the best Clout
+	-- phone's 5, so a free player with the Ultra Max is never behind.
+	ProPhone = { Name = "Prism Pro (exclusive)", BonusAnswers = 1, Color = { 120, 255, 230 }, Size = { 0.7, 1.4, 0.07 } },
+	MaxAnswersPerSnap = 5,
 
 	-- Pass floors (bounded: the Clout shop always has a better tier on top).
 	SilentModeEarbudsTier = 3,

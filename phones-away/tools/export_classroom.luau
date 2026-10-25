@@ -1,6 +1,6 @@
 --[[
 	Exports the classroom (built by the real ClassroomBuilder), the teacher rig (TeacherRig) and a
-	phone on a few desks (Props) as a JSON part list for a browser 3D preview
+	phone on a few desks and a test paper on every desk (Props) as a JSON part list for a browser 3D preview
 	(tools/render_preview.mjs). Same approach as snatch-tycoon/tools/export_blobbies.luau.
 	Usage (from phones-away/):
 	  rojo build -o build/PhonesAway.rbxlx
@@ -117,6 +117,12 @@ for i, desk in ipairs(world.desks) do
 		local phone = Props.phone(tier, nil, if i == 4 then desk.phoneUp else desk.phoneDown)
 		exportParts(phone, parts)
 	end
+end
+-- A test paper on every desk (versions alternate), one already ripped up.
+for i, desk in ipairs(world.desks) do
+	local cf = desk.top.CFrame * roblox.CFrame.new(-0.2, desk.top.Size.Y / 2 + 0.02, 0.2)
+	local paper = if i == 7 then Props.rippedPaper(cf) else Props.testPaper(cf, if i % 2 == 0 then "B" else "A")
+	exportParts(paper, parts)
 end
 -- The whiteboard's text lives in a SurfaceGui: export it with the board.
 local boardSurface = world.boardText.Parent.Parent

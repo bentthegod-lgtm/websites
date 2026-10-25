@@ -178,6 +178,46 @@ function Props.decor(style, cf)
 	return model
 end
 
+-- The test paper lying on a desk: a sheet with question lines, a name line, a big version
+-- letter and a pencil. `cf` = centre of the paper on the desk surface.
+function Props.testPaper(cf, letter)
+	local model = Instance.new("Model")
+	model.Name = "TestPaper"
+	local sheet = part(model, "Sheet", Vector3.new(1.7, 0.03, 2.2), cf * CFrame.Angles(0, math.rad(-6), 0), Color3.fromRGB(252, 252, 246))
+	model.PrimaryPart = sheet
+	local ink = Color3.fromRGB(70, 90, 160)
+	part(model, "Title", Vector3.new(1.1, 0.01, 0.12), sheet.CFrame * CFrame.new(-0.1, 0.02, -0.9), Color3.fromRGB(40, 40, 60))
+	for i = 1, 8 do
+		part(model, "Line", Vector3.new(1.3, 0.01, 0.04), sheet.CFrame * CFrame.new(0, 0.02, -0.6 + i * 0.17), ink)
+		part(model, "Bubble", Vector3.new(0.06, 0.01, 0.06), sheet.CFrame * CFrame.new(-0.72, 0.02, -0.6 + i * 0.17), ink)
+	end
+	local badge = part(model, "Version", Vector3.new(0.34, 0.012, 0.34), sheet.CFrame * CFrame.new(0.6, 0.02, -0.88), if letter == "B" then Color3.fromRGB(255, 120, 160) else Color3.fromRGB(90, 170, 255))
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Top
+	gui.Parent = badge
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Text = letter or "A"
+	label.TextScaled = true
+	label.Font = Enum.Font.FredokaOne
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Parent = gui
+	part(model, "Pencil", Vector3.new(0.08, 0.08, 1.3), sheet.CFrame * CFrame.new(0.95, 0.05, 0.1) * CFrame.Angles(0, math.rad(10), 0), Color3.fromRGB(255, 205, 60))
+	return model
+end
+
+-- A torn-up test (after a catch): scattered scraps.
+function Props.rippedPaper(cf)
+	local model = Instance.new("Model")
+	model.Name = "RippedTest"
+	for i = 1, 6 do
+		local a = i / 6 * math.pi * 2
+		part(model, "Scrap", Vector3.new(0.5, 0.02, 0.4), cf * CFrame.new(math.cos(a) * 0.5, 0.02 + i * 0.005, math.sin(a) * 0.5) * CFrame.Angles(0, a * 1.7, 0), Color3.fromRGB(245, 245, 235))
+	end
+	return model
+end
+
 -- A folded paper airplane (for throws).
 function Props.plane(cf)
 	local model = Instance.new("Model")
