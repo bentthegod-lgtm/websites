@@ -4,8 +4,9 @@
 	Developer Products (permanent cosmetics) go through MarketplaceService.ProcessReceipt:
 	  * the PurchaseId is recorded in the profile and the profile is SAVED before
 	    PurchaseGranted is returned, so a purchase is granted exactly once;
-	  * if the profile isn't loaded, can't persist in a live game, or the save fails, the
-	    grant is undone and NotProcessedYet is returned (Roblox retries later).
+	  * if the profile isn't loaded, can't persist in a live game, is mid leave/shutdown
+	    save, or the save fails, the grant is undone and NotProcessedYet is returned
+	    (Roblox retries later).
 	Game Passes: UserOwnsGamePassAsync (pcall, cached per session) and
 	PromptGamePassPurchaseFinished. IDs of 0: Studio grants for free, live says "not available".
 
@@ -156,6 +157,11 @@ function ShopService.processReceipt(receipt)
 	if not services.DataService.isPersistent(player) and not RunService:IsStudio() then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
+	-- Leaving / shutting down: the final save may already have run (and released the lock),
+	-- so a grant now could be acknowledged without ever being saved. Roblox retries later.
+	if services.DataService.isLeaving(player) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	local undo = grantProduct(profile, product)
 	profile.Receipts[id] = os.time()
 	trimReceipts(profile)
@@ -228,10 +234,17 @@ function ShopService.start()
 		lastRequest[player] = t
 		ShopService.buy(player, key)
 	end)
+	local lastEquip = {}
+	Players.PlayerRemoving:Connect(function(player)
+		lastEquip[player] = nil
+	end)
 	remotes.Equip.OnServerEvent:Connect(function(player, kind, id)
-		if type(kind) ~= "string" or type(id) ~= "string" then
+		-- Throttled: every equip rebuilds the welded rig and replicates it to everyone.
+		local t = os.clock()
+		if type(kind) ~= "string" or type(id) ~= "string" or (lastEquip[player] and t - lastEquip[player] < 0.4) then
 			return
 		end
+		lastEquip[player] = t
 		local ok, message = ShopService.equip(player, kind, id)
 		remotes.Notify:FireClient(player, message, if ok then "good" else "error")
 	end)

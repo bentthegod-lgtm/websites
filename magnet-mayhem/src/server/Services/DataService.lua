@@ -82,9 +82,11 @@ local function defaultProfile()
 end
 DataService.defaultProfile = defaultProfile
 
--- Upgrades older profiles. Add a step here whenever SchemaVersion goes up.
+-- Upgrades older profiles. Add a step here whenever SchemaVersion goes up. Runs on the raw
+-- saved table BEFORE defaults are filled in (otherwise a missing Version would already be
+-- the current one and every step would be skipped). A brand-new profile needs no steps.
 local function migrate(data)
-	data.Version = data.Version or 1
+	data.Version = tonumber(data.Version) or (if data.Coins == nil then GameConfig.SchemaVersion else 1)
 	-- (no migrations yet: version 1 is the first released schema)
 	data.Version = GameConfig.SchemaVersion
 	return data
@@ -110,6 +112,7 @@ local function reconcile(data)
 	if type(data) ~= "table" then
 		return defaults
 	end
+	migrate(data)
 	for key, value in pairs(defaults) do
 		if type(data[key]) ~= type(value) then
 			data[key] = value
@@ -160,7 +163,7 @@ local function reconcile(data)
 	if not MagnetConfig.Trails[data.Cosmetics.Trail] then
 		data.Cosmetics.Trail = "None"
 	end
-	return migrate(data)
+	return data
 end
 DataService.reconcile = reconcile
 
@@ -185,6 +188,13 @@ end
 function DataService.isPersistent(player)
 	local entry = profiles[player]
 	return entry ~= nil and entry.persistent
+end
+
+-- True once the profile's final save has started (player leaving or server shutting down):
+-- later writes may never reach the DataStore.
+function DataService.isLeaving(player)
+	local entry = profiles[player]
+	return entry ~= nil and (entry.leaving == true or entry.released == true)
 end
 
 function DataService.markDirty(player)

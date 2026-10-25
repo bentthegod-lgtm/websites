@@ -484,16 +484,20 @@ local function buildRustyard(root, world)
 		part(fence, "WallE", Vector3.new(2, 40, 140), at(151, 20, zz + (if zz < 0 then -6 else 6)), rgb(0, 0, 0), M.SmoothPlastic, { Transparency = 1 })
 	end
 
-	-- Distant industrial silhouettes.
+	-- Distant industrial silhouettes, just beyond the berms (the yard ends at +-160).
 	local far = folder(z, "Skyline")
 	local frng = Random.new(7)
 	for i = 1, 16 do
 		local a = (i / 16) * math.pi * 2 + 0.2
-		local d = frng:NextNumber(330, 420)
+		local d = frng:NextNumber(235, 300)
 		local h = frng:NextNumber(30, 90)
 		local x, zz = math.cos(a) * d, math.sin(a) * d
 		if x < 150 then -- keep the Metro side clear
-			part(far, "Factory" .. i, Vector3.new(frng:NextNumber(30, 60), h, frng:NextNumber(20, 40)), at(x, h / 2 - 4, zz) * ang(0, a, 0), rgb(84, 76, 72), M.Concrete, { CanCollide = false, CastShadow = false })
+			local w, depth = frng:NextNumber(30, 60), frng:NextNumber(20, 40)
+			-- A darker yard lot under each building, so it visibly stands on ground rather than
+			-- floating over the sand-coloured outskirts (which fades into the haze).
+			part(far, "Lot" .. i, Vector3.new(w + 26, 3, depth + 26), at(x, -1, zz) * ang(0, a, 0), rgb(104, 92, 80), M.Ground, { CanCollide = false, CastShadow = false })
+			part(far, "Factory" .. i, Vector3.new(w, h, depth), at(x, h / 2 - 4, zz) * ang(0, a, 0), rgb(84, 76, 72), M.Concrete, { CanCollide = false, CastShadow = false })
 			if i % 3 == 0 then
 				part(far, "Chimney" .. i, Vector3.new(5, h + 40, 5), at(x + 8, (h + 40) / 2 - 4, zz), rgb(96, 84, 78), M.Concrete, { CanCollide = false, CastShadow = false })
 			end

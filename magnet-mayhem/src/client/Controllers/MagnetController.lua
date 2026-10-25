@@ -135,7 +135,9 @@ local function stepFlights()
 	local now = os.clock()
 	local moveParts, moveCFrames = {}, {}
 	for id, f in pairs(flights) do
-		if not f.model.Parent then
+		if f.hidden then
+			continue -- arrived; waits for the server's Collected (destroy) or Released (restore)
+		elseif not f.model.Parent then
 			endFlight(id)
 		elseif f.animate then
 			local t = now - f.t0
@@ -545,6 +547,12 @@ function MagnetController.init()
 		track(p)
 	end
 	Players.PlayerAdded:Connect(track)
+	Players.PlayerRemoving:Connect(function(p)
+		if hums[p] then
+			hums[p]:Destroy()
+			hums[p] = nil
+		end
+	end)
 	local outlineTimer = 0
 	RunService.RenderStepped:Connect(function(dt)
 		stepFlights()

@@ -92,6 +92,19 @@ local function startFlight(player, s, item, stats, rootPos, pulse)
 	return true
 end
 
+-- Queues a release for clients. A claim that hasn't been broadcast yet is simply dropped
+-- (clients never saw it); otherwise Released goes out before this tick's Attract batch,
+-- so an object released by one player and re-claimed by another animates correctly.
+local function queueRelease(id)
+	for i, entry in ipairs(pendingAttract) do
+		if entry[1] == id then
+			table.remove(pendingAttract, i)
+			return
+		end
+	end
+	table.insert(pendingRelease, id)
+end
+
 local function endFlight(s, flight)
 	s.flights[flight.item.id] = nil
 	s.inFlight = math.max(0, s.inFlight - 1)
@@ -109,7 +122,7 @@ function MagnetService.cancelAll(player)
 	end
 	for _, flight in pairs(s.flights) do
 		services.ScrapService.release(flight.item)
-		table.insert(pendingRelease, flight.item.id)
+		queueRelease(flight.item.id)
 		endFlight(s, flight)
 	end
 	s.active = false
@@ -189,7 +202,7 @@ local function award(player, s, flight, stats, rootPos)
 		and (data.Zones[item.zone] or item.zone == "Any")
 	if not valid then
 		services.ScrapService.release(item)
-		table.insert(pendingRelease, item.id)
+		queueRelease(item.id)
 		return nil
 	end
 	if not services.ScrapService.consume(item) then
@@ -262,9 +275,13 @@ function MagnetService.tick(dt)
 	MagnetService.flush()
 end
 
--- Sends this tick's batches (one remote call each, to everyone).
+-- Sends this tick's batches (one remote call each, to everyone). Released first: see queueRelease.
 function MagnetService.flush()
 	local remotes = services.Remotes
+	if #pendingRelease > 0 then
+		remotes.Released:FireAllClients(pendingRelease)
+		pendingRelease = {}
+	end
 	if #pendingAttract > 0 or #pendingPulse > 0 then
 		remotes.Attract:FireAllClients(pendingAttract, pendingPulse)
 		pendingAttract, pendingPulse = {}, {}
@@ -272,10 +289,6 @@ function MagnetService.flush()
 	if #pendingCollect > 0 then
 		remotes.Collected:FireAllClients(pendingCollect)
 		pendingCollect = {}
-	end
-	if #pendingRelease > 0 then
-		remotes.Released:FireAllClients(pendingRelease)
-		pendingRelease = {}
 	end
 end
 

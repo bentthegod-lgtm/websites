@@ -16,11 +16,15 @@ local CameraController = {}
 local player = Players.LocalPlayer
 local BASE_FOV = 70
 local SHOULDER = Vector3.new(1.4, 0.8, 0)
+local MIN_ZOOM, MAX_ZOOM, RETURN_ZOOM = 8, 60, 16
+local lastMode = nil
 
 function CameraController.apply()
 	local mode = ClientState.setting("CameraMode") or "Third"
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local wasFirst = lastMode == "First"
+	lastMode = mode
 	if mode == "First" then
 		player.CameraMode = Enum.CameraMode.LockFirstPerson
 		if humanoid then
@@ -28,8 +32,20 @@ function CameraController.apply()
 		end
 	else
 		player.CameraMode = Enum.CameraMode.Classic
-		player.CameraMinZoomDistance = 8
-		player.CameraMaxZoomDistance = 60
+		player.CameraMaxZoomDistance = MAX_ZOOM
+		if wasFirst then
+			-- Leaving LockFirstPerson keeps Roblox's zoom at ~0.5 (still first person). The
+			-- camera only re-clamps when the min zoom property changes, so raise it for a
+			-- moment to push the camera back out, then restore it.
+			player.CameraMinZoomDistance = RETURN_ZOOM
+			task.delay(0.2, function()
+				if lastMode ~= "First" then
+					player.CameraMinZoomDistance = MIN_ZOOM
+				end
+			end)
+		else
+			player.CameraMinZoomDistance = MIN_ZOOM
+		end
 		if humanoid then
 			humanoid.CameraOffset = SHOULDER
 		end
@@ -64,7 +80,9 @@ function CameraController.init()
 	-- Start a bit further out than default so the pile is visible from the first second.
 	player.CameraMinZoomDistance = 18
 	task.delay(0.5, function()
-		player.CameraMinZoomDistance = 8
+		if lastMode ~= "First" then
+			player.CameraMinZoomDistance = MIN_ZOOM
+		end
 	end)
 	ClientState.SettingsChanged:Connect(CameraController.apply)
 	player.CharacterAdded:Connect(function()

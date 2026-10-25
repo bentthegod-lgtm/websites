@@ -510,14 +510,17 @@ end)
 
 -- Remote stubs that record traffic.
 local log = {}
+local logSeq = 0 -- global send order across remotes
 local function stubRemote(name)
 	log[name] = {}
 	return {
 		FireAllClients = function(_, ...)
-			table.insert(log[name], { all = true, args = table.pack(...) })
+			logSeq += 1
+			table.insert(log[name], { all = true, args = table.pack(...), seq = logSeq })
 		end,
 		FireClient = function(_, player, ...)
-			table.insert(log[name], { player = player, args = table.pack(...) })
+			logSeq += 1
+			table.insert(log[name], { player = player, args = table.pack(...), seq = logSeq })
 		end,
 		OnServerEvent = signal(),
 	}
@@ -955,6 +958,54 @@ check("player leaving mid-pull: in-flight scrap is released, never awarded", fun
 	assert(SS.get(item.id) == item and not item.claimedBy, "left player's object not released")
 end)
 
+local function hasId(list, id, userId)
+	for _, entry in ipairs(list or {}) do
+		if (type(entry) == "table" and entry[1] == id and (not userId or entry[2] == userId)) or entry == id then
+			return true
+		end
+	end
+	return false
+end
+
+check("magnet: released by one player and re-grabbed by another in one tick -> Released is sent before Attract", function()
+	remotes.Magnet.OnServerEvent:Fire(alice, false)
+	remotes.Magnet.OnServerEvent:Fire(bob, false)
+	moveTo(aliceRoot, roblox.Vector3.new(-60, 3, 60))
+	moveTo(bobRoot, roblox.Vector3.new(-52, 3, 60))
+	DS.getProfile(alice).Carried = {}
+	DS.getProfile(bob).Carried = {}
+	clearNear(aliceRoot.Position, 60)
+	local item = spawnAt("Bolt", roblox.Vector3.new(-56, 1, 62))
+	MS.setActive(alice, true)
+	tick(0.1)
+	assert(item.claimedBy == alice, "alice did not claim")
+	MS.cancelAll(alice) -- e.g. died: release queued for the next batch
+	MS.setActive(bob, true)
+	tick(0.1)
+	assert(item.claimedBy == bob, "bob did not re-claim the released object")
+	local rel, att = log.Released[#log.Released], log.Attract[#log.Attract]
+	assert(hasId(rel.args[1], item.id) and hasId(att.args[1], item.id, bob.UserId), "release / re-claim not broadcast")
+	assert(rel.seq < att.seq, "Released sent after Attract: clients would drop bob's flight")
+	MS.cancelAll(bob)
+	tick(0.1)
+	-- A claim that is released before it was ever broadcast is dropped, not sent twice.
+	local attracts, releases = #log.Attract, #log.Released
+	MS.stateOf(alice).lastPulse = -math.huge
+	assert(MS.pulse(alice), "pulse refused")
+	assert(item.claimedBy == alice, "pulse did not claim")
+	MS.cancelAll(alice)
+	MS.flush()
+	for i = attracts + 1, #log.Attract do
+		assert(not hasId(log.Attract[i].args[1], item.id), "cancelled claim still broadcast as Attract")
+	end
+	for i = releases + 1, #log.Released do
+		assert(not hasId(log.Released[i].args[1], item.id), "never-broadcast claim sent as Released")
+	end
+	assert(not item.claimedBy, "object stuck claimed")
+	moveTo(aliceRoot, roblox.Vector3.new(0, 3, 40))
+	moveTo(bobRoot, roblox.Vector3.new(4, 3, 40))
+end)
+
 check("prestige: needs confirmation + eligibility, resets exactly what it says", function()
 	local p = DS.getProfile(alice)
 	assert(not registry.UpgradeService.prestige(alice, "yes"), "prestiged without CONFIRM")
@@ -1068,7 +1119,22 @@ check("session lock: load locks, a taken-over profile stops saving, leaving unlo
 		local erinKey = "player_" .. erin.UserId
 		assert(DS.isPersistent(erin) and DS.getProfile(erin).Coins == 55, "stale lock blocked the load")
 		DS.getProfile(erin).Coins = 99
+		-- A receipt arriving after the final save (leave / BindToClose) must not be granted:
+		-- that save already ran and released the lock, so the grant would never be stored.
+		local realRelease, lateDecision = DS.release, nil
+		DS.release = function(player)
+			if player == erin then
+				-- (in Roblox the player is still in Players here, and during BindToClose)
+				table.insert(playerList, erin)
+				lateDecision = receipt(erin, "late-1")
+				table.remove(playerList, table.find(playerList, erin))
+			end
+			return realRelease(player)
+		end
 		leave(erin)
+		DS.release = realRelease
+		assert(lateDecision == roblox.Enum.ProductPurchaseDecision.NotProcessedYet, "receipt granted after the final save")
+		assert(stored[erinKey].Receipts == nil or stored[erinKey].Receipts["late-1"] == nil)
 		assert(stored[erinKey].Coins == 99 and stored[erinKey].Lock == nil, "leave save did not persist and unlock")
 	end)
 	isStudio = true
@@ -1195,6 +1261,30 @@ check("client controllers initialise, render a real snapshot and animate flights
 	controllers.EffectsController.sell(bob.UserId, 500, #pile.pieces, false)
 	assert(#pile.pieces == 0, "sell animation did not take the pile")
 	flushDeferred()
+	-- Arrived (hidden) but then released by the server (walked away at the last moment):
+	-- the object must come back on this client, even several frames later.
+	clearNear(bobRoot.Position, 60)
+	local late = spawnAt("Toolbox", bobRoot.Position + roblox.Vector3.new(6, -2, 0))
+	tick(0.1)
+	assert(late.claimedBy == bob, "second toolbox not claimed")
+	local lateAttract = log.Attract[#log.Attract].args
+	CS.Attracted:Fire(lateAttract[1], lateAttract[2])
+	local lateEntry = lateAttract[1][#lateAttract[1]]
+	advance(lateEntry[3] + 0.05)
+	clientStep()
+	assert(late.model.Parent == nil, "arrived object should be hidden")
+	clientStep()
+	clientStep()
+	assert(controllers.MagnetController.flights[late.id], "hidden flight dropped before the server answered")
+	remotes.Magnet.OnServerEvent:Fire(bob, false)
+	local home = bobRoot.Position
+	moveTo(bobRoot, home + roblox.Vector3.new(0, 0, 200))
+	tick(1)
+	assert(SS.get(late.id) == late and not late.claimedBy, "server did not release the toolbox")
+	CS.Released:Fire(log.Released[#log.Released].args[1])
+	assert(late.model.Parent == world.scrapFolder, "released object stays invisible on this client")
+	assert(not controllers.MagnetController.flights[late.id], "released flight not ended")
+	moveTo(bobRoot, home)
 	-- Popups, events, settings, zone change.
 	for _, kind in ipairs({ "Achievement", "Quest", "Daily", "Discovery", "Upgrade", "Tier", "Zone", "Prestige", "StormReward", "TutorialDone", "OpenMenu", "GateMenu" }) do
 		CS.PopupRequested:Fire(kind, { id = "SteelSafe", name = "Large Steel Safe", rarity = "Rare", count = 3, total = 26, text = "x", reward = 10, tier = 2, cores = 3, total2 = 3, tab = "Codex" })

@@ -131,7 +131,7 @@ Settings > Controls lists everything in game.
 | `lune run tests/compile` | `compiled 47 files, 0 failures` |
 | `lune run tests/run` | `33 passed, 0 failed` |
 | `rojo build -o build/MagnetMayhem.rbxlx` | `Built project to MagnetMayhem.rbxlx` |
-| `lune run tests/harness build/MagnetMayhem.rbxlx` | `harness: 28 passed, 0 failed` |
+| `lune run tests/harness build/MagnetMayhem.rbxlx` | `harness: 29 passed, 0 failed` |
 
 * **Bugs found by tests and fixed:**
   * The first claim waited about 0.2 s for the claim budget, so it felt laggy. The first grab

@@ -179,6 +179,29 @@ local function build()
 	-- Touch controls.
 	if UserInputService.TouchEnabled then
 		local touch = Ui.new("Frame", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -170, 1, -30), Size = UDim2.fromOffset(260, 220), BackgroundTransparency = 1, Parent = gui })
+		-- Keep the cluster left of Roblox's Jump button. The Jump button is sized in real
+		-- pixels (70 px at (1,-95) on small screens, 120 px at (1,-170) otherwise) while this
+		-- layout is shrunk by the UIScale, so the offset is converted per screen size. Where
+		-- that would run into the bottom-centre bar (narrow / 4:3 screens), lift it above.
+		local uiScale = gui:FindFirstChildOfClass("UIScale")
+		local function placeTouch()
+			local size = Ui.viewportSize()
+			local jumpLeft = if math.min(size.X, size.Y) <= 500 then 95 else 170
+			local scale = if uiScale and uiScale.Scale > 0 then uiScale.Scale else 1
+			local right = jumpLeft + 12
+			local bottom = 30
+			if size.X - right - 210 * scale < size.X / 2 + 270 * scale then
+				bottom = 146 -- above the capacity bar and its FULL label
+			end
+			touch.Position = UDim2.new(1, -math.ceil(right / scale), 1, -bottom)
+		end
+		placeTouch()
+		if uiScale then
+			uiScale:GetPropertyChangedSignal("Scale"):Connect(placeTouch)
+		end
+		if workspace.CurrentCamera then
+			workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(placeTouch)
+		end
 		local magnet = Ui.button("MAGNET", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(120, 120), TextSize = 20 }, C.Accent)
 		Ui.corner(magnet, 60)
 		magnet.Parent = touch
