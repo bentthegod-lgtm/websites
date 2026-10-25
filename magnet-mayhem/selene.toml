@@ -1,0 +1,5 @@
+std = "roblox_min"
+
+[rules]
+shadowing = "allow"
+mixed_table = "allow"
