@@ -5,11 +5,14 @@
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("ReboundRumble")
 local GameConfig = require(Shared.Config.GameConfig)
+-- Studio play-tests use separate stores, so free test grants never reach live data.
+local STORE_SUFFIX = if RunService:IsStudio() then "_Studio" else ""
 
 local LeaderboardService = {}
 
@@ -22,7 +25,7 @@ local REFRESH = 60
 function LeaderboardService.init(registry)
 	_services = registry
 	local ok, result = pcall(function()
-		return DataStoreService:GetOrderedDataStore(GameConfig.LeaderboardStoreName)
+		return DataStoreService:GetOrderedDataStore(GameConfig.LeaderboardStoreName .. STORE_SUFFIX)
 	end)
 	if ok then
 		store = result

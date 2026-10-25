@@ -11,11 +11,14 @@
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("ReboundRumble")
 local GameConfig = require(Shared.Config.GameConfig)
+-- Studio play-tests use separate stores, so free test grants never reach live data.
+local STORE_SUFFIX = if RunService:IsStudio() then "_Studio" else ""
 local ProgressionConfig = require(Shared.Config.ProgressionConfig)
 local AbilityConfig = require(Shared.Config.AbilityConfig)
 local CosmeticConfig = require(Shared.Config.CosmeticConfig)
@@ -147,7 +150,7 @@ end
 function DataService.init(registry)
 	services = registry
 	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore(GameConfig.DataStoreName)
+		return DataStoreService:GetDataStore(GameConfig.DataStoreName .. STORE_SUFFIX)
 	end)
 	if ok then
 		store = result

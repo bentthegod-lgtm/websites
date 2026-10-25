@@ -23,6 +23,8 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("SnatchTycoon")
 local GameConfig = require(Shared.Config.GameConfig)
+-- Studio play-tests use separate stores, so free test grants never reach live data.
+local STORE_SUFFIX = if RunService:IsStudio() then "_Studio" else ""
 local Signal = require(Shared.Signal)
 
 local DataService = {}
@@ -105,7 +107,7 @@ end
 function DataService.init(registry)
 	services = registry
 	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore(GameConfig.DataStoreName)
+		return DataStoreService:GetDataStore(GameConfig.DataStoreName .. STORE_SUFFIX)
 	end)
 	if ok and result then
 		store = result

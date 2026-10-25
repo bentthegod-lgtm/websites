@@ -12,11 +12,14 @@
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("SproutValley")
 local GameConfig = require(Shared.Config.GameConfig)
+-- Studio play-tests use separate stores, so free test grants never reach live data.
+local STORE_SUFFIX = if RunService:IsStudio() then "_Studio" else ""
 local CropConfig = require(Shared.Config.CropConfig)
 local MutationConfig = require(Shared.Config.MutationConfig)
 local GearConfig = require(Shared.Config.GearConfig)
@@ -106,7 +109,7 @@ DataService.reconcile = reconcile
 function DataService.init(registry)
 	services = registry
 	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore(GameConfig.DataStoreName)
+		return DataStoreService:GetDataStore(GameConfig.DataStoreName .. STORE_SUFFIX)
 	end)
 	if ok then
 		store = result
