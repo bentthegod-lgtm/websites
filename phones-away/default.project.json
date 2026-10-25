@@ -1,0 +1,57 @@
+{
+  "name": "PhonesAway",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "PhonesAway": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "PhonesAwayServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 16,
+        "CharacterJumpPower": 50,
+        "CameraMaxZoomDistance": 90,
+        "CameraMinZoomDistance": 6
+      },
+      "StarterPlayerScripts": {
+        "PhonesAwayClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 2.4,
+        "ClockTime": 10.2,
+        "EnvironmentDiffuseScale": 0.6,
+        "EnvironmentSpecularScale": 0.4
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
