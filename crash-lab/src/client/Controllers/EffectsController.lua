@@ -50,6 +50,12 @@ local function rigFor(model)
 	if rig then
 		return rig
 	end
+	-- Machines are rebuilt on every claim / machine change: drop rigs of destroyed models.
+	for old in pairs(rigCache) do
+		if not old.Parent then
+			rigCache[old] = nil
+		end
+	end
 	local mover = model:FindFirstChild("Arm") or model:FindFirstChild("Barrel")
 	rig = { mover = mover, restPivot = mover and mover:GetPivot(), coils = {}, extras = {} }
 	if mover then

@@ -72,7 +72,8 @@ function Run:sample(position, t)
 			self.voided = true
 		end
 		-- The anomalous point is ignored entirely (no distance, height or speed from it).
-		self.lastT = t
+		-- lastT stays with the last accepted point: the next sample is measured from that
+		-- point over the real elapsed time, so one physics glitch can't cascade into a void.
 		return "anomaly"
 	end
 	self.samples += 1

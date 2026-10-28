@@ -48,7 +48,7 @@ MachineConfig.ById = {
 		ChargeTime = 1.35,
 		Cooldown = 7,
 		Spin = Vector3.new(-6, 0, 0), -- backspin (radians/s around the launch's right axis)
-		LaunchHeight = 4.5,
+		LaunchHeight = 5.2, -- root height: the feet (RootHeight 4.43 below) must clear the 0.3-stud pad
 		Cost = 2500,
 		Requirement = { Stat = "BestDistance", Value = 140, Text = "Reach 140 studs in one run" },
 		Color = { 70, 170, 255 },

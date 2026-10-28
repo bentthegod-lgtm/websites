@@ -31,7 +31,7 @@ return {
 		FloorY = 0,
 		Length = 540, -- the far catch net sits here
 		HalfWidth = 78, -- side nets
-		Ceiling = 260, -- anything above this is out of bounds
+		Ceiling = 320, -- anything above this is out of bounds (top Air Cannon arc peaks ~251)
 		KillY = -40,
 		LobbyZ = -90, -- lobby centre (behind the launch line)
 	},

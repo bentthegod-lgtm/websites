@@ -312,6 +312,18 @@ Key safety features:
 - [ ] A dummy never escapes the arena; out-of-bounds ends the run.
 - [ ] Moving targets register hits and debris behaves (falls, despawns, never blocks).
 
+**Physics risks found in review, most likely first. Watch these in Studio:**
+1. Fast dummies tunnelling through nets. The side nets are now 4 studs thick and the catch
+   net 6 studs. If a max-power launch still passes through, thicken them again in
+   `FacilityBuilder.lua`.
+2. High lobs crossing the side nets. The nets now reach 130 studs and the out-of-bounds
+   ceiling is 320, while the top Air Cannon arc peaks at about 251.
+3. Ragdoll stability at Chaos spin (about 13 rad/s), and knees and elbows bending 70° in
+   every direction.
+4. Moving targets are CFramed every frame, so they can fling a dummy rather than push it.
+5. Whether the camera sensitivity setting (`MouseDeltaSensitivity`) has a noticeable effect.
+6. On phones under 500 px tall, the results card overlaps the Jump button.
+
 **Gameplay and UI:**
 - [ ] The first launch comes within a minute and the first upgrade within a few minutes.
 - [ ] The follow camera is smooth and skippable, and it returns to the player afterwards.

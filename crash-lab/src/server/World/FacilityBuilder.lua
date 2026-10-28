@@ -455,13 +455,14 @@ local function buildArena(world)
 		local wall = part({ Name = "SideGlass", Size = Vector3.new(1, 14, length + 20), CFrame = CFrame.new(x * half, 7, length / 2 + 4), Color = C.Glass, Material = M.Glass, Transparency = 0.55, Parent = arena })
 		key(wall, "SideWall")
 		for z = 10, length, 40 do
-			part({ Name = "NetPost", Size = Vector3.new(1.4, 70, 1.4), CFrame = CFrame.new(x * (half + 0.6), 35, z), Color = C.Steel, Material = M.Metal, Parent = arena })
+			part({ Name = "NetPost", Size = Vector3.new(1.4, 130, 1.4), CFrame = CFrame.new(x * (half + 2.6), 65, z), Color = C.Steel, Material = M.Metal, Parent = arena })
 		end
-		local net = part({ Name = "SideNet", Size = Vector3.new(0.4, 56, length + 20), CFrame = CFrame.new(x * half, 42, length / 2 + 4), Color = rgb(40, 44, 50), Material = M.Fabric, Transparency = 0.82, Parent = arena })
+		-- Thick nets: fast dummies can tunnel through thin parts between physics steps.
+		local net = part({ Name = "SideNet", Size = Vector3.new(4, 116, length + 20), CFrame = CFrame.new(x * (half + 2), 72, length / 2 + 4), Color = rgb(40, 44, 50), Material = M.Fabric, Transparency = 0.82, Parent = arena })
 		key(net, "SideNet")
-		deco({ Size = Vector3.new(1.2, 1.2, length + 20), CFrame = CFrame.new(x * (half + 0.6), 70, length / 2 + 4), Color = C.Yellow, Material = M.Metal, Parent = arena })
+		deco({ Size = Vector3.new(1.2, 1.2, length + 20), CFrame = CFrame.new(x * (half + 2), 130.6, length / 2 + 4), Color = C.Yellow, Material = M.Metal, Parent = arena })
 	end
-	local catch = part({ Name = "CatchNet", Size = Vector3.new(half * 2, 130, 1), CFrame = CFrame.new(0, 65, length), Color = rgb(40, 44, 50), Material = M.Fabric, Transparency = 0.7, Parent = arena })
+	local catch = part({ Name = "CatchNet", Size = Vector3.new(half * 2 + 8, 130, 6), CFrame = CFrame.new(0, 65, length + 2.5), Color = rgb(40, 44, 50), Material = M.Fabric, Transparency = 0.7, Parent = arena })
 	key(catch, "CatchNet")
 	part({ Name = "CatchFrameTop", Size = Vector3.new(half * 2 + 4, 2, 2), CFrame = CFrame.new(0, 131, length), Color = C.Yellow, Material = M.Metal, Parent = arena })
 	for _, x in ipairs({ -1, 0, 1 }) do

@@ -495,6 +495,10 @@ check("three machines build: distinct models, movers, anchored and non-colliding
 		local model, rig = MachineModels.build(id, CF.new(0, 1, 0))
 		assert(rig.mover and rig.mover.PrimaryPart, id .. " has no moving part")
 		assert(rig.launchOffset.Position.Y > 3, id .. " launch point too low")
+		-- The ragdoll spawns standing at the launch point: its feet must clear the pad top
+		-- (the pad part is 0.3 studs thick), or it starts inside the pad and gets ejected.
+		local DummyModel = requireModule(Shared.DummyModel)
+		assert(rig.launchOffset.Position.Y - DummyModel.RootHeight > 0.3 + 0.1, id .. " spawns the dummy's feet inside the pad")
 		local n = 0
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
@@ -1090,6 +1094,24 @@ check("machines: unlock needs requirement + coins, selection rebuilds the pad ma
 	tick(2)
 	local run = CS.runOf(alice)
 	assert(run.machine.Id == "Spring" and run.launch.Elevation < 45, "spring should fire flatter")
+	-- Backspin is applied to the whole ragdoll as one rigid body (w on every part, v + w x r).
+	local omega = run.root.AssemblyAngularVelocity
+	assert(omega.Magnitude > 1, "spring backspin not applied")
+	local centre = run.root.CFrame.Position
+	for _, part in ipairs(run.body) do
+		assert((part.AssemblyAngularVelocity - omega).Magnitude < 1e-3, part.Name .. " not spinning with the body")
+		local expected = run.launch.Velocity + omega:Cross(part.CFrame.Position - centre)
+		assert((part.AssemblyLinearVelocity - expected).Magnitude < 1e-3, part.Name .. " velocity doesn't match the spin")
+	end
+	-- Touched fires after the solver: a part stopped dead by a wall reads ~0 st/s. The tier
+	-- comes from the speed it had going in (previous Heartbeat).
+	local bumper = world.folder.Arena:FindFirstChild("Bumper1")
+	run.root.AssemblyLinearVelocity = V3.new(0, 0, 120)
+	CS.step()
+	run.root.AssemblyLinearVelocity = V3.new(0, 0, 0)
+	run.root.Touched:Fire(bumper)
+	local hit = run.tracker.impacts[#run.tracker.impacts]
+	assert(hit and hit.key == "Bumper1" and hit.tier == "Heavy", "wall impact tiered from post-contact speed")
 	tick(6, ballistic(run))
 	assert(US.select(alice, "Standard"))
 end)

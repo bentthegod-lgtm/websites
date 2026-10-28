@@ -43,16 +43,27 @@ CrashService.Groups = { Dummy = "CL_Dummy", Player = "CL_Player", Debris = "CL_D
 
 function CrashService.init(registry)
 	services = registry
-	pcall(function()
-		for _, name in pairs(CrashService.Groups) do
-			PhysicsService:RegisterCollisionGroup(name)
+	-- Each step on its own: a group that already exists (saved in the place file) must not
+	-- stop the collidable rules from being set.
+	for _, name in pairs(CrashService.Groups) do
+		local ok, registered = pcall(function()
+			return PhysicsService:IsCollisionGroupRegistered(name)
+		end)
+		if not (ok and registered) then
+			pcall(function()
+				PhysicsService:RegisterCollisionGroup(name)
+			end)
 		end
-		local G = CrashService.Groups
-		PhysicsService:CollisionGroupSetCollidable(G.Dummy, G.Dummy, false)
-		PhysicsService:CollisionGroupSetCollidable(G.Dummy, G.Player, false)
-		PhysicsService:CollisionGroupSetCollidable(G.Debris, G.Dummy, false)
-		PhysicsService:CollisionGroupSetCollidable(G.Debris, G.Player, false)
-	end)
+	end
+	local G = CrashService.Groups
+	for _, pair in ipairs({ { G.Dummy, G.Dummy }, { G.Dummy, G.Player }, { G.Debris, G.Dummy }, { G.Debris, G.Player } }) do
+		local ok, err = pcall(function()
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], false)
+		end)
+		if not ok then
+			warn("[CrashLab] collision rule " .. pair[1] .. "/" .. pair[2] .. " failed: " .. tostring(err))
+		end
+	end
 end
 
 function CrashService.setWorld(newWorld)
@@ -140,15 +151,20 @@ function CrashService.start(player, pad, machine, launch, stats, featuredId)
 	attachTrail(parts.Root, data.Cosmetics.Trail)
 	model.Parent = world.dummyFolder
 	-- Server owns the physics: clients can't teleport or fling their own dummy.
+	-- Every body part is its own assembly (ball sockets aren't rigid), so each one gets the
+	-- spin plus the matching tangential velocity (v + w x r): the whole dummy tumbles as one
+	-- body instead of the torso spinning alone and yanking the limbs.
+	local omega = spinToWorld(launch.Direction, launch.Spin)
+	local centre = parts.Root.CFrame.Position
 	for _, p in ipairs(body) do
 		pcall(function()
 			p:SetNetworkOwner(nil)
 		end)
-		p.AssemblyLinearVelocity = launch.Velocity
+		p.AssemblyLinearVelocity = launch.Velocity + omega:Cross(p.CFrame.Position - centre)
+		pcall(function()
+			p.AssemblyAngularVelocity = omega
+		end)
 	end
-	pcall(function()
-		parts.Root.AssemblyAngularVelocity = spinToWorld(launch.Direction, launch.Spin)
-	end)
 	local now = os.clock()
 	local origin = Vector3.new(pad.cframe.Position.X, ARENA.FloorY, pad.cframe.Position.Z)
 	local forward = Vector3.new(0, 0, 1) -- distance is measured straight down the course
@@ -168,6 +184,7 @@ function CrashService.start(player, pad, machine, launch, stats, featuredId)
 		tracker = Scoring.Run.new(origin, forward, { floorY = ARENA.FloorY, impactCap = stats.ImpactCap, startTime = now, maxSpeed = ScoringConfig.MaxLaunchSpeed }),
 		brokenGroups = {},
 		connections = {},
+		lastSpeed = {}, -- [part] = speed at the previous Heartbeat (pre-contact)
 		ended = false,
 		eventsSent = 0,
 	}
@@ -182,6 +199,10 @@ function CrashService.start(player, pad, machine, launch, stats, featuredId)
 			if ok then
 				speed = v
 			end
+			-- Touched fires after the solver has already resolved the contact, so the part's
+			-- current velocity is the post-impact one (a dead stop against a wall reads ~0).
+			-- The speed it had at the previous Heartbeat is the impact speed.
+			speed = math.max(speed, run.lastSpeed[p] or 0)
 			CrashService.contact(run, other, speed, p.Position)
 		end))
 	end
@@ -309,6 +330,13 @@ function CrashService.step()
 			end
 			if reason then
 				CrashService.finish(run, reason)
+			else
+				for _, p in ipairs(run.body) do
+					local ok, v = pcall(function()
+						return p.AssemblyLinearVelocity.Magnitude
+					end)
+					run.lastSpeed[p] = if ok then v else nil
+				end
 			end
 		end
 	end
@@ -357,15 +385,11 @@ function CrashService.finish(run, reason)
 		c:Disconnect()
 	end
 	table.clear(run.connections)
-	local finalPosition = if run.root.Parent then run.root.Position else run.tracker.last
-	local landed = reason == "settled" or reason == "stuck"
-	local paid = reason ~= "left" and reason ~= "cancelled"
-	if paid then
-		local objectives = CrashService.evaluate(run, finalPosition, landed)
-		services.ScoringService.finish(run, objectives, reason)
-	end
+	table.clear(run.lastSpeed)
 	local player = run.player
 	local model = run.model
+	-- Cleanup is scheduled BEFORE the payout, so an error in reward code can never leave
+	-- the dummy in the arena.
 	task.delay(RUN.CleanupDelay, function()
 		if model then
 			model:Destroy()
@@ -377,6 +401,20 @@ function CrashService.finish(run, reason)
 			services.PadService.broadcast()
 		end
 	end)
+	local finalPosition = if run.root.Parent then run.root.Position else run.tracker.last
+	local landed = reason == "settled" or reason == "stuck"
+	local paid = reason ~= "left" and reason ~= "cancelled"
+	if paid then
+		local ok, err = pcall(function()
+			local objectives = CrashService.evaluate(run, finalPosition, landed)
+			services.ScoringService.finish(run, objectives, reason)
+		end)
+		if not ok then
+			warn("[CrashLab] run payout failed for " .. player.Name .. ": " .. tostring(err))
+			-- The owner's client waits for RunEnded before it allows another launch.
+			services.Remotes.RunEnded:FireAllClients(player.UserId, { score = 0, distance = 0, name = player.DisplayName })
+		end
+	end
 end
 
 function CrashService.cancel(player)

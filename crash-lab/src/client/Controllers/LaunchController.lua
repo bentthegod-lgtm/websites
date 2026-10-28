@@ -161,7 +161,9 @@ function LaunchController.build()
 			setPowerFromX(input.Position.X)
 		end
 	end)
-	hit.InputEnded:Connect(function(input)
+	-- Released anywhere (not just over the bar): GuiObject.InputEnded doesn't fire when the
+	-- mouse / finger lets go outside the bar, which would leave the drag stuck on.
+	UserInputService.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
 		end

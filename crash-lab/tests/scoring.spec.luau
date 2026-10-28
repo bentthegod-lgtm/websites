@@ -40,6 +40,18 @@ test("a teleport-sized jump is rejected; three of them void the run", function()
 	assert(run:sample(Vector3.new(0 / 0, 0, 0), 0.5) == "anomaly", "NaN accepted")
 end)
 
+test("one physics glitch is one anomaly: later samples are judged over the real elapsed time", function()
+	local run = newRun()
+	local dt = 1 / GameConfig.Run.SampleRate
+	run:sample(Vector3.new(0, 10, 10), dt)
+	-- A depenetration fling: 50 studs in one sample gap is faster than any launch.
+	assert(run:sample(Vector3.new(0, 10, 60), 2 * dt) == "anomaly")
+	-- The dummy carries on from where the glitch left it, at a normal speed.
+	assert(run:sample(Vector3.new(0, 10, 64), 3 * dt) == "ok", "a single glitch cascaded")
+	assert(run:sample(Vector3.new(0, 10, 68), 4 * dt) == "ok")
+	assert(run.anomalies == 1 and not run.voided, "anomalies " .. run.anomalies)
+end)
+
 test("fast but legal flight samples are accepted", function()
 	local run = newRun()
 	local dt = 1 / GameConfig.Run.SampleRate
