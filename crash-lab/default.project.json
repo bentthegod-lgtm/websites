@@ -1,0 +1,58 @@
+{
+  "name": "CrashLab",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "CrashLab": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "CrashLabServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 18,
+        "CharacterJumpPower": 50,
+        "CameraMaxZoomDistance": 70,
+        "CameraMinZoomDistance": 6,
+        "EnableMouseLockOption": false
+      },
+      "StarterPlayerScripts": {
+        "CrashLabClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 2.4,
+        "ClockTime": 14.2,
+        "EnvironmentDiffuseScale": 0.5,
+        "EnvironmentSpecularScale": 0.55
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}

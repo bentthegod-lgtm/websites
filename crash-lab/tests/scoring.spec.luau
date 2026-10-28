@@ -1,0 +1,143 @@
+local L = require("./loader")
+local Scoring = L.shared("Scoring")
+local ScoringConfig = L.shared("Config/ScoringConfig")
+local GameConfig = L.shared("Config/GameConfig")
+local Vector3 = L.roblox.Vector3
+
+local cases = {}
+local function test(name, fn)
+	table.insert(cases, { name = "Scoring: " .. name, fn = fn })
+end
+
+local FORWARD = Vector3.new(0, 0, 1)
+local function newRun(cap)
+	return Scoring.Run.new(Vector3.new(0, 5, 0), FORWARD, { floorY = 0, impactCap = cap or 10, startTime = 0 })
+end
+
+test("distance is the furthest valid point down the course, not path length", function()
+	local run = newRun()
+	run:sample(Vector3.new(0, 10, 10), 0.1)
+	run:sample(Vector3.new(0, 12, 20), 0.2)
+	run:sample(Vector3.new(0, 8, 15), 0.3) -- bounced back
+	run:sample(Vector3.new(15, 6, 15), 0.4) -- sideways
+	local r = run:result()
+	assert(r.distance == 20, "distance " .. r.distance)
+	assert(r.height == 12, "height " .. r.height)
+end)
+
+test("a teleport-sized jump is rejected; three of them void the run", function()
+	local run = newRun()
+	run:sample(Vector3.new(0, 10, 10), 0.1)
+	assert(run:sample(Vector3.new(0, 10, 5000), 0.2) == "anomaly")
+	assert(run:result().distance == 10, "teleport counted")
+	-- A believable next sample (from the last good point) still works.
+	assert(run:sample(Vector3.new(0, 10, 30), 0.3) == "ok")
+	run:sample(Vector3.new(0, 900, 30), 0.35)
+	run:sample(Vector3.new(0, -900, 30), 0.4)
+	local r = run:result()
+	assert(r.voided and r.score == 0 and r.coins == ScoringConfig.VoidCoins, "voided run still paid")
+	assert(not run:award("Target", "Gong", 300), "awards after voiding")
+	assert(run:sample(Vector3.new(0 / 0, 0, 0), 0.5) == "anomaly", "NaN accepted")
+end)
+
+test("fast but legal flight samples are accepted", function()
+	local run = newRun()
+	local dt = 1 / GameConfig.Run.SampleRate
+	local pos = Vector3.new(0, 5, 0)
+	for i = 1, 10 do
+		pos += Vector3.new(0, 200 * dt, ScoringConfig.MaxLaunchSpeed * 0.9 * dt)
+		assert(run:sample(pos, i * dt) == "ok", "legal sample " .. i .. " rejected")
+	end
+end)
+
+test("impacts: tiers, slow touches ignored, debounce and per-object cap", function()
+	local run = newRun(50)
+	assert(run:impact("Wall", 10, 1) == nil, "slow touch counted")
+	assert(run:impact("Wall", 30, 1) == "Light")
+	assert(run:impact("Wall", 120, 1.2) == nil, "debounce ignored")
+	assert(run:impact("Wall", 120, 1.6) == "Heavy")
+	assert(run:impact("Wall", 200, 2.2) == "Massive")
+	assert(run:impact("Wall", 200, 3) == nil, "per-object cap ignored")
+	assert(run:impact("Ramp", 60, 3) == "Medium")
+	local r = run:result()
+	assert(r.impacts == 4 and r.impactTiers.Massive == 1, "counted " .. r.impacts)
+	assert(r.impactPoints == 6 + 40 + 75 + 16, "impact points " .. r.impactPoints)
+end)
+
+test("impacts: floor bounces are grouped and capped; run cap holds", function()
+	local run = newRun(6)
+	local n = 0
+	for i = 1, 20 do
+		if run:impact("FloorTile" .. i, 80, i, "Floor") then
+			n += 1
+		end
+	end
+	assert(n == ScoringConfig.Impact.FloorMax, "floor counted " .. n)
+	local extra = 0
+	for i = 1, 10 do
+		if run:impact("Obj" .. i, 80, 100 + i) then
+			extra += 1
+		end
+	end
+	assert(n + extra == 6, "run cap ignored: " .. (n + extra))
+end)
+
+test("bonuses are awarded once; featured objective multiplies only itself", function()
+	local run = newRun()
+	assert(run:award("Objective", "RingLow", 100))
+	assert(not run:award("Objective", "RingLow", 100), "awarded twice")
+	assert(run:award("Target", "Gong", 300))
+	run:sample(Vector3.new(0, 5, 50), 0.5)
+	local r = run:result({ bonus = 1.5, featured = 3, featuredId = "RingLow", coins = 2 })
+	assert(r.bonusPoints == 150 + 450, "bonus " .. r.bonusPoints)
+	assert(r.featuredPoints == 300, "featured " .. r.featuredPoints)
+	assert(r.score == 50 + 2 + 0 + 600 + 300, "score " .. r.score) -- 2 = height 5 * 0.5
+	assert(r.coins == math.floor(r.score * ScoringConfig.CoinsPerPoint * 2))
+end)
+
+test("a flop still earns the minimum coins", function()
+	local run = newRun()
+	run:sample(Vector3.new(0, 5, 0.5), 0.2)
+	local r = run:result()
+	assert(r.coins == ScoringConfig.MinCoins, "flop paid " .. r.coins)
+end)
+
+test("settle, stuck and timeout detection", function()
+	local cfg = GameConfig.Run
+	local run = newRun()
+	run:sample(Vector3.new(0, 1, 10), 0.3)
+	assert(run:status(0.4) == nil)
+	-- Still, but too early in the run: not settled yet.
+	run:sample(Vector3.new(0, 1, 10), 0.5)
+	assert(run:status(0.5) == nil, "settled before min air time")
+	local t = 0.5
+	while t < cfg.MinAirTime + cfg.SettleTime + 0.2 do
+		t += 0.1
+		run:sample(Vector3.new(0, 1, 10), t)
+	end
+	assert(run:status(t) == "settled", "did not settle")
+	-- Jittering in place fast enough not to "settle" still ends as stuck.
+	local stuck = newRun()
+	t = 0
+	local flip = 1
+	while t < cfg.StuckWindow + 1 do
+		t += 0.1
+		flip = -flip
+		stuck:sample(Vector3.new(flip * 0.6, 1, 20), t)
+	end
+	assert(stuck:status(t) == "stuck", "jitter not detected as stuck: " .. tostring(stuck:status(t)))
+	local long = newRun()
+	assert(long:status(cfg.MaxDuration + 0.1) == "timeout")
+end)
+
+test("ring crossing and landing zones", function()
+	local center, radius = Vector3.new(0, 20, 100), 10
+	assert(Scoring.crossesRing(Vector3.new(0, 18, 95), Vector3.new(0, 22, 105), center, radius))
+	assert(not Scoring.crossesRing(Vector3.new(0, 40, 95), Vector3.new(0, 40, 105), center, radius), "passed over the ring")
+	assert(not Scoring.crossesRing(Vector3.new(0, 20, 80), Vector3.new(0, 20, 90), center, radius), "never reached it")
+	assert(Scoring.insideZone(Vector3.new(3, 1, 152), Vector3.new(0, 0, 150), 15))
+	assert(not Scoring.insideZone(Vector3.new(30, 1, 150), Vector3.new(0, 0, 150), 15))
+	assert(not Scoring.insideZone(Vector3.new(0, 40, 150), Vector3.new(0, 0, 150), 15), "hovering above counts as landed")
+end)
+
+return cases
