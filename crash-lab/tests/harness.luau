@@ -1533,6 +1533,36 @@ check("Gravity Lab: per-dummy low-g force on in a field, off outside and after t
 	assert(Course.travel(fay, "IndustrialLab"))
 end)
 
+check("facilities: old 'access granted' saves get the Facilities count; leaving forgets the location; destroyed fragments leave the pool", function()
+	local Course = registry.CourseService
+	local gil = makePlayer("Gil")
+	local p = DS.getProfile(gil)
+	-- A save from before the facilities were built: free access flags, no count.
+	for _, id in ipairs({ "Destruction", "HighAltitude", "GravityLab" }) do
+		p.Facilities[id] = true
+	end
+	p.Stats.Facilities = nil
+	Course.onProfileLoaded(gil)
+	assert(p.Stats.Facilities == 4 and p.Achievements.Explorer, "facility count not derived for an old save")
+	assert(Course.travel(gil, "HighAltitude") and Course.locationOf(gil) == "HighAltitude")
+	leave(gil)
+	assert(Course.locationOf(gil) == CourseConfig.StartFacility, "location kept after the player left")
+	-- A fragment the engine destroyed (fell out of the world) is not put back in the pool.
+	flushDeferred()
+	local before = Course.debrisPoolSize()
+	for id, prop in pairs(world.props) do
+		if prop.facility == "Destruction" and not prop.broken then
+			Course.hitProp(id, 90, 1)
+			break
+		end
+	end
+	local fragment = world.debrisFolder:FindFirstChildWhichIsA("BasePart")
+	assert(fragment, "no fragment spawned")
+	fragment:Destroy()
+	flushDeferred()
+	assert(Course.activeDebris() == 0 and Course.debrisPoolSize() == before - 1, "destroyed fragment still counted: " .. Course.debrisPoolSize())
+end)
+
 check("cosmetics: coins purchase, achievement unlock, equip only owned, nothing changes stats", function()
 	local SS = registry.ShopService
 	local p = DS.getProfile(alice)

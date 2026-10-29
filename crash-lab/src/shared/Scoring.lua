@@ -290,7 +290,9 @@ function Run:result(mult)
 		bonuses = lines,
 		voided = self.voided,
 		anomalies = self.anomalies,
-		freeFall = math.floor(self.freeFall * 10) / 10,
+		-- Only where the course has a Free-Fall Bonus: a hub or Gravity Lab drop must not feed
+		-- BestFreeFall, the Free Faller achievement or the High-Altitude daily.
+		freeFall = if tuning.FreeFall then math.floor(self.freeFall * 10) / 10 else 0,
 		comboBest = self.comboBest,
 		comboPoints = self.comboPoints,
 	}

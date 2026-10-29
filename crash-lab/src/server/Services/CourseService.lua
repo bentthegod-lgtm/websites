@@ -91,10 +91,18 @@ local function cleanupDebris(entry)
 		table.remove(activeDebris, i)
 	end
 	for _, p in ipairs(entry.parts) do
-		-- Back to the pool: out of the world, ready for the next break.
-		p.Anchored = true
-		p.Parent = nil
-		table.insert(debrisPool, p)
+		-- Back to the pool: out of the world, ready for the next break. A fragment that fell
+		-- below FallenPartsDestroyHeight was destroyed by the engine (Parent locked): it is
+		-- dropped from the count so the pool can build a replacement.
+		local ok = pcall(function()
+			p.Anchored = true
+			p.Parent = nil
+		end)
+		if ok then
+			table.insert(debrisPool, p)
+		else
+			debrisCreated -= 1
+		end
 	end
 	table.clear(entry.parts)
 end
@@ -368,14 +376,26 @@ function CourseService.travel(player, id)
 	return true, "Welcome to the " .. f.Name .. "!"
 end
 
--- Respawns put the player back in the facility they were in.
+-- Respawns put the player back in the facility they were in. The move waits for the root
+-- part and one frame (the engine places a new character on the hub SpawnLocation around
+-- CharacterAdded). If the character can't be moved, the server's location falls back to
+-- the hub so it never disagrees with where the player really is.
 function CourseService.onCharacter(player, character)
 	local id = CourseService.locationOf(player)
 	local entry = world and world.facilities[id]
 	if id ~= CourseConfig.StartFacility and entry then
-		task.defer(function()
-			if character.Parent and character.PrimaryPart then
+		task.spawn(function()
+			local root = character:WaitForChild("HumanoidRootPart", 10)
+			task.wait()
+			if not player.Parent or player.Character ~= character or location[player] ~= id then
+				return
+			end
+			if root and character.Parent and character.PrimaryPart then
 				character:PivotTo(entry.spawn)
+			else
+				location[player] = nil
+				services.QuestService.rerollFeatured(player)
+				services.DataService.sendProfile(player)
 			end
 		end)
 	end
@@ -397,6 +417,12 @@ end
 
 function CourseService.onProfileLoaded(player)
 	CourseService.checkFacilities(player, true)
+	-- Saves from before the facilities were built already hold their "access granted"
+	-- flags but never had the Facilities count (Lab Explorer achievement): derive it.
+	local data = services.DataService.getProfile(player)
+	if data then
+		services.DataService.setStat(player, "Facilities", countFacilities(data))
+	end
 end
 
 function CourseService.onPlayerRemoving(player)

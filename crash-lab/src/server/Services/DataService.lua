@@ -508,7 +508,7 @@ function DataService.release(player)
 end
 
 -- Run cleanup first (an in-flight run is cancelled with no reward), then everything else.
-local LEAVE_HOOKS = { "CrashService", "LaunchService", "PadService", "DuelService", "UpgradeService", "QuestService", "ShopService", "PlayerService", "LeaderboardService" }
+local LEAVE_HOOKS = { "CrashService", "LaunchService", "PadService", "CourseService", "DuelService", "UpgradeService", "QuestService", "ShopService", "PlayerService", "LeaderboardService" }
 
 function DataService.start()
 	Players.PlayerAdded:Connect(function(player)

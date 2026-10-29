@@ -194,6 +194,8 @@ test("free-fall bonus: height lost from the run's peak, min / max, only where tu
 	hub.last = Vector3.new(0, 50, 0)
 	hub:sample(Vector3.new(0, 10, 10), 0.2)
 	assert(hub:freeFallPoints() == 0, "hub course pays a free-fall bonus")
+	assert(hub:result().freeFall == 0, "hub drop reported as free-fall (records / achievement / daily)")
+	assert(run:result().freeFall >= 300, "tuned course lost its free-fall")
 end)
 
 test("per-course run limits replace the global ones", function()
