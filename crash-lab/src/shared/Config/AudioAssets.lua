@@ -36,6 +36,14 @@ return {
 	PanelShatter = { Id = "rbxassetid://9114591515", Volume = 0.7, Group = "Effects" },
 	GongHit = { Id = "rbxassetid://9119661709", Volume = 0.5, Pitch = 0.6, Group = "Effects", Duration = 3 },
 	RingPass = { Id = "rbxassetid://9113880475", Volume = 0.5, Pitch = 1.6, Group = "Effects" },
+	-- Destruction Testing Zone props (pitched reuses; swap for real recordings)
+	BrickCrumble = { Id = "rbxassetid://9120851227", Volume = 0.6, Pitch = 0.55, Group = "Effects" }, -- box crunch pitched down
+	BarrelClang = { Id = "rbxassetid://9116537007", Volume = 0.6, Pitch = 0.7, Group = "Effects" }, -- metal impact pitched down
+	-- Facility hazards
+	WindGust = { Id = "rbxassetid://9125446564", Volume = 0.3, Pitch = 1.7, Group = "Effects", Duration = 1 }, -- ventilation pitched up (swap for a real gust)
+	GravityShift = { Id = "rbxassetid://9112889082", Volume = 0.35, Pitch = 2, Group = "Effects", Duration = 1 }, -- air pressure pitched up
+	BounceField = { Id = "", Volume = 0.45, Group = "Effects" }, -- add: sci-fi bounce / spring zap
+	TransitWhoosh = { Id = "", Volume = 0.4, Group = "UI" }, -- add: teleport / transit whoosh
 	-- Feedback
 	ObjectiveDone = { Id = "rbxassetid://1837953706", Volume = 0.6, Group = "UI" },
 	NewRecord = { Id = "rbxassetid://1837953706", Volume = 0.7, Pitch = 1.2, Group = "UI" },
@@ -53,6 +61,9 @@ return {
 	Machinery = { Id = "rbxassetid://9119386548", Volume = 0.1, Looped = true, Group = "Ambient" },
 	ElectricHum = { Id = "rbxassetid://9112823813", Volume = 0.08, Looped = true, Group = "Ambient" },
 	Clank = { Id = "rbxassetid://9113134899", Volume = 0.2, Pitch = 1.3, Group = "Ambient" },
+	CanyonWind = { Id = "rbxassetid://9125446564", Volume = 0.2, Pitch = 0.55, Looped = true, Group = "Ambient" }, -- ventilation pitched down (swap for real mountain wind)
+	DemolitionRumble = { Id = "rbxassetid://9119386548", Volume = 0.12, Pitch = 0.7, Looped = true, Group = "Ambient" }, -- machinery pitched down
+	GravityHum = { Id = "rbxassetid://9112823813", Volume = 0.1, Pitch = 1.5, Looped = true, Group = "Ambient" }, -- electric hum pitched up
 	-- Music (none bundled: add licensed tracks)
 	MusicLobby = { Id = "", Volume = 0.25, Looped = true, Group = "Music" },
 	MusicRun = { Id = "", Volume = 0.3, Looped = true, Group = "Music" },

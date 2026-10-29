@@ -2,12 +2,14 @@
 	JuiceController - moment-to-moment feedback during YOUR run. All client-side and
 	purely visual; the numbers that pay out always come from the server's results.
 
-	* Live readout: distance and height (current + peak) while your dummy flies.
+	* Live readout: distance and height (current + peak) while your dummy flies, measured in
+	  the facility's own course space (each facility has its own origin and floor).
 	* Combo counter: impacts within ComboWindow of each other chain into "x3 COMBO!" with
 	  a pop in the tier's colour.
 	* Floating score popups at the impact point (tier base points; at most MaxPopups).
 	* Speed lines at the screen edges above SpeedLineMin studs/s (capped count).
 	* NEW RECORD banner + falling confetti when the results contain a record.
+	* Facility callouts: "GUST!", "LOW-G" / "FLIP!", "BOUNCE!" and destruction combos.
 	Reduced effects turns off the speed lines and confetti and calms the popups.
 ]]
 
@@ -138,10 +140,13 @@ function JuiceController.step(dt)
 		end
 		return
 	end
-	local pos = root.Position
-	peak = math.max(peak, pos.Y)
+	local course = ClientState.course(root.Position)
+	local pos = root.Position - course.Origin
+	local height = pos.Y - course.Arena.FloorY
+	peak = math.max(peak, height)
 	liveDistance.Text = Format.exact(math.max(0, math.floor(pos.Z)))
-	liveHeight.Text = string.format("%d  (peak %d)", math.max(0, math.floor(pos.Y)), math.floor(peak))
+	liveHeight.Text = string.format("%d  (peak %d)", math.floor(height), math.floor(peak))
+	pos = root.Position
 	local now = os.clock()
 	local speed = 0
 	if lastRootPos and lastRootT and now > lastRootT then
@@ -170,7 +175,7 @@ function JuiceController.celebrate(result)
 	if not next(records) then
 		return false
 	end
-	local which = if records.BestScore then "SCORE" elseif records.BestDistance then "DISTANCE" elseif records.BestHeight then "HEIGHT" else "IMPACTS"
+	local which = if records.BestScore then "SCORE" elseif records.FacilityScore then "FACILITY" elseif records.BestDistance then "DISTANCE" elseif records.BestHeight then "HEIGHT" else "IMPACTS"
 	banner.Text = "NEW " .. which .. " RECORD!"
 	banner.Visible = true
 	banner.TextTransparency = 0
@@ -237,6 +242,16 @@ function JuiceController.init()
 			JuiceController.popup(data.position, "TARGET!", C.Red)
 		elseif kind == "Ring" then
 			JuiceController.popup(data.position, "RING!", C.Green)
+		elseif kind == "Wind" then
+			JuiceController.popup(data.position, "GUST!", Color3.fromRGB(200, 230, 255))
+		elseif kind == "Gravity" then
+			JuiceController.popup(data.position, if (data.scale or 1) < 0 then "FLIP FIELD!" else "LOW-G", Color3.fromRGB(80, 240, 255))
+		elseif kind == "Flip" then
+			JuiceController.popup(data.position, "FLIP!", Color3.fromRGB(190, 110, 255))
+		elseif kind == "Bounce" then
+			JuiceController.popup(data.position, "BOUNCE!", Color3.fromRGB(190, 110, 255))
+		elseif kind == "Combo" then
+			JuiceController.popup(data.position, string.format("x%d SMASH COMBO", data.chain or 2), JuiceController.TierColor.Heavy)
 		end
 	end)
 	ClientState.RunStarted:Connect(function(userId)

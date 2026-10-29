@@ -31,6 +31,28 @@ look. Keep part names and attributes, because the server checks `CL_Floor`, `CL_
 8. **Arena dressing:** test fans (hub + 4 blades: keep `FanHub` / `FanBlade` names and the
    `Fan` attribute), light towers, gantries, net posts.
 
+### New facilities (`src/server/World/Facilities/*`)
+
+Keep the part names / attributes the server reads (`CL_Prop`, `CL_Key`, `CL_Floor`,
+`CL_Target`, `CL_Bounce`, `CL_Flip`) and the prop sizes, or update `CourseConfig` to match.
+
+9. **Destruction Testing Zone** (`Destruction.lua`):
+   - brick block (7.8×3.9×3), shipping crate (5×5×5), glass pane (7.6×10×0.6) and oil
+     drum (4×3×3, upright): an intact mesh plus 3–4 chunk meshes each (the chunks replace
+     the pooled fragment parts);
+   - wrecking-ball crane (tower, jib, cab, cable + 14-stud ball), shipping containers,
+     excavator, dumpster, rubble heaps, floodlight towers.
+10. **High-Altitude Launch Facility** (`HighAltitude.lua`):
+    - the mesa, canyon walls and pillars as sculpted rock meshes (keep their sizes as
+      collision boxes, or use mesh collision fidelity "Box");
+    - rope bridges (planks, ropes, hangers: the plank segments are the `HA_Bridge*`
+      impact objects), ledges, the cliff-face target arm, cable-car target, windsock,
+      pines, mountains.
+11. **Experimental Gravity Lab** (`GravityLab.lua`):
+    - wall panels with neon trim, ribs, the roof, consoles, coolant tanks;
+    - gravity-field emitters, bounce pads (keep `CL_Bounce`), ceiling flip panels (keep
+      `CL_Flip`), holo-emitters under the floating rings, the Antimatter Core target.
+
 ## ComfyUI prompts
 
 - **Game icon (512×512):** "cartoon crash test dummy flying out of a yellow catapult,
@@ -53,7 +75,19 @@ look. Keep part names and attributes, because the server checks `CL_Floor`, `CL_
 
 Empty (silent until filled):
 - `Boing`: comedic bounce for crash pads.
+- `BounceField` (Gravity Lab): a sci-fi spring / zap when a bounce field fires.
+- `TransitWhoosh` (UI): plays on arriving at a facility.
 - `MusicLobby` / `MusicRun`: licensed, upbeat, quieter than effects.
+
+Facility slots filled with pitched DEAD AIR reuses (placeholders):
+- Destruction Zone: `BrickCrumble` (box crunch x0.55), `BarrelClang` (metal impact x0.7),
+  ambient `DemolitionRumble` (machinery x0.7) + `Clank`. Wanted: brick crumble, drum
+  clang, glass shatter, wrecking-ball thud, distant diesel engines.
+- High-Altitude: ambient `CanyonWind` (ventilation x0.55), `WindGust` (ventilation x1.7).
+  Wanted: a real mountain wind loop and short gust whooshes.
+- Gravity Lab: ambient `GravityHum` (electric hum x1.5) + `ElectricHum`, `GravityShift`
+  (air pressure x2) when a dummy enters a field or hits a flip panel. Wanted: a sci-fi
+  field hum and a "gravity drop" swell.
 
 Filled in the polish pass with pitched DEAD AIR reuses (placeholders, replace when you can):
 - `AirHiss` and `Whoosh`: the ventilation loop pitched up (x2.4 / x2), cut short.
@@ -83,3 +117,9 @@ allow-list in `tests/config.spec.luau` when you add IDs.
 | Settle / stuck / time limit | `GameConfig.Run` | 4 st/s for 1.4 s / 4 s / 22 s |
 | Prop break speeds and strength | `CourseConfig.DestructibleKinds` | |
 | Prestige score | `Progress.PrestigeScore` | 3,000 |
+| Facility prices / requirements | `CourseConfig.Facilities` | Destruction 6k + 150 props; High-Altitude 20k + 400 st + Air Cannon; Gravity Lab 30k + 1 prestige |
+| Wind | `CourseConfig.Courses.HighAltitude.Wind` | every 0.7 s, 12 st/s per gust, 36 st/s per run |
+| Free-Fall Bonus | `...HighAltitude.Tuning.FreeFall` | 0.8 pts / stud, 15–240 studs |
+| Destruction combo | `...Destruction.Tuning.Combo` | 1.2 s window, 12 pts / step (max 8 steps), cap 500 |
+| Low gravity | `...GravityLab.Gravity.Volumes` / `Run` | scale 0.3 / 0.2, flip -0.5; drift limit 7 s; 18 s runs |
+| Bounce fields | `...GravityLab.Bounce` | 85 st/s, 6 per run |

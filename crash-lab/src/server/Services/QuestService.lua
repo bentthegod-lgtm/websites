@@ -92,16 +92,32 @@ local function ownedMachines(data)
 	return list
 end
 
+-- Unlocked, built facilities other than the hub (for facility challenges).
+local function ownedFacilities(data)
+	local list = {}
+	for _, f in ipairs(CourseConfig.Facilities) do
+		if f.Built and f.Id ~= CourseConfig.StartFacility and data.Facilities[f.Id] then
+			table.insert(list, f.Id)
+		end
+	end
+	return list
+end
+
 local function dailyList(player, data)
 	local day = Progress.dayNumber(os.time())
 	if data.Daily.Day ~= day then
-		data.Daily = { Day = day, Progress = {}, Done = {}, Seed = { Stats = { BestDistance = data.Stats.BestDistance or 0, BestScore = data.Stats.BestScore or 0 }, Machines = ownedMachines(data) } }
+		data.Daily = {
+			Day = day,
+			Progress = {},
+			Done = {},
+			Seed = { Stats = { BestDistance = data.Stats.BestDistance or 0, BestScore = data.Stats.BestScore or 0, BestFreeFall = data.Stats.BestFreeFall or 0, BestCombo = data.Stats.BestCombo or 0 }, Machines = ownedMachines(data), Facilities = ownedFacilities(data) },
+		}
 		services.DataService.markDirty(player)
 	end
 	-- Targets are frozen at the start of the day (from that morning's records), so
 	-- beating a record mid-day doesn't move the goalposts.
 	local seed = data.Daily.Seed or { Stats = data.Stats, Machines = ownedMachines(data) }
-	return Progress.dailyFor(day, player.UserId, seed.Stats, seed.Machines), day
+	return Progress.dailyFor(day, player.UserId, seed.Stats, seed.Machines, seed.Facilities), day
 end
 
 local function completeDaily(player, data, index, challenge)
@@ -171,26 +187,35 @@ function QuestService.onRun(player, result, _run)
 	end
 	addDaily(player, data, "RunDistance", nil, result.distance)
 	addDaily(player, data, "RunScore", nil, result.score)
+	if (result.freeFall or 0) > 0 then
+		addDaily(player, data, "RunFreeFall", nil, result.freeFall)
+	end
+	if (result.comboBest or 0) > 0 then
+		addDaily(player, data, "RunCombo", nil, result.comboBest)
+	end
 end
 
 -- Featured objective ---------------------------------------------------------------------
 
--- Picks an objective the player's current setup can plausibly reach.
+-- Picks an objective in the facility the player is in that their current setup can
+-- plausibly reach (each course has its own objectives).
 function QuestService.rerollFeatured(player)
 	local data = profile(player)
 	if not data then
 		return
 	end
 	local machine = MachineConfig.ById[data.Selected] or MachineConfig.ById.Standard
-	local reach = Economy.reach(machine, services.UpgradeService.statsFor(player))
+	local here = if services.CourseService and services.CourseService.locationOf then services.CourseService.locationOf(player) else CourseConfig.StartFacility
+	local course = CourseConfig.Courses[here] or CourseConfig.Courses[CourseConfig.StartFacility]
+	local reach = Economy.reach(machine, services.UpgradeService.statsFor(player)) * (course.ReachFactor or 1)
 	local pool = {}
-	for _, o in ipairs(CourseConfig.Objectives) do
+	for _, o in ipairs(course.Objectives) do
 		if o.MinReach <= reach and o.Id ~= featured[player] then
 			table.insert(pool, o.Id)
 		end
 	end
 	if #pool == 0 then
-		pool = { "Reach100" }
+		pool = { course.Objectives[1].Id }
 	end
 	featured[player] = pool[rng:NextInteger(1, #pool)]
 end

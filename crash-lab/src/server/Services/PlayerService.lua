@@ -37,11 +37,13 @@ local function setGroup(part)
 	end
 end
 
-function PlayerService.onCharacter(_player, character)
+function PlayerService.onCharacter(player, character)
 	for _, d in ipairs(character:GetDescendants()) do
 		setGroup(d)
 	end
 	character.DescendantAdded:Connect(setGroup)
+	-- Respawn in the facility the player was in.
+	services.CourseService.onCharacter(player, character)
 end
 
 function PlayerService.saveSettings(player, incoming)

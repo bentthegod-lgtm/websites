@@ -152,6 +152,15 @@ local function reconcile(data)
 			data.Stats[k] = math.max(0, v)
 		end
 	end
+	-- Saves from before per-facility bests only ever played the hub course.
+	local hub = CourseConfig.StartFacility
+	if data.Stats["Facility:" .. hub] == nil then
+		for _, key in ipairs({ "BestScore", "BestDistance", "LastScore" }) do
+			if data.Stats[key] and data.Stats[key .. ":" .. hub] == nil then
+				data.Stats[key .. ":" .. hub] = data.Stats[key]
+			end
+		end
+	end
 	data.Prestige.Credits = math.floor(num(data.Prestige.Credits, 0, 0))
 	data.Prestige.Count = math.floor(num(data.Prestige.Count, 0, 0))
 	data.Tutorial.Step = math.floor(num(data.Tutorial.Step, 1, 1))
@@ -327,6 +336,8 @@ function DataService.snapshot(player)
 		machines = data.Machines,
 		selected = data.Selected,
 		facilities = data.Facilities,
+		facilityView = services.CourseService and services.CourseService.facilityView(player) or nil,
+		location = services.CourseService and services.CourseService.locationOf(player) or CourseConfig.StartFacility,
 		stats = data.Stats,
 		achievements = data.Achievements,
 		daily = questService and questService.dailyView(player) or nil,

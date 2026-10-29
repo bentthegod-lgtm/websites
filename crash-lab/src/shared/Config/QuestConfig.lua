@@ -5,8 +5,9 @@
 	Stats are profile.Stats counters (bumped by the server) or records:
 	  Launches, Runs, Impacts, Targets, Destroyed, Objectives, Rings, Upgrades, Earned,
 	  BestDistance, BestHeight, BestScore, BestImpacts (records), Machines (count owned),
-	  Prestige, RunScore / RunDistance / RunTargets / RunDestroyed (single-run values, for
-	  daily challenges), "Machine:<Id>" (runs with a machine).
+	  Prestige, RunScore / RunDistance / RunFreeFall / RunCombo (single-run values, for
+	  daily challenges), "Machine:<Id>" (runs with a machine), "Facility:<Id>" (runs in a
+	  facility), Facilities (count unlocked), BestFreeFall / BestCombo (records).
 ]]
 
 local QuestConfig = {}
@@ -38,6 +39,13 @@ QuestConfig.Achievements = {
 	{ Id = "Score1500", Name = "Top Marks", Text = "Score 1,500 in one run", Stat = "BestScore", Target = 1500, Reward = 600 },
 	{ Id = "Launch100", Name = "Lab Regular", Text = "Launch 100 dummies", Stat = "Launches", Target = 100, Reward = 1000, Cosmetic = "Gold" },
 	{ Id = "Certified", Name = "Certified", Text = "Earn Lab Certification (prestige)", Stat = "Prestige", Target = 1, Reward = 0, Cosmetic = "Chrome" },
+	-- New facilities.
+	{ Id = "Demolisher", Name = "Demolisher", Text = "Complete a run in the Destruction Testing Zone", Stat = "Facility:Destruction", Target = 1, Reward = 300 },
+	{ Id = "WreckingCrew", Name = "Wrecking Crew", Text = "Chain an x8 destruction combo", Stat = "BestCombo", Target = 8, Reward = 1000 },
+	{ Id = "CanyonDiver", Name = "Canyon Diver", Text = "Complete a run at the High-Altitude Launch Facility", Stat = "Facility:HighAltitude", Target = 1, Reward = 500 },
+	{ Id = "FreeFaller", Name = "Free Faller", Text = "Free-fall 150 studs in one run", Stat = "BestFreeFall", Target = 150, Reward = 1200 },
+	{ Id = "ZeroG", Name = "Zero-G Veteran", Text = "Complete 10 runs in the Experimental Gravity Lab", Stat = "Facility:GravityLab", Target = 10, Reward = 1500 },
+	{ Id = "Explorer", Name = "Lab Explorer", Text = "Unlock all three new facilities", Stat = "Facilities", Target = 4, Reward = 2000 },
 }
 QuestConfig.AchievementById = {}
 for _, a in ipairs(QuestConfig.Achievements) do
@@ -55,6 +63,10 @@ QuestConfig.Daily = {
 	{ Id = "Launches", Stat = "Launches", Text = "Launch %d times", Base = 8, Max = 25 },
 	{ Id = "Objectives", Stat = "Objectives", Text = "Complete %d objectives", Base = 2, Max = 8 },
 	{ Id = "Machine", Stat = "Machine", Text = "Complete %d runs with the %s", Base = 3, Max = 6 },
+	-- Facility challenges (only offered once the player has unlocked a new facility).
+	{ Id = "Facility", Stat = "Facility", Text = "Complete %d runs in the %s", Base = 3, Max = 6 },
+	{ Id = "FreeFall", Stat = "RunFreeFall", Single = true, Requires = "HighAltitude", Text = "Free-fall %d studs in one run", Base = 60, Scale = "BestFreeFall", Factor = 0.8, Max = 220 },
+	{ Id = "Combo", Stat = "RunCombo", Single = true, Requires = "Destruction", Text = "Chain an x%d destruction combo", Base = 4, Max = 10 },
 }
 QuestConfig.DailyCount = 3
 

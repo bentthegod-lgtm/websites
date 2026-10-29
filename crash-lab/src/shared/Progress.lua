@@ -9,6 +9,7 @@
 
 local QuestConfig = require(script.Parent.Config.QuestConfig)
 local MachineConfig = require(script.Parent.Config.MachineConfig)
+local CourseConfig = require(script.Parent.Config.CourseConfig)
 local Rng = require(script.Parent.Rng)
 
 local Progress = {}
@@ -29,10 +30,24 @@ local function scaled(def, stats)
 	return math.min(target, def.Max)
 end
 
--- Returns a list of { Id, Stat, Text, Target, Reward, Single, Machine }.
-function Progress.dailyFor(day, userId, stats, ownedMachines)
+-- Returns a list of { Id, Stat, Text, Target, Reward, Single, Machine, Facility }.
+-- `facilities`: the player's unlocked facilities other than the hub (facility challenges
+-- are only offered for places the player can actually go).
+function Progress.dailyFor(day, userId, stats, ownedMachines, facilities)
 	local rng = Rng.new(day * 7919 + (tonumber(userId) or 0) % 100003 + 17)
-	local pool = table.clone(QuestConfig.Daily)
+	facilities = facilities or {}
+	local pool = {}
+	for _, def in ipairs(QuestConfig.Daily) do
+		local ok = true
+		if def.Id == "Facility" then
+			ok = #facilities > 0
+		elseif def.Requires then
+			ok = table.find(facilities, def.Requires) ~= nil
+		end
+		if ok then
+			table.insert(pool, def)
+		end
+	end
 	local list = {}
 	local bestScore = Progress.statValue(stats, "BestScore")
 	local reward = math.clamp(math.floor((60 + bestScore * 0.25) / 5) * 5, 60, 5000)
@@ -46,6 +61,12 @@ function Progress.dailyFor(day, userId, stats, ownedMachines)
 			entry.Stat = "Machine:" .. machineId
 			entry.Target = def.Base
 			entry.Text = string.format(def.Text, def.Base, MachineConfig.ById[machineId].Name)
+		elseif def.Id == "Facility" then
+			local facilityId = facilities[rng:NextInteger(1, #facilities)]
+			entry.Facility = facilityId
+			entry.Stat = "Facility:" .. facilityId
+			entry.Target = def.Base
+			entry.Text = string.format(def.Text, def.Base, CourseConfig.FacilityById[facilityId].Name)
 		else
 			entry.Target = scaled(def, stats)
 			entry.Text = string.format(def.Text, entry.Target)
@@ -53,6 +74,18 @@ function Progress.dailyFor(day, userId, stats, ownedMachines)
 		table.insert(list, entry)
 	end
 	return list
+end
+
+-- Personal bests per facility live in Stats as "<Key>:<FacilityId>" (BestScore:Destruction,
+-- BestDistance:HighAltitude, LastScore:GravityLab ...). Saves from before facilities existed
+-- only ever played the hub course, so the hub falls back to the old global stat.
+function Progress.facilityStat(stats, key, facilityId)
+	stats = stats or {}
+	local v = stats[key .. ":" .. tostring(facilityId)]
+	if v == nil and facilityId == CourseConfig.StartFacility then
+		v = stats[key]
+	end
+	return v
 end
 
 -- Prestige ("Lab Certification"): needs the Air Cannon AND a score of 3,000 earned in the

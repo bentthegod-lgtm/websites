@@ -76,4 +76,48 @@ test("prestige: every cycle must beat the requirement again (per-cycle best)", f
 	assert(not Progress.prestige(p).eligible, "eligible below the requirement")
 end)
 
+test("daily challenges: facility challenges only for facilities the player has unlocked", function()
+	local CourseConfig = L.shared("Config/CourseConfig")
+	local stats = { BestDistance = 300, BestScore = 2000, BestFreeFall = 120, BestCombo = 6 }
+	-- No new facility unlocked: never a facility challenge.
+	for day = 30000, 30060 do
+		for _, c in ipairs(Progress.dailyFor(day, 77, stats, { "Standard" }, {})) do
+			assert(c.Id ~= "Facility" and c.Id ~= "FreeFall" and c.Id ~= "Combo", "facility challenge without the facility")
+		end
+	end
+	-- With Destruction only: facility runs there, combo challenges, never free-fall.
+	local seenFacility, seenCombo = false, false
+	for day = 30000, 30200 do
+		for _, c in ipairs(Progress.dailyFor(day, 77, stats, { "Standard" }, { "Destruction" })) do
+			assert(c.Id ~= "FreeFall", "free-fall challenge without High-Altitude")
+			if c.Id == "Facility" then
+				seenFacility = true
+				assert(c.Facility == "Destruction" and c.Stat == "Facility:Destruction" and string.find(c.Text, CourseConfig.FacilityById.Destruction.Name, 1, true))
+			elseif c.Id == "Combo" then
+				seenCombo = true
+				assert(c.Single and c.Stat == "RunCombo" and c.Target >= 2)
+			end
+		end
+	end
+	assert(seenFacility and seenCombo, "facility challenges never offered")
+	-- Same inputs, same list (deterministic); old players' lists are unchanged by the new entries.
+	local a = Progress.dailyFor(31000, 9, stats, { "Standard" }, { "HighAltitude" })
+	local b = Progress.dailyFor(31000, 9, stats, { "Standard" }, { "HighAltitude" })
+	for i, c in ipairs(a) do
+		assert(c.Id == b[i].Id and c.Target == b[i].Target)
+	end
+	local old = Progress.dailyFor(31000, 9, stats, { "Standard" })
+	local none = Progress.dailyFor(31000, 9, stats, { "Standard" }, {})
+	for i, c in ipairs(old) do
+		assert(c.Id == none[i].Id, "lists changed for players without facilities")
+	end
+end)
+
+test("per-facility personal bests, with the hub falling back to old global stats", function()
+	local stats = { BestScore = 900, ["BestScore:Destruction"] = 400 }
+	assert(Progress.facilityStat(stats, "BestScore", "Destruction") == 400)
+	assert(Progress.facilityStat(stats, "BestScore", "IndustrialLab") == 900, "old saves lost their hub best")
+	assert(Progress.facilityStat(stats, "BestScore", "GravityLab") == nil, "a facility inherited another's best")
+end)
+
 return cases

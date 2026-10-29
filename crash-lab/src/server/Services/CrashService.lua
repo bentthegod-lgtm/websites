@@ -6,11 +6,23 @@
 	other players' dummies), makes the SERVER the network owner (clients can't move it),
 	and gives every body part the launch velocity + spin computed by LaunchService.
 
+	Every run belongs to the facility of its pad and is measured in that course's LOCAL
+	space (position - course origin), against that course's rings, zones, objectives,
+	bounds, run limits and scoring tuning (CourseConfig.Courses).
+
 	step() (Heartbeat): samples the dummy's root at GameConfig.Run.SampleRate into the
 	Scoring run tracker (impossible jumps are rejected there), checks rings (path crosses
-	the ring's disc) and distance goals, and ends the run when the dummy settles, gets
-	stuck, leaves the arena / falls out of the world, the rig breaks, or the time limit
-	is hit.
+	the ring's disc) and distance goals, applies the facility hazards, and ends the run
+	when the dummy settles, gets stuck, leaves the arena / falls out of the world, the rig
+	breaks, drifts too long in low gravity, or the time limit is hit.
+
+	Hazards (server-side, per run, never global):
+	  * Wind (High-Altitude): every Wind.Period a gust changes the dummy's velocity; gusts
+	    are deterministic per run seed (Hazards.gust) and the run's total is capped.
+	  * Gravity volumes (Gravity Lab): inside a volume, each body part of THAT dummy gets a
+	    VectorForce of mass * g * (1 - Scale) upward; outside it is zero, and the forces are
+	    removed when the run ends. workspace.Gravity is never touched.
+	  * Bounce fields / flip panels (Gravity Lab), destruction combos (Destruction Zone).
 
 	contact(): every body part's Touched goes here. Contacts are classified (floor /
 	obstacle / target / prop / soft pad), turned into impacts by the tracker (debounced,
@@ -30,6 +42,7 @@ local ScoringConfig = require(Shared.Config.ScoringConfig)
 local CosmeticConfig = require(Shared.Config.CosmeticConfig)
 local DummyModel = require(Shared.DummyModel)
 local Scoring = require(Shared.Scoring)
+local Hazards = require(Shared.Hazards)
 
 local CrashService = {}
 
@@ -37,9 +50,10 @@ local services
 local world
 local runs = {} -- [player] = run
 local RUN = GameConfig.Run
-local ARENA = GameConfig.Arena
 
-CrashService.Groups = { Dummy = "CL_Dummy", Player = "CL_Player", Debris = "CL_Debris" }
+-- PlayerWall: invisible walls that keep players on a facility's deck but let dummies and
+-- debris fly through (High-Altitude mesa edge).
+CrashService.Groups = { Dummy = "CL_Dummy", Player = "CL_Player", Debris = "CL_Debris", PlayerWall = "CL_PlayerWall" }
 
 function CrashService.init(registry)
 	services = registry
@@ -56,7 +70,7 @@ function CrashService.init(registry)
 		end
 	end
 	local G = CrashService.Groups
-	for _, pair in ipairs({ { G.Dummy, G.Dummy }, { G.Dummy, G.Player }, { G.Debris, G.Dummy }, { G.Debris, G.Player } }) do
+	for _, pair in ipairs({ { G.Dummy, G.Dummy }, { G.Dummy, G.Player }, { G.Debris, G.Dummy }, { G.Debris, G.Player }, { G.PlayerWall, G.Dummy }, { G.PlayerWall, G.Debris } }) do
 		local ok, err = pcall(function()
 			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], false)
 		end)
@@ -130,6 +144,56 @@ local function spinToWorld(direction, spin)
 	return right * spin.X + up * spin.Y + forward * spin.Z
 end
 
+local function partMass(p)
+	local ok, m = pcall(function()
+		return p:GetMass()
+	end)
+	if ok and type(m) == "number" and m > 0 then
+		return m
+	end
+	local props = p.CustomPhysicalProperties
+	return p.Size.X * p.Size.Y * p.Size.Z * (if props then props.Density else 0.7)
+end
+
+-- Gravity Lab: one VectorForce per body part (zero until the dummy enters a volume).
+local function addGravityForces(run)
+	run.gravity = { forces = {}, scale = 1, volume = nil, floatTime = 0, lastT = run.startedAt }
+	for _, p in ipairs(run.body) do
+		local a = Instance.new("Attachment")
+		a.Name = "CL_GravityAttachment"
+		a.Parent = p
+		local f = Instance.new("VectorForce")
+		f.Name = "CL_Gravity"
+		f.Attachment0 = a
+		f.RelativeTo = Enum.ActuatorRelativeTo.World
+		f.ApplyAtCenterOfMass = true
+		f.Force = Vector3.new(0, 0, 0)
+		f.Parent = p
+		run.gravity.forces[p] = { force = f, attachment = a, mass = partMass(p) }
+	end
+end
+
+local function setGravityScale(run, scale)
+	local g = run.gravity
+	g.scale = scale
+	local gravity = workspace.Gravity
+	for _, entry in pairs(g.forces) do
+		entry.force.Force = if scale == 1 then Vector3.new(0, 0, 0) else Vector3.new(0, Hazards.liftForce(entry.mass, gravity, scale), 0)
+	end
+end
+
+local function removeGravityForces(run)
+	if not run.gravity then
+		return
+	end
+	for _, entry in pairs(run.gravity.forces) do
+		entry.force:Destroy()
+		entry.attachment:Destroy()
+	end
+	table.clear(run.gravity.forces)
+	run.gravity.scale = 1
+end
+
 function CrashService.start(player, pad, machine, launch, stats, featuredId)
 	if runs[player] and not runs[player].ended then
 		return false
@@ -138,6 +202,8 @@ function CrashService.start(player, pad, machine, launch, stats, featuredId)
 	if not data then
 		return false
 	end
+	local facilityId = pad.facility or CourseConfig.StartFacility
+	local course = CourseConfig.Courses[facilityId]
 	local rig = services.PadService.rig(pad.index)
 	local offset = if rig then rig.launchOffset else CFrame.new(0, machine.LaunchHeight, 4)
 	local spawnCF = pad.cframe * offset
@@ -166,10 +232,16 @@ function CrashService.start(player, pad, machine, launch, stats, featuredId)
 		end)
 	end
 	local now = os.clock()
-	local origin = Vector3.new(pad.cframe.Position.X, ARENA.FloorY, pad.cframe.Position.Z)
+	-- Everything about the run is measured in the course's local space.
+	local padLocal = pad.cframe.Position - course.Origin
+	local origin = Vector3.new(padLocal.X, course.Arena.FloorY, padLocal.Z)
 	local forward = Vector3.new(0, 0, 1) -- distance is measured straight down the course
+	local tuning = course.Tuning or {}
 	local run = {
 		player = player,
+		facility = facilityId,
+		course = course,
+		origin = course.Origin,
 		pad = pad,
 		machine = machine,
 		launch = launch,
@@ -181,14 +253,29 @@ function CrashService.start(player, pad, machine, launch, stats, featuredId)
 		startedAt = now,
 		nextSample = now,
 		lastSample = spawnCF.Position,
-		tracker = Scoring.Run.new(origin, forward, { floorY = ARENA.FloorY, impactCap = stats.ImpactCap, startTime = now, maxSpeed = ScoringConfig.MaxLaunchSpeed }),
+		tracker = Scoring.Run.new(origin, forward, {
+			floorY = course.Arena.FloorY,
+			impactCap = stats.ImpactCap,
+			startTime = now,
+			maxSpeed = ScoringConfig.MaxLaunchSpeed * (tuning.SpeedHeadroom or 1),
+			tuning = tuning,
+			limits = CourseConfig.limits(course, RUN),
+		}),
 		brokenGroups = {},
+		bounces = 0,
+		flipped = false,
 		connections = {},
 		lastSpeed = {}, -- [part] = speed at the previous Heartbeat (pre-contact)
 		ended = false,
 		eventsSent = 0,
 	}
-	run.tracker.last = spawnCF.Position
+	run.tracker.last = spawnCF.Position - course.Origin
+	if course.Wind then
+		run.wind = { seed = Hazards.runSeed(player.UserId, data.Stats.Launches), index = 0, total = Vector3.new(0, 0, 0), nextAt = now + course.Wind.Period, gusts = {} }
+	end
+	if course.Gravity then
+		addGravityForces(run)
+	end
 	runs[player] = run
 	for _, p in ipairs(body) do
 		table.insert(run.connections, p.Touched:Connect(function(other)
@@ -250,6 +337,10 @@ function CrashService.contact(run, other, speed, position)
 			local kind = CourseConfig.DestructibleKinds[prop.kind]
 			if tracker:award("Prop", propId, kind.Points) then
 				run.brokenGroups[prop.group or "?"] = true
+				local chain = tracker:breakChain(t)
+				if chain >= 2 then
+					event(run, "Combo", { chain = chain, position = position })
+				end
 			end
 		end
 		local tier = tracker:impact("Prop:" .. propId, speed, t)
@@ -267,6 +358,24 @@ function CrashService.contact(run, other, speed, position)
 	end
 	local key = other:GetAttribute("CL_Key")
 	if key then
+		local course = run.course
+		local boost = other:GetAttribute("CL_Bounce")
+		if type(boost) == "number" and course.Bounce and run.bounces < course.Bounce.Max and t - (run.lastBounce or -math.huge) > 0.4 then
+			-- Bounce field: launch the whole dummy upward (never faster than the field's boost).
+			run.bounces += 1
+			run.lastBounce = t
+			for _, p in ipairs(run.body) do
+				local v = p.AssemblyLinearVelocity
+				p.AssemblyLinearVelocity = Vector3.new(v.X, math.max(v.Y, boost), v.Z)
+			end
+			event(run, "Bounce", { position = position })
+		end
+		if other:GetAttribute("CL_Flip") and course.Gravity then
+			-- Ceiling flip panel: the flip column lets go of this dummy for a while.
+			run.flipped = true
+			run.flipOffUntil = t + (course.Gravity.FlipOff or 3)
+			event(run, "Flip", { position = position })
+		end
 		local tier = tracker:impact(key, speed, t)
 		if tier then
 			event(run, "Impact", { tier = tier, position = position, soft = other:GetAttribute("CL_Soft") == true, metal = not other:GetAttribute("CL_Soft") })
@@ -274,9 +383,12 @@ function CrashService.contact(run, other, speed, position)
 	end
 end
 
-local function outOfBounds(p)
-	return p.Y < ARENA.KillY or p.Y > ARENA.Ceiling or math.abs(p.X) > ARENA.HalfWidth + 40 or p.Z > ARENA.Length + 30 or p.Z < ARENA.LaunchZ - 40
+-- `p` is in the course's local space.
+local function outOfBounds(course, p)
+	local A = course.Arena
+	return p.Y < A.KillY or p.Y > A.Ceiling or math.abs(p.X) > A.HalfWidth + 40 or p.Z > A.Length + 30 or p.Z < A.LaunchZ - 40
 end
+CrashService.outOfBounds = outOfBounds
 
 local function rigBroken(run)
 	for _, p in ipairs(run.body) do
@@ -287,25 +399,79 @@ local function rigBroken(run)
 	return false
 end
 
+-- Wind gust (High-Altitude): deterministic per run seed, capped per gust and in total.
+local function applyWind(run, position, now)
+	local wind = run.course.Wind
+	local state = run.wind
+	if not wind or not state or now < state.nextAt then
+		return
+	end
+	state.nextAt = now + wind.Period
+	if position.Z < wind.StartZ then
+		return
+	end
+	state.index += 1
+	local gust = Hazards.capGust(state.total, Hazards.gust(state.seed, state.index, wind), wind.MaxTotal)
+	state.total += gust
+	table.insert(state.gusts, gust)
+	for _, p in ipairs(run.body) do
+		p.AssemblyLinearVelocity += gust
+	end
+	if gust.Magnitude > wind.MaxGust * 0.5 then
+		event(run, "Wind", { position = run.root.Position, gust = gust })
+	end
+end
+
+-- Gravity volumes (Gravity Lab). Returns true when the dummy has drifted in low gravity
+-- for longer than the course allows.
+local function applyGravity(run, position, now)
+	local g = run.gravity
+	if not g then
+		return false
+	end
+	local flipOff = run.flipOffUntil ~= nil and now < run.flipOffUntil
+	local volume = Hazards.volumeAt(run.course.Gravity.Volumes, position, flipOff)
+	local scale = if volume then volume.Scale else 1
+	if scale ~= g.scale then
+		setGravityScale(run, scale)
+		if volume then
+			event(run, "Gravity", { name = volume.Name, scale = scale, position = run.root.Position })
+		end
+	end
+	g.volume = volume
+	local dt = math.max(0, now - g.lastT)
+	g.lastT = now
+	if volume and scale < 0.5 then
+		g.floatTime += dt
+	else
+		g.floatTime = 0
+	end
+	return g.floatTime >= (run.tracker.limits.MaxFloatTime or math.huge)
+end
+
 local function sampleRun(run, now)
-	local position = run.root.Position
+	local course = run.course
+	-- Local course space: the facility origin is subtracted from every sample.
+	local position = run.root.Position - run.origin
 	local previous = run.tracker.last
 	local result = run.tracker:sample(position, now)
 	if result == "ok" then
-		for _, ring in ipairs(CourseConfig.Rings) do
+		for _, ring in ipairs(course.Rings) do
 			if not run.tracker:has("Ring", ring.Id) and Scoring.crossesRing(previous, position, ring.Position, ring.Radius) then
 				run.tracker:award("Ring", ring.Id, 30)
-				event(run, "Ring", { id = ring.Id, position = ring.Position })
+				event(run, "Ring", { id = ring.Id, position = ring.Position + run.origin })
 			end
 		end
-		for _, goal in ipairs(CourseConfig.DistanceGoals) do
+		for _, goal in ipairs(course.DistanceGoals) do
 			if run.tracker.distance >= goal and not run.tracker:has("Distance", goal) then
 				run.tracker:award("Distance", goal, 0)
 				event(run, "Marker", { distance = goal })
 			end
 		end
+		applyWind(run, position, now)
 	end
-	return position
+	local drifted = applyGravity(run, position, now)
+	return position, drifted
 end
 
 function CrashService.step()
@@ -319,9 +485,11 @@ function CrashService.step()
 				reason = "broken"
 			elseif now >= run.nextSample then
 				run.nextSample = now + 1 / RUN.SampleRate
-				local position = sampleRun(run, now)
-				if outOfBounds(position) then
+				local position, drifted = sampleRun(run, now)
+				if outOfBounds(run.course, position) then
 					reason = "outOfBounds"
+				elseif drifted then
+					reason = "drifted"
 				elseif run.tracker.voided then
 					reason = "voided"
 				else
@@ -345,15 +513,24 @@ end
 -- Objectives completed this run (server data only).
 function CrashService.evaluate(run, finalPosition, landed)
 	local tracker = run.tracker
+	local course = run.course
 	if landed then
-		for _, zone in ipairs(CourseConfig.LandingZones) do
+		for _, zone in ipairs(course.LandingZones) do
 			if Scoring.insideZone(finalPosition, zone.Position, zone.Radius) then
 				tracker:award("Zone", zone.Id, zone.Points)
 			end
 		end
 	end
+	-- Facility bonuses (0 where the course has none).
+	local freeFall = tracker:freeFallPoints()
+	if freeFall > 0 then
+		tracker:award("FreeFall", math.floor(tracker.freeFall), freeFall)
+	end
+	if tracker.comboPoints > 0 then
+		tracker:award("Combo", tracker.comboBest, tracker.comboPoints)
+	end
 	local done = {}
-	for _, o in ipairs(CourseConfig.Objectives) do
+	for _, o in ipairs(course.Objectives) do
 		local ok = false
 		if o.Kind == "Ring" then
 			ok = tracker:has("Ring", o.Id)
@@ -367,6 +544,18 @@ function CrashService.evaluate(run, finalPosition, landed)
 			ok = run.brokenGroups[o.Group] == true
 		elseif o.Kind == "Multi" then
 			ok = tracker:count("Target") + tracker:count("Prop") >= o.Value
+		elseif o.Kind == "Props" then
+			ok = tracker:count("Prop") >= o.Value
+		elseif o.Kind == "Combo" then
+			ok = tracker.comboBest >= o.Value
+		elseif o.Kind == "FreeFall" then
+			ok = tracker.freeFall >= o.Value
+		elseif o.Kind == "Hit" then
+			ok = (tracker.perObject[o.Key] or 0) > 0
+		elseif o.Kind == "Bounce" then
+			ok = run.bounces >= o.Value
+		elseif o.Kind == "Flip" then
+			ok = run.flipped
 		end
 		if ok and tracker:award("Objective", o.Id, o.Points) then
 			table.insert(done, o.Id)
@@ -386,6 +575,7 @@ function CrashService.finish(run, reason)
 	end
 	table.clear(run.connections)
 	table.clear(run.lastSpeed)
+	removeGravityForces(run)
 	local player = run.player
 	local model = run.model
 	-- Cleanup is scheduled BEFORE the payout, so an error in reward code can never leave
@@ -403,7 +593,7 @@ function CrashService.finish(run, reason)
 			services.PadService.broadcast()
 		end
 	end)
-	local finalPosition = if run.root.Parent then run.root.Position else run.tracker.last
+	local finalPosition = if run.root.Parent then run.root.Position - run.origin else run.tracker.last
 	local landed = reason == "settled" or reason == "stuck"
 	local paid = reason ~= "left" and reason ~= "cancelled"
 	if paid then

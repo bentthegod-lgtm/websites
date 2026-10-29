@@ -4,11 +4,11 @@ A multiplayer Roblox physics simulator: **build a machine, launch a dummy, cause
 crash, earn coins, upgrade everything, try again.** Cartoon crash-test dummies, ragdoll
 physics and stylised destruction, with no gore.
 
-Everything (the facility, the machines, the dummies and the UI) is built from code in this
-Rojo project. There are no imported models and no free-model scripts.
+Everything (four facilities, the machines, the dummies and the UI) is built from code in
+this Rojo project. There are no imported models and no free-model scripts.
 
 > **Honest status:** every check that can run in this environment passes (lint, compile,
-> 29 unit tests, a 28-check headless harness on the built place, preview renders). **No
+> 38 unit tests, a 32-check headless harness on the built place, preview renders). **No
 > Roblox Studio play-test has been possible here.** Lune does not simulate physics, so
 > the real ragdoll motion, how launches *feel*, bounce and slide behaviour and the
 > camera/UI on real devices are **unverified**. See [Studio testing checklist](#studio-testing-checklist).
@@ -35,6 +35,9 @@ rojo build -o build/CrashLab.rbxlx      # open the file in Roblox Studio and pre
    landing zones and objectives. The featured objective pays a multiplier. Coins = score.
 6. **Upgrade** at the station or with U, unlock the Spring Cannon and the Air Cannon,
    and go again.
+7. **New facilities**: once you meet a facility's requirement, unlock it once for coins in
+   the Facilities menu (M, or the hub's FACILITY TRANSIT gate) and TRAVEL there. Each
+   facility's HUB TRANSIT kiosk (behind its deck) brings you back.
 
 The first launch happens in seconds. The first upgrade (Launch Power, 60 coins) is
 affordable after one to three launches, and it is a visible change: about 7% faster,
@@ -131,7 +134,7 @@ Each machine has its own model, animation (client-side, purely visual) and sound
     Corkscrew / Chaos).
   - **Scoring**: Objective Bonus, Challenge Multiplier, Lab Analyst.
 - **Personal records**: best score, farthest, highest and most impacts.
-- **16 achievements**, some unlocking cosmetics.
+- **22 achievements**, some unlocking cosmetics (6 are for the new facilities).
 - **3 daily challenges per UTC day**: targets are frozen from that morning's records, so
   they are always achievable, and no purchase is needed.
 - **Codes**: `CRASHLAB`, `BUCKLEUP`.
@@ -140,12 +143,44 @@ Each machine has its own model, animation (client-side, purely visual) and sound
   - Keeps records, achievements, cosmetics, settings and facility access.
   - Grants Lab Credits (+5% coins each, up to +100%).
   - The confirmation lists exactly what resets.
-- **Facilities framework**: High-Altitude, Destruction Zone, Gravity Lab and Space Launch
-  unlock through **real** requirements (checked and saved on the server). Their courses
-  aren't built yet, so the gate says "under construction" instead of pretending.
+- **Facilities**: three more are built and playable (see [Facilities](#facilities)). Each
+  unlocks with a real requirement **and** a one-time coin price, both checked on the
+  server. The Space Launch Facility is the only one still "under construction".
+
+### Facilities
+
+All four are built at server start, 4,000 studs apart (so they can never interact). Each
+has its own deck and pads (your unlocked machines and upgrades work everywhere), course,
+objectives, bounds, run limits, scoring tuning, distance markers, lighting and ambient
+sound. Every run is measured in its own course's local space.
+
+| Facility | Unlock | Course | Special rules |
+|---|---|---|---|
+| Industrial Crash Lab (hub) | start | 540-stud arena, 14 objectives | - |
+| Destruction Testing Zone | break 150 props + 6,000 coins | demolition yard: brick walls (each block a prop), crate towers, glass gallery, oil-drum stacks, crane with a swinging wrecking ball, rubble pit, dumpster; 14 objectives | **Combo**: breaks within 1.2 s chain; each break from the 2nd adds min(chain - 1, 8) x 12 points, capped at 500 per run |
+| High-Altitude Launch Facility | 400 studs + Air Cannon + 20,000 coins | cliff-top deck over a 200-stud canyon: three rope bridges, ledges at three depths, hanging rings, a cliff-face and a cable-car target; 14 objectives | **Wind**: a gust every 0.7 s past Z 20, at most 12 st/s each and 36 st/s in total per run, deterministic per run seed. **Free-Fall Bonus**: 0.8 pts per stud dropped from the run's peak (15-240 studs) |
+| Experimental Gravity Lab | 1 prestige + 30,000 coins | dark neon hall: two low-g fields, a gravity-flip column, three bounce fields, ceiling flip panels, floating rings; 12 objectives | **Low gravity**: inside a field, each body part of *that* dummy gets an upward VectorForce of mass x g x (1 - scale); `workspace.Gravity` never changes. A run ends after 7 s of continuous drifting in low-g (paid, not landed); 18 s time limit |
+| Space Launch Facility | 3 prestiges | under construction | - |
+
+- **Travel**: the server checks access, frees your pad, moves you and remembers where you
+  are (you respawn there; anyone who falls off the High-Altitude mesa is put back on the
+  deck). No travelling mid-launch.
+- **Personal bests per facility** (`Stats["BestScore:<Id>"]`, `BestDistance:<Id>`), shown
+  in the Facilities menu. Grades and the "vs last run" delta use the facility's own best.
+  The global leaderboards stay global.
+- **Featured objective**: picked from the facility you are in.
+- **Daily challenges**: "Complete N runs in the <facility>", "Free-fall N studs" and
+  "Chain an xN combo", offered only once you have unlocked that facility.
+- **Lighting**: each client applies its facility's preset (sunny mountain, dusty orange
+  floodlight, dark cyan/purple neon with restrained bloom). It is local to that player.
+- **Debris**: fragments come from a reused pool that never holds more than 60 parts;
+  props are prebuilt parts that are only hidden when broken.
+- **Part counts** (harness): hub + Industrial Crash Lab 1,016, Destruction 479,
+  High-Altitude 426, Gravity Lab 365 (2,286 total).
 
 ### Multiplayer
-- Shared facility, with clear pad ownership (one per player, one player per pad).
+- Shared facilities, with clear pad ownership (one per player, one player per pad; pads
+  are numbered across all four facilities).
 - Dummies and debris never collide with players or with each other's dummies.
 - Scores and rewards are tied to the run's owner.
 - **Crash duels**: invite a player; each of your next runs counts, and the winner gets a
@@ -271,6 +306,28 @@ server returns `NotProcessedYet` if the profile can't persist or is mid leave-sa
   control booth was moved off the camera line.
 - **Remaining:** see the Studio checklist below.
 
+### Facilities phase
+- **Built**: the Destruction Testing Zone, the High-Altitude Launch Facility and the
+  Experimental Gravity Lab (see [Facilities](#facilities)), plus unlock + travel, per-facility
+  bests, lighting presets, facility dailies and achievements, a fragment pool and a
+  player-only wall collision group. The world builder was split into `World/Kit` (shared
+  pieces) and `World/Facilities/*`.
+- **Fixed on the way**: debris fragments copied the *broken* prop's transparency (1), so
+  they were invisible; they now use the prop's normal look.
+- **Tested (harness)**: unlocking each facility (requirement enforced, coins taken once,
+  refused when short); travel there and back; a scripted run in each facility: wind gusts
+  capped and deterministic, free-fall bonus, per-facility out-of-bounds (100 studs down
+  the canyon is fine, below it isn't), destruction combo capped at 500 and reset after the
+  window, fragment pool capped and reused, low-g force on inside a field / off outside /
+  removed after the run, bounce and flip contacts, the drift limit, `workspace.Gravity`
+  untouched; per-facility personal best saved; the Facilities menu and lighting presets.
+- **Tested (unit)**: gust determinism and caps, gravity volume lookup and lift force,
+  combo and free-fall maths, per-course run limits, facility dailies, per-facility bests,
+  and that every course's objectives, cues and unlocks are real.
+- **Not tested here**: physics. Whether the wind feels fair, how low-g and bounce fields
+  move a real ragdoll, and whether a max-power launch tunnels through any wall all need
+  Studio.
+
 ### Polish pass
 - **Juice:** live readout, combos, score popups, speed lines, dust, tiered camera punch,
   Massive hit-stop, charge countdown and wind-up, record banner and confetti (all
@@ -326,8 +383,8 @@ Key safety features:
 
 - **Shop IDs:** Developer Product IDs for `NeonDummy` and `Fireworks`, and the Game Pass
   ID for `RainbowTrail`, in `ShopConfig.lua`.
-- **Audio:** 3 empty slots: `Boing`, `MusicLobby`, `MusicRun`, plus any reused or
-  pitched placeholder you want to replace (see POLISH.md).
+- **Audio:** 5 empty slots: `Boing`, `BounceField`, `TransitWhoosh`, `MusicLobby`,
+  `MusicRun`, plus any reused or pitched placeholder you want to replace (see POLISH.md).
 - **Icon and thumbnails:** see the ComfyUI prompts in POLISH.md.
 - **Publishing:** publish the place and enable API access to use DataStores and
   leaderboards.
@@ -367,6 +424,19 @@ Key safety features:
 - [ ] Settings apply and persist, and volume groups behave.
 - [ ] Every button does something, and insufficient funds shows red.
 
+**New facilities:**
+- [ ] Travel from the hub gate / menu and back with each HUB TRANSIT kiosk; respawning
+  keeps you in the facility; you can't walk off the High-Altitude mesa.
+- [ ] High-Altitude: gusts are noticeable but fair; long falls don't trip the anti-teleport
+  check (it allows 1.35x speed there); dummies settle on the ledges and bridges.
+- [ ] Destruction: walls and towers break satisfyingly with only a few fragments; the
+  wrecking ball pushes rather than flings.
+- [ ] Gravity Lab: dummies float in the fields and fall normally outside; the flip column
+  lifts them to the ceiling and the flip panels let them drop; bounce fields launch them;
+  nothing drifts forever (7 s limit).
+- [ ] Lighting switches when you arrive and back when you leave; bloom stays controlled
+  in the Gravity Lab.
+
 **Multiplayer:**
 - [ ] Two to four players launch at once without blocking each other.
 - [ ] Duels work end to end.
@@ -378,8 +448,8 @@ Key safety features:
 cd crash-lab
 selene src                         # lint
 lune run tests/compile             # compile every file
-lune run tests/run                 # 29 unit tests
-rojo build -o build/CrashLab.rbxlx && lune run tests/harness build/CrashLab.rbxlx   # 28 checks
+lune run tests/run                 # 38 unit tests
+rojo build -o build/CrashLab.rbxlx && lune run tests/harness build/CrashLab.rbxlx   # 32 checks
 lune run tools/export_preview build/CrashLab.rbxlx build/preview.json && node tools/render_preview.mjs build/preview.json build/
 ```
 
@@ -396,10 +466,10 @@ questionnaire answers.
 ## Layout
 
 ```
-src/shared/            configs + pure logic (Economy, Scoring, Progress) + models (DummyModel, MachineModels) + Net
-src/server/World/      FacilityBuilder
+src/shared/            configs + pure logic (Economy, Scoring, Progress, Hazards, Grades, Motion) + LightingPresets + models (DummyModel, MachineModels) + Net
+src/server/World/      FacilityBuilder (hub + Industrial Crash Lab), Kit (shared pieces), Facilities/ (Destruction, HighAltitude, GravityLab)
 src/server/Services/   Data, Upgrade, Pad, Launch, Crash, Course, Scoring, Quest, Duel, Shop, Player, Leaderboard, Analytics, RateLimit
-src/client/Controllers ClientState, Audio, Camera, Input, Launch, Hud, Results, Effects, Tutorial, Menu, Ui
+src/client/Controllers ClientState, Audio, Camera, Input, Launch, Hud, Results, Juice, Effects, Tutorial, Menu, Lighting, Ui
 tests/                 unit specs, compile check, headless harness
 tools/                 preview export (Lune) + render (three.js / Playwright)
 ```

@@ -38,10 +38,15 @@ local function reduced()
 	return ClientState.setting("ReducedEffects") == true
 end
 
+-- Pads are numbered across every facility; each slot sits in its facility's LaunchDeck.
+local slots = {}
 local function machineModel(padIndex)
-	facility = facility or workspace:FindFirstChild("CrashLabFacility")
-	local deck = facility and facility:FindFirstChild("LaunchDeck")
-	local slot = deck and deck:FindFirstChild("PadMachine" .. padIndex)
+	local slot = slots[padIndex]
+	if not slot or not slot.Parent then
+		facility = facility or workspace:FindFirstChild("CrashLabFacility")
+		slot = facility and facility:FindFirstChild("PadMachine" .. padIndex, true)
+		slots[padIndex] = slot
+	end
 	return slot and slot:FindFirstChildWhichIsA("Model")
 end
 
@@ -250,6 +255,15 @@ local function onRunEvent(userId, kind, data)
 		EffectsController.burst(data.position, 24, { color = ColorSequence.new(Color3.fromRGB(255, 90, 70)), light = 0.5 })
 	elseif kind == "Marker" and mine then
 		AudioController.play("Countdown", nil, true)
+	elseif kind == "Wind" and mine then
+		AudioController.play("WindGust", nil, true)
+		EffectsController.burst(data.position, 10, { color = ColorSequence.new(Color3.fromRGB(235, 245, 255)), size = NumberSequence.new(1.4, 0), speed = NumberRange.new(20, 40), lifetime = NumberRange.new(0.4, 0.8) })
+	elseif kind == "Gravity" or kind == "Flip" then
+		AudioController.play("GravityShift", if mine then nil else data.position, true)
+		EffectsController.burst(data.position, 22, { color = ColorSequence.new(Color3.fromRGB(80, 240, 255), Color3.fromRGB(190, 110, 255)), light = 1, speed = NumberRange.new(6, 16), accel = Vector3.new(0, 8, 0) })
+	elseif kind == "Bounce" then
+		AudioController.play("BounceField", data.position, true)
+		EffectsController.burst(data.position, 26, { color = ColorSequence.new(Color3.fromRGB(190, 110, 255)), light = 1, speed = NumberRange.new(20, 34), accel = Vector3.new(0, 20, 0) })
 	end
 end
 

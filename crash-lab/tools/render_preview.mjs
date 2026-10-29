@@ -17,6 +17,12 @@ const VIEWS = [
 	{ name: "preview-course", groups: ["world", "action"], eye: [10, 45, -36], target: [0, 10, 230], fov: 55, sky: 0xbcd3ea },
 	{ name: "preview-lobby", groups: ["world"], eye: [30, 30, -10], target: [-5, 10, -140], fov: 60, sky: 0xbcd3ea },
 	{ name: "preview-catalog", groups: ["sheet"], eye: [2000, 26, 42], target: [2000, 3, -6], fov: 50, sky: 0x2a2c33 },
+	// New facilities (world origins: High-Altitude 4000,300,0 / Destruction -4000,0,0 / Gravity Lab 0,0,4000).
+	{ name: "preview-altitude", groups: ["world"], eye: [3830, 420, -150], target: [4000, 220, 230], fov: 55, sky: 0x9cc8f0 },
+	{ name: "preview-altitude-deck", groups: ["world"], eye: [4024, 326, -40], target: [4000, 250, 230], fov: 60, sky: 0x9cc8f0 },
+	{ name: "preview-destruction", groups: ["world"], eye: [-4190, 150, -140], target: [-4000, 0, 230], fov: 55, sky: 0xe0a070 },
+	{ name: "preview-destruction-deck", groups: ["world"], eye: [-3972, 24, -40], target: [-4000, 6, 160], fov: 60, sky: 0xe0a070 },
+	{ name: "preview-gravity", groups: ["world"], eye: [52, 70, 3950], target: [0, 50, 4260], fov: 62, sky: 0x1c1830 },
 ];
 
 function script(view) {

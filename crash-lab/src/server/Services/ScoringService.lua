@@ -5,8 +5,9 @@
 	cancelled run or a player who left). It:
 	  1. computes the breakdown with the server's multipliers (Scoring.Run:result);
 	  2. marks the run paid BEFORE adding coins (no double payout on any path);
-	  3. bumps stats, updates personal records, feeds quests / dailies / achievements /
-	     duels / tutorial / analytics;
+	  3. bumps stats, updates personal records (global ones for the leaderboards, plus a
+	     personal best per facility: Stats["BestScore:<Facility>"] ...), feeds quests /
+	     dailies / achievements / duels / tutorial / analytics;
 	  4. sends the owner a Results breakdown (+ next recommended upgrade) and everyone a
 	     short summary (results board, announcements for big records).
 ]]
@@ -66,6 +67,7 @@ function ScoringService.finish(run, objectives, reason)
 		coins = stats.CoinMultiplier,
 	})
 	result.reason = reason
+	result.facility = run.facility or CourseConfig.StartFacility
 	result.machine = run.machine.Id
 	result.objectives = objectives
 	result.featuredId = run.featuredId
@@ -80,6 +82,7 @@ function ScoringService.finish(run, objectives, reason)
 	local rings = run.tracker:count("Ring")
 	DS.bump(player, "Runs", 1)
 	DS.bump(player, "Machine:" .. run.machine.Id, 1)
+	DS.bump(player, "Facility:" .. result.facility, 1)
 	if result.impacts > 0 then
 		DS.bump(player, "Impacts", result.impacts)
 	end
@@ -95,9 +98,11 @@ function ScoringService.finish(run, objectives, reason)
 	if #objectives > 0 then
 		DS.bump(player, "Objectives", #objectives)
 	end
-	-- Grade + delta are judged against the state BEFORE this run.
-	local previousBest = data.Stats.BestScore or 0
-	local lastScore = data.Stats.LastScore
+	-- Grade + delta are judged against THIS facility's state BEFORE this run (courses
+	-- score differently, so a canyon run isn't graded against a demolition-yard best).
+	local fac = result.facility
+	local previousBest = Progress.facilityStat(data.Stats, "BestScore", fac) or 0
+	local lastScore = Progress.facilityStat(data.Stats, "LastScore", fac)
 	result.records = {}
 	if not result.voided then
 		for key, value in pairs({ BestScore = result.score, BestDistance = math.floor(result.distance), BestHeight = math.floor(result.height), BestImpacts = result.impacts }) do
@@ -105,14 +110,30 @@ function ScoringService.finish(run, objectives, reason)
 				result.records[key] = true
 			end
 		end
+		if (result.freeFall or 0) > 0 then
+			DS.record(player, "BestFreeFall", math.floor(result.freeFall))
+		end
+		if (result.comboBest or 0) > 0 then
+			DS.record(player, "BestCombo", result.comboBest)
+		end
+		-- Personal bests per facility.
+		if result.score > previousBest then
+			data.Stats["BestScore:" .. fac] = result.score
+			result.records.FacilityScore = true
+		end
+		if math.floor(result.distance) > (Progress.facilityStat(data.Stats, "BestDistance", fac) or 0) then
+			data.Stats["BestDistance:" .. fac] = math.floor(result.distance)
+		end
+		DS.markDirty(player)
 	end
-	result.personalBest = data.Stats.BestScore or 0
+	result.personalBest = data.Stats["BestScore:" .. fac] or previousBest
 	result.previousBest = previousBest
 	result.lastScore = lastScore
 	result.grade = if result.voided then "D" else Grades.grade(result.score, previousBest)
 	result.delta = if result.voided then nil else Grades.delta(result.score, lastScore)
 	if not result.voided then
 		data.Stats.LastScore = result.score
+		data.Stats["LastScore:" .. fac] = result.score
 		-- Best score of the current prestige cycle (reset on every certification).
 		if result.score > Progress.cycleBest(data) then
 			data.Stats.CycleBestScore = result.score

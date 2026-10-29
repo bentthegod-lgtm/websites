@@ -517,12 +517,35 @@ check("three machines build: distinct models, movers, anchored and non-colliding
 end)
 
 local world
-check("facility builds: lobby, 6 pads, rings, targets, zones, props, tags, part budget", function()
+check("facilities build: hub lobby + 4 courses, pads per facility, rings, targets, zones, props, tags, part budget", function()
 	local FacilityBuilder = requireModule(ServerRoot.World.FacilityBuilder)
 	world = FacilityBuilder.build()
 	syncPositions(world.folder)
 	assert(world.spawn:IsA("SpawnLocation"))
-	assert(#world.pads == GameConfig.PadCount, "pads " .. #world.pads)
+	assert(#world.facilities.IndustrialLab.pads == GameConfig.PadCount, "hub pads " .. #world.facilities.IndustrialLab.pads)
+	local padTotal = 0
+	for id, course in pairs(CourseConfig.Courses) do
+		local entry = world.facilities[id]
+		assert(entry and entry.spawn and #entry.pads == course.PadCount, id .. " missing / wrong pads")
+		padTotal += course.PadCount
+		for _, pad in ipairs(entry.pads) do
+			assert(pad.facility == id and world.pads[pad.index] == pad, "pad " .. pad.index .. " not filed under " .. id)
+			assert(CourseConfig.facilityAt(pad.cframe.Position).Id == id, "pad " .. pad.index .. " sits in another facility's space")
+		end
+		if id ~= CourseConfig.StartFacility then
+			assert(entry.returnPrompt and entry.returnPrompt:IsA("ProximityPrompt"), id .. " has no way back to the hub")
+		end
+		for _, def in ipairs(course.Rings) do
+			assert(world.rings[def.Id], def.Id .. " missing")
+		end
+		for _, def in ipairs(course.Targets) do
+			assert(world.targets[def.Id] and world.targets[def.Id].part:GetAttribute("CL_Target") == def.Id, def.Id .. " missing")
+		end
+		for _, def in ipairs(course.LandingZones) do
+			assert(world.zones[def.Id], def.Id .. " missing")
+		end
+	end
+	assert(#world.pads == padTotal, "pads " .. #world.pads)
 	for _, pad in ipairs(world.pads) do
 		assert(pad.prompt:IsA("ProximityPrompt") and pad.slot and pad.ownerLabel, "pad " .. pad.index .. " incomplete")
 		-- Every pad heads down the course.
@@ -535,7 +558,11 @@ check("facility builds: lobby, 6 pads, rings, targets, zones, props, tags, part 
 	for _ in pairs(world.rings) do
 		n += 1
 	end
-	assert(n == #CourseConfig.Rings)
+	local ringDefs = 0
+	for _, course in pairs(CourseConfig.Courses) do
+		ringDefs += #course.Rings
+	end
+	assert(n == ringDefs, "rings " .. n)
 	for _, def in ipairs(CourseConfig.Targets) do
 		assert(world.targets[def.Id] and world.targets[def.Id].part:GetAttribute("CL_Target") == def.Id, def.Id .. " missing")
 	end
@@ -563,8 +590,14 @@ check("facility builds: lobby, 6 pads, rings, targets, zones, props, tags, part 
 	assert(floors >= 6, "floor not tagged")
 	assert(world.stationPrompt and world.lockerPrompt and world.gate.prompt, "lobby prompts missing")
 	assert(#world.boards.score.rows == 10 and #world.resultsBoard.rows == 6)
-	assert(world.partCount < 4500, "part count " .. world.partCount)
-	print("        facility parts: " .. world.partCount)
+	assert(world.partCount < 7000, "part count " .. world.partCount)
+	local counts = {}
+	for id, entry in pairs(world.facilities) do
+		assert(entry.parts < 2200, id .. " uses " .. entry.parts .. " parts")
+		table.insert(counts, id .. " " .. entry.parts)
+	end
+	table.sort(counts)
+	print("        facility parts: " .. world.partCount .. " (" .. table.concat(counts, ", ") .. ")")
 end)
 
 -- Remote stubs that record traffic.
@@ -1221,6 +1254,285 @@ check("prestige: needs confirmation + eligibility, resets exactly what it says",
 	p.Machines.AirCannon = nil
 end)
 
+-- Facilities --------------------------------------------------------------------------------
+local fay, fayRoot
+local Hazards = requireModule(Shared.Hazards)
+-- Claims a pad in the facility and launches; returns the run.
+local function launchIn(player, root, facilityId)
+	local pad = world.facilities[facilityId].pads[1]
+	moveTo(root, pad.cframe.Position + V3.new(0, 3, -8))
+	assert(PS.claim(player, pad.index), "claim in " .. facilityId .. " failed")
+	tick(12)
+	assert(LS.request(player, { Power = 1, Angle = 45 }), "launch in " .. facilityId .. " refused")
+	tick(MachineConfig.ById[DS.getProfile(player).Selected].ChargeTime + 0.05)
+	local run = CS.runOf(player)
+	assert(run and run.facility == facilityId, "run not filed under " .. facilityId)
+	return run
+end
+-- Scripted path in the run's LOCAL course space: { {time, localPosition}, ... }, then holds.
+local function localPath(run, path)
+	local start = clock
+	local from = run.tracker.last
+	return function()
+		if run.ended then
+			return
+		end
+		local t = clock - start
+		local pos = path[#path][2]
+		for i, step in ipairs(path) do
+			if t <= step[1] then
+				local prev = if i == 1 then from else path[i - 1][2]
+				local t0 = if i == 1 then 0 else path[i - 1][1]
+				pos = prev:Lerp(step[2], math.clamp((t - t0) / (step[1] - t0), 0, 1))
+				break
+			end
+		end
+		setRoot(run, run.origin + pos)
+	end
+end
+
+check("facilities: unlock needs the requirement AND coins (paid once); travel there and back", function()
+	local Course = registry.CourseService
+	local QuestConfig = requireModule(Shared.Config.QuestConfig)
+	fay, fayRoot = makePlayer("Fay")
+	local p = DS.getProfile(fay)
+	p.Coins = 100000
+	local ok, msg = Course.unlockFacility(fay, "Destruction")
+	assert(not ok and string.find(msg, "Locked", 1, true) and p.Coins == 100000 and not p.Facilities.Destruction, "unlocked without the requirement")
+	assert(not Course.travel(fay, "Destruction"), "travelled to a locked facility")
+	-- Requirement met: announced once, but still not unlocked until paid for.
+	p.Stats.Destroyed = 150
+	Course.checkFacilities(fay)
+	Course.checkFacilities(fay)
+	assert(count("Popup", "FacilityReady", fay) == 1, "'available' popup missing or repeated")
+	assert(not p.Facilities.Destruction, "unlocked for free")
+	p.Coins = 10
+	assert(not Course.unlockFacility(fay, "Destruction") and p.Coins == 10 and not p.Facilities.Destruction, "unlocked without coins")
+	p.Coins = 100000
+	assert(Course.unlockFacility(fay, "Destruction"), "unlock failed")
+	local paid = CourseConfig.FacilityById.Destruction.Cost
+	assert(p.Facilities.Destruction and p.Coins == 100000 - paid, "wrong price taken: " .. p.Coins)
+	assert(not Course.unlockFacility(fay, "Destruction") and p.Coins == 100000 - paid, "charged twice")
+	-- High-Altitude: 400 studs AND the Air Cannon. Gravity Lab: one prestige.
+	p.Stats.BestDistance = 450
+	assert(not Course.unlockFacility(fay, "HighAltitude") and not p.Facilities.HighAltitude, "high altitude without the air cannon")
+	p.Machines.AirCannon = true
+	assert(Course.unlockFacility(fay, "HighAltitude"))
+	assert(not Course.unlockFacility(fay, "GravityLab"), "gravity lab without a prestige")
+	p.Prestige.Count = 1
+	assert(Course.unlockFacility(fay, "GravityLab"))
+	assert(not Course.unlockFacility(fay, "SpaceLaunch") and not Course.travel(fay, "SpaceLaunch"), "space launch is under construction")
+	local spent = CourseConfig.FacilityById.Destruction.Cost + CourseConfig.FacilityById.HighAltitude.Cost + CourseConfig.FacilityById.GravityLab.Cost
+	assert(p.Stats.Facilities == 4 and p.Achievements.Explorer, "explorer achievement missing")
+	assert(p.Coins == 100000 - spent + QuestConfig.AchievementById.Explorer.Reward, "coins after unlocks: " .. p.Coins)
+	local view = Course.facilityView(fay)
+	assert(#view == #CourseConfig.Facilities and view[2].owned and not view[#view].built, "facility view wrong")
+	-- Travel: off the hub, the featured objective comes from that course, and back.
+	assert(Course.travel(fay, "Destruction"))
+	local entry = world.facilities.Destruction
+	assert((fayRoot.CFrame.Position - entry.spawn.Position).Magnitude < 1, "not moved to the facility")
+	assert(Course.locationOf(fay) == "Destruction" and DS.snapshot(fay).location == "Destruction")
+	assert(CourseConfig.CourseOfObjective[registry.QuestService.featuredId(fay)] == "Destruction", "featured objective from another facility")
+	entry.returnPrompt.Triggered:Fire(fay)
+	assert(Course.locationOf(fay) == "IndustrialLab" and (fayRoot.CFrame.Position - world.facilities.IndustrialLab.spawn.Position).Magnitude < 1, "return kiosk didn't bring the player back")
+	-- No travelling mid-launch.
+	moveTo(fayRoot, world.pads[5].cframe.Position + V3.new(0, 3, -8))
+	assert(PS.claim(fay, 5))
+	tick(12)
+	assert(LS.request(fay, { Power = 1 }))
+	assert(not Course.travel(fay, "Destruction"), "travelled while charging")
+	tick(1)
+	CS.cancel(fay)
+	tick(12)
+end)
+
+check("High-Altitude: capped deterministic wind, free-fall bonus, deep bounds, facility best saved", function()
+	local Course = registry.CourseService
+	local course = CourseConfig.Courses.HighAltitude
+	local p = DS.getProfile(fay)
+	assert(Course.travel(fay, "HighAltitude"))
+	-- A player who walks off the mesa is put back on the deck.
+	moveTo(fayRoot, course.Origin + V3.new(0, -60, 30))
+	Course.checkCharacters()
+	assert((fayRoot.CFrame.Position - world.facilities.HighAltitude.spawn.Position).Magnitude < 1, "fallen player not rescued")
+	local labBest = p.Stats["BestScore:IndustrialLab"]
+	local run = launchIn(fay, fayRoot, "HighAltitude")
+	assert(run.wind and run.wind.seed == Hazards.runSeed(fay.UserId, p.Stats.Launches), "no wind seed")
+	-- Off the cliff, over the canyon, down onto the middle ledge (local Y -95).
+	tick(6, localPath(run, { { 1, V3.new(0, 20, 120) }, { 2.5, V3.new(0, -94, 310) } }))
+	assert(run.ended and run.reason == "settled", "canyon run: " .. tostring(run.reason))
+	local wind = course.Wind
+	assert(#run.wind.gusts >= 2, "no gusts")
+	for i, g in ipairs(run.wind.gusts) do
+		assert(g.Magnitude <= wind.MaxGust + 1e-3, "gust " .. i .. " too strong")
+	end
+	assert(run.wind.total.Magnitude <= wind.MaxTotal + 1e-3, "wind total over the cap")
+	assert((run.wind.gusts[1] - Hazards.gust(run.wind.seed, 1, wind)).Magnitude < 1e-3, "wind not deterministic per seed")
+	local r = lastFor("Results", fay).args[1]
+	local has = {}
+	for _, id in ipairs(r.objectives) do
+		has[id] = true
+	end
+	assert(r.facility == "HighAltitude" and has.HA_MidLedge and has.HA_Drop60 and has.HA_Reach300, "objectives: " .. table.concat(r.objectives, ","))
+	local freeFall
+	for _, b in ipairs(r.bonuses) do
+		if b.kind == "FreeFall" then
+			freeFall = b
+		end
+	end
+	assert(freeFall and freeFall.points > 0 and r.freeFall >= 100, "no free-fall bonus")
+	assert(p.Stats["BestScore:HighAltitude"] == r.score and p.Stats["BestDistance:HighAltitude"] == math.floor(r.distance) and r.records.FacilityScore, "facility best not saved")
+	assert(p.Stats["BestScore:IndustrialLab"] == labBest, "hub best changed by a canyon run")
+	assert(p.Stats["Facility:HighAltitude"] == 1 and p.Achievements.CanyonDiver and p.Stats.BestFreeFall >= 100, "facility stats / achievement")
+	-- 100 studs below the deck is fine here (the hub's kill floor is -40); below the canyon is out.
+	tick(12)
+	assert(LS.request(fay, { Power = 1 }))
+	tick(1)
+	run = CS.runOf(fay)
+	tick(1.2, localPath(run, { { 1, V3.new(0, -100, 60) } }))
+	assert(not run.ended, "ended 100 studs down the canyon: " .. tostring(run.reason))
+	tick(2, localPath(run, { { 1.5, V3.new(0, -250, 120) } }))
+	assert(run.ended and run.reason == "outOfBounds", "fell below the canyon without ending: " .. tostring(run.reason))
+	tick(12)
+end)
+
+check("Destruction Zone: chained breaks build a capped combo; fragments come from a capped pool", function()
+	local Course = registry.CourseService
+	local combo = CourseConfig.Courses.Destruction.Tuning.Combo
+	assert(Course.travel(fay, "Destruction"))
+	local run = launchIn(fay, fayRoot, "Destruction")
+	local pos = run.root.Position
+	local n = 0
+	for id, prop in pairs(world.props) do
+		if prop.facility == "Destruction" and not prop.broken and n < 30 then
+			n += 1
+			CS.contact(run, prop.part, 90, pos)
+			assert(prop.broken, id .. " didn't break")
+		end
+	end
+	assert(n == 30, "not enough props in the yard")
+	assert(run.tracker.comboBest == 30 and run.tracker.comboPoints == combo.Cap, "combo not capped: " .. run.tracker.comboPoints)
+	assert(Course.debrisPoolSize() <= requireModule(Shared.Config.PerformanceConfig).MaxActiveDebris, "fragment pool over the cap")
+	-- A break after the combo window starts a new chain.
+	advance(combo.Window + 0.5)
+	for _, prop in pairs(world.props) do
+		if prop.facility == "Destruction" and not prop.broken then
+			CS.contact(run, prop.part, 90, pos)
+			break
+		end
+	end
+	assert(run.tracker.chain == 1 and run.tracker.comboPoints == combo.Cap, "chain didn't reset")
+	local still = run.tracker.last
+	tick(4, function()
+		setRoot(run, run.origin + still)
+	end)
+	assert(run.ended, "run did not end")
+	local r = lastFor("Results", fay).args[1]
+	local has, comboLine = {}, nil
+	for _, id in ipairs(r.objectives) do
+		has[id] = true
+	end
+	for _, b in ipairs(r.bonuses) do
+		if b.kind == "Combo" then
+			comboLine = b
+		end
+	end
+	assert(comboLine and comboLine.points > 0 and has.DZ_Combo8 and has.DZ_Props15, "combo bonus / objectives missing: " .. table.concat(r.objectives, ","))
+	assert(DS.getProfile(fay).Stats.BestCombo == 30 and DS.getProfile(fay).Achievements.WreckingCrew, "combo record / achievement")
+	-- Fragments return to the pool and props respawn.
+	local poolBefore = Course.debrisPoolSize()
+	flushDeferred()
+	assert(Course.activeDebris() == 0 and Course.debrisPoolSize() == poolBefore, "fragments not returned to the pool")
+	for _, prop in pairs(world.props) do
+		assert(not prop.broken, "prop never respawned")
+	end
+	-- Breaking again reuses pooled fragments instead of creating new ones.
+	for id, prop in pairs(world.props) do
+		if prop.facility == "Destruction" then
+			Course.hitProp(id, 90, 1)
+		end
+	end
+	assert(Course.debrisPoolSize() == poolBefore, "new fragments created instead of reusing the pool")
+	flushDeferred()
+	tick(12)
+end)
+
+check("Gravity Lab: per-dummy low-g force on in a field, off outside and after the run; drifting ends the run", function()
+	local Course = registry.CourseService
+	local course = CourseConfig.Courses.GravityLab
+	local gravityBefore = workspaceService.Gravity
+	assert(Course.travel(fay, "GravityLab"))
+	local run = launchIn(fay, fayRoot, "GravityLab")
+	assert(run.gravity, "no gravity state")
+	local function forces()
+		local list = {}
+		for _, part in ipairs(run.body) do
+			local f = part:FindFirstChild("CL_Gravity")
+			if f then
+				table.insert(list, { part = part, force = f })
+			end
+		end
+		return list
+	end
+	assert(#forces() == #run.body, "not every body part has a gravity force")
+	for _, f in ipairs(forces()) do
+		assert(f.force.Force.Magnitude == 0, "force on before entering a field")
+	end
+	local lowG = course.Gravity.Volumes[1]
+	tick(1.3, localPath(run, { { 1, lowG.Center } }))
+	assert(run.gravity.scale == lowG.Scale, "not in low gravity: " .. tostring(run.gravity.scale))
+	for _, f in ipairs(forces()) do
+		local expected = Hazards.liftForce(run.gravity.forces[f.part].mass, workspaceService.Gravity, lowG.Scale)
+		assert(f.force.Force.Y > 0 and math.abs(f.force.Force.Y - expected) < 1e-3, "wrong low-g force on " .. f.part.Name)
+	end
+	-- Bounce field and flip panel contacts.
+	local bounce = world.folder.Facilities.GravityLab.Arena:FindFirstChild("GL_Bounce1")
+	CS.contact(run, bounce, 60, run.root.Position)
+	assert(run.bounces == 1 and run.root.AssemblyLinearVelocity.Y >= course.Bounce.Boost - 1e-3, "bounce field did nothing")
+	local panel = world.folder.Facilities.GravityLab.Arena:FindFirstChild("FlipPanel")
+	CS.contact(run, panel, 40, run.root.Position)
+	assert(run.flipped and run.flipOffUntil, "flip panel did nothing")
+	-- Out of every field: no force.
+	tick(1.2, localPath(run, { { 0.8, V3.new(0, 10, 215) } }))
+	assert(run.gravity.scale == 1, "still in low gravity outside the fields")
+	for _, f in ipairs(forces()) do
+		assert(f.force.Force.Magnitude == 0, "force left on outside the fields")
+	end
+	-- Drift inside field B: the run ends on the float limit (well before the time limit).
+	local centre = course.Gravity.Volumes[3].Center
+	tick(1.1, localPath(run, { { 1, centre } }))
+	local held = forces()
+	local k = 0
+	tick(course.Run.MaxFloatTime + 3, function()
+		k += 1
+		if not run.ended then
+			setRoot(run, run.origin + centre + V3.new(math.sin(k / 6) * 10, math.cos(k / 6) * 6, 0))
+		end
+	end)
+	assert(run.ended and run.reason == "drifted", "floating run didn't end: " .. tostring(run.reason))
+	assert(next(run.gravity.forces) == nil, "gravity forces still tracked after the run")
+	for _, f in ipairs(held) do
+		-- (Lune errors on any access to a destroyed instance: that counts as removed.)
+		local alive, parent = pcall(function()
+			return f.force.Parent
+		end)
+		assert(not alive or parent == nil, "gravity force left on a body part after the run")
+	end
+	assert(workspaceService.Gravity == gravityBefore and math.abs(gravityBefore - 196.2) < 1e-3, "workspace gravity was changed")
+	local r = lastFor("Results", fay).args[1]
+	local has = {}
+	for _, id in ipairs(r.objectives) do
+		has[id] = true
+	end
+	assert(has.GL_Bounce and has.GL_Flip, "gravity lab objectives: " .. table.concat(r.objectives, ","))
+	-- Nobody else's dummy got a force.
+	for _, d in ipairs(world.dummyFolder:GetDescendants()) do
+		assert(d.Name ~= "CL_Gravity", "a gravity force leaked onto another dummy")
+	end
+	tick(12)
+	assert(Course.travel(fay, "IndustrialLab"))
+end)
+
 check("cosmetics: coins purchase, achievement unlock, equip only owned, nothing changes stats", function()
 	local SS = registry.ShopService
 	local p = DS.getProfile(alice)
@@ -1394,7 +1706,7 @@ check("client controllers initialise and render real server data", function()
 	camera.Parent = workspaceService
 	workspaceService.CurrentCamera = camera
 	local folder = place:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts"):FindFirstChild("CrashLabClient"):FindFirstChild("Controllers")
-	local names = { "ClientState", "AudioController", "CameraController", "InputController", "LaunchController", "HudController", "ResultsController", "JuiceController", "EffectsController", "TutorialController", "MenuController" }
+	local names = { "ClientState", "AudioController", "CameraController", "InputController", "LaunchController", "HudController", "ResultsController", "JuiceController", "EffectsController", "TutorialController", "MenuController", "LightingController" }
 	local controllers = {}
 	for _, name in ipairs(names) do
 		controllers[name] = requireModule(folder[name])
@@ -1426,6 +1738,28 @@ check("client controllers initialise and render real server data", function()
 		Menu.open(tab)
 		Menu.render()
 	end
+	-- Facilities tab with a player who owns every facility: TRAVEL buttons, a best score.
+	ClientState.profile = DS.snapshot(fay)
+	Menu.open("Facilities")
+	local travel, unlock = 0, 0
+	for _, d in ipairs(playerGui.CrashMenu:GetDescendants()) do
+		if d:IsA("TextButton") and d.Text == "TRAVEL" then
+			travel += 1
+		elseif d:IsA("TextButton") and string.find(d.Text, "UNLOCK", 1, true) then
+			unlock += 1
+		end
+	end
+	assert(travel == 3 and unlock == 0, string.format("facilities tab: %d travel, %d unlock buttons", travel, unlock))
+	ClientState.profile = snapshot
+	Menu.open("Facilities")
+	-- Per-facility lighting, applied on the client only.
+	local LightingService = place:GetService("Lighting")
+	local LightingPresets = requireModule(Shared.LightingPresets)
+	for id, course in pairs(CourseConfig.Courses) do
+		assert(controllers.LightingController.update(course.Origin + V3.new(10, 5, 120)) == id, "lighting picked the wrong facility")
+		assert(math.abs(LightingService.ClockTime - LightingPresets[id].Lighting.ClockTime) < 1e-3, id .. " lighting not applied")
+	end
+	controllers.LightingController.update(V3.new(0, 5, 0))
 	for _, cat in ipairs(UpgradeConfig.Categories) do
 		Menu.setTab("Upgrades")
 		Menu.setCategory(cat)

@@ -52,6 +52,12 @@ local BONUS_NAMES = {
 		local o = CourseConfig.ObjectiveById[id]
 		return "Objective: " .. (o and o.Name or id)
 	end,
+	FreeFall = function(id)
+		return string.format("Free-Fall Bonus: %s studs dropped", tostring(id))
+	end,
+	Combo = function(id)
+		return string.format("Destruction combo: best chain x%s", tostring(id))
+	end,
 }
 
 -- A breakdown row. The value counts up when the row's turn comes (see show()).
@@ -113,8 +119,13 @@ function ResultsController.show(r)
 		order += 1
 		table.insert(rows, row(text, value, color, order))
 	end
-	refs.title.Text = if r.voided then "TEST VOIDED" elseif r.records and r.records.BestScore then "NEW PERSONAL BEST!" else "TEST RESULTS"
-	refs.title.TextColor3 = if r.voided then C.Red elseif r.records and r.records.BestScore then C.Green else C.Accent
+	local best = r.records and (r.records.BestScore or r.records.FacilityScore)
+	refs.title.Text = if r.voided then "TEST VOIDED" elseif best then "NEW PERSONAL BEST!" else "TEST RESULTS"
+	refs.title.TextColor3 = if r.voided then C.Red elseif best then C.Green else C.Accent
+	local facility = r.facility and CourseConfig.FacilityById[r.facility]
+	if facility and r.facility ~= CourseConfig.StartFacility then
+		add(facility.Name, nil, C.Dim)
+	end
 	if r.voided then
 		add("The run's data didn't add up, so it wasn't scored.", nil, C.Red)
 	end

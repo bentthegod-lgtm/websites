@@ -7,8 +7,13 @@
 	  :sample(position, t)          -> "ok" | "anomaly"   (impossible jumps are rejected)
 	  :impact(key, speed, t, kind)  -> tier name or nil   (debounced, per-object and per-run caps)
 	  :award(kind, id, points)      -> true once per id   (targets, props, rings, zones, objectives)
+	  :breakChain(t)                -> chain length (Destruction combo; capped points)
 	  :status(t)                    -> nil | "settled" | "stuck" | "timeout"
 	  :result(mult)                 -> breakdown table with total score and coins
+
+	opts.tuning (per course, CourseConfig.Courses[*].Tuning) can override DistancePoints /
+	HeightPoints and turn on the Free-Fall Bonus (height lost from the run's peak) and the
+	destruction Combo; opts.limits replaces GameConfig.Run (per-course run limits).
 
 	Distance is the furthest VALID point down the course (projected on `forward`), never
 	the raw path length, so wiggling in place earns nothing. Height is the highest valid
@@ -27,10 +32,12 @@ Scoring.Run = Run
 local IMPACT = ScoringConfig.Impact
 local RUN = GameConfig.Run
 
--- opts: { floorY, maxSpeed, impactCap, startTime }
+-- opts: { floorY, maxSpeed, impactCap, startTime, tuning, limits }
 function Run.new(origin, forward, opts)
 	opts = opts or {}
 	local self = setmetatable({}, Run)
+	self.tuning = opts.tuning or {}
+	self.limits = opts.limits or RUN
 	self.origin = origin
 	self.forward = Vector3.new(forward.X, 0, forward.Z).Unit
 	self.floorY = opts.floorY or 0
@@ -54,6 +61,12 @@ function Run.new(origin, forward, opts)
 	self.awards = {} -- [kind..":"..id] = points
 	self.awardList = {}
 	self.voided = false
+	self.peakY = origin.Y
+	self.freeFall = 0 -- largest drop below the run's highest point so far
+	self.chain = 0
+	self.chainLast = nil
+	self.comboBest = 0
+	self.comboPoints = 0
 	return self
 end
 
@@ -68,7 +81,7 @@ function Run:sample(position, t)
 	local step = (position - self.last).Magnitude
 	if step ~= step or step > self:maxStep(dt) then
 		self.anomalies += 1
-		if self.anomalies >= RUN.AnomalyLimit then
+		if self.anomalies >= self.limits.AnomalyLimit then
 			self.voided = true
 		end
 		-- The anomalous point is ignored entirely (no distance, height or speed from it).
@@ -88,13 +101,20 @@ function Run:sample(position, t)
 	if height > self.maxHeight then
 		self.maxHeight = math.min(height, ScoringConfig.MaxCountedHeight)
 	end
-	if self.speed < RUN.SettleSpeed then
+	if position.Y > self.peakY then
+		self.peakY = position.Y
+	end
+	if self.peakY - position.Y > self.freeFall then
+		self.freeFall = self.peakY - position.Y
+	end
+	local limits = self.limits
+	if self.speed < limits.SettleSpeed then
 		self.stillSince = self.stillSince or t
 	else
 		self.stillSince = nil
 	end
 	table.insert(self.history, { t = t, pos = position })
-	while #self.history > 0 and t - self.history[1].t > RUN.StuckWindow do
+	while #self.history > 0 and t - self.history[1].t > limits.StuckWindow do
 		table.remove(self.history, 1)
 	end
 	return "ok"
@@ -172,17 +192,48 @@ function Run:count(kind)
 	return n
 end
 
+-- Destruction combo: a break within Combo.Window of the previous one extends the chain.
+-- Every break from the 2nd in a chain adds min(chain - 1, MaxStep) * PerStep points, and
+-- the run's combo points never exceed Combo.Cap.
+function Run:breakChain(t)
+	local combo = self.tuning.Combo
+	if not combo or self.voided then
+		return 0
+	end
+	if self.chainLast and t - self.chainLast <= combo.Window then
+		self.chain += 1
+	else
+		self.chain = 1
+	end
+	self.chainLast = t
+	self.comboBest = math.max(self.comboBest, self.chain)
+	if self.chain >= 2 then
+		self.comboPoints = math.min(combo.Cap, self.comboPoints + math.min(self.chain - 1, combo.MaxStep) * combo.PerStep)
+	end
+	return self.chain
+end
+
+-- Free-Fall Bonus points for the run so far (0 where the course has none).
+function Run:freeFallPoints()
+	local ff = self.tuning.FreeFall
+	if not ff or self.voided or self.freeFall < (ff.Min or 0) then
+		return 0
+	end
+	return math.floor(math.min(self.freeFall, ff.Max) * ff.PerStud)
+end
+
 function Run:status(t)
+	local limits = self.limits
 	local elapsed = t - self.startTime
-	if elapsed >= RUN.MaxDuration then
+	if elapsed >= limits.MaxDuration then
 		return "timeout"
 	end
-	if elapsed >= RUN.MinAirTime and self.stillSince and t - self.stillSince >= RUN.SettleTime then
+	if elapsed >= limits.MinAirTime and self.stillSince and t - self.stillSince >= limits.SettleTime then
 		return "settled"
 	end
-	if elapsed >= RUN.StuckWindow and #self.history >= 2 then
+	if elapsed >= limits.StuckWindow and #self.history >= 2 then
 		local first = self.history[1]
-		if t - first.t >= RUN.StuckWindow * 0.9 and (self.last - first.pos).Magnitude < RUN.StuckDistance then
+		if t - first.t >= limits.StuckWindow * 0.9 and (self.last - first.pos).Magnitude < limits.StuckDistance then
 			return "stuck"
 		end
 	end
@@ -194,8 +245,9 @@ function Run:result(mult)
 	mult = mult or {}
 	local impactMult = mult.impact or 1
 	local bonusMult = mult.bonus or 1
-	local distancePts = math.floor(math.max(0, self.distance) * ScoringConfig.DistancePoints)
-	local heightPts = math.floor(math.max(0, self.maxHeight) * ScoringConfig.HeightPoints)
+	local tuning = self.tuning
+	local distancePts = math.floor(math.max(0, self.distance) * (tuning.DistancePoints or ScoringConfig.DistancePoints))
+	local heightPts = math.floor(math.max(0, self.maxHeight) * (tuning.HeightPoints or ScoringConfig.HeightPoints))
 	local impactPts = 0
 	local tiers = {}
 	for _, i in ipairs(self.impacts) do
@@ -238,6 +290,9 @@ function Run:result(mult)
 		bonuses = lines,
 		voided = self.voided,
 		anomalies = self.anomalies,
+		freeFall = math.floor(self.freeFall * 10) / 10,
+		comboBest = self.comboBest,
+		comboPoints = self.comboPoints,
 	}
 end
 

@@ -1,17 +1,14 @@
 --[[
-	FacilityBuilder - builds the Industrial Crash Lab from code: the lobby (CRASH LAB sign,
-	dummy display, upgrade station, results board, leaderboards, tutorial signs, facility
-	gate) and the test arena (launch deck with six pads, crash pads, ramps, barriers,
-	destructible props, rings, moving targets, landing zones, distance markers, catch
-	nets, spectator stands, observation booth, gantries, light towers, fans).
+	FacilityBuilder - builds every facility from code at server start. The hub: the lobby
+	(CRASH LAB sign, dummy display, upgrade station, results board, leaderboards, tutorial
+	signs, facility transit gate) and the Industrial Crash Lab arena (launch deck with six
+	pads, crash pads, ramps, barriers, destructible props, rings, moving targets, landing
+	zones, distance markers, catch nets, stands, booth, gantries, light towers, fans).
+	The three other facilities are built by World/Facilities/* 4,000 studs away, each in
+	its own folder (CrashLabFacility.Facilities.<Id>) with its own deck and arena.
 
 	The layout comes from CourseConfig so the server's objective checks and the world can
-	never disagree. Tagging (attributes) used by the crash simulation:
-	  CL_Floor = true         floor / ground contact (grouped impacts)
-	  CL_Key   = "<id>"       an obstacle that counts as its own impact object
-	  CL_Prop  = "<id>"       a destructible prop (see world.props[id])
-	  CL_Target = "<id>"      a target (see world.targets[id])
-	  CL_Soft  = true         crash pad (bouncy; impacts play the soft sound)
+	never disagree. Tags used by the crash simulation are listed in World/Kit.
 	Returns a `world` table (see the end of build()).
 ]]
 
@@ -23,103 +20,17 @@ local GameConfig = require(Shared.Config.GameConfig)
 local CourseConfig = require(Shared.Config.CourseConfig)
 local DummyModel = require(Shared.DummyModel)
 
+local Kit = require(script.Parent.Kit)
+local Facilities = script.Parent:WaitForChild("Facilities")
+
 local FacilityBuilder = {}
 
-local rgb = Color3.fromRGB
-local M = Enum.Material
-local CYL = Enum.PartType.Cylinder
-
-local C = {
-	Concrete = rgb(168, 166, 160),
-	ConcreteDark = rgb(132, 130, 126),
-	Floor = rgb(150, 152, 150),
-	Steel = rgb(98, 104, 114),
-	SteelDark = rgb(56, 60, 68),
-	Yellow = rgb(255, 200, 40),
-	Black = rgb(28, 28, 30),
-	White = rgb(240, 240, 236),
-	Blue = rgb(60, 130, 220),
-	Red = rgb(225, 70, 55),
-	Orange = rgb(255, 140, 40),
-	Glass = rgb(170, 210, 230),
-	Green = rgb(80, 210, 120),
-}
-
-local partCount = 0
-local folder
-
-local function part(props)
-	local p = Instance.new(props.Class or "Part")
-	p.Anchored = true
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Material = props.Material or M.SmoothPlastic
-	p.Color = props.Color or C.Concrete
-	p.Size = props.Size
-	p.CFrame = props.CFrame
-	if props.Shape then
-		p.Shape = props.Shape
-	end
-	if props.Transparency then
-		p.Transparency = props.Transparency
-	end
-	if props.CanCollide ~= nil then
-		p.CanCollide = props.CanCollide
-	end
-	if props.CanQuery ~= nil then
-		p.CanQuery = props.CanQuery
-	end
-	if props.CastShadow ~= nil then
-		p.CastShadow = props.CastShadow
-	end
-	p.Name = props.Name or "Part"
-	p.Parent = props.Parent or folder
-	partCount += 1
-	return p
-end
-
-local function deco(props)
-	props.CanCollide = false
-	props.CanQuery = false
-	local p = part(props)
-	p.CanTouch = false
-	return p
-end
-
-local function sub(name, parent)
-	local f = Instance.new("Folder")
-	f.Name = name
-	f.Parent = parent or folder
-	return f
-end
-
-local function surfaceText(target, face, text, props)
-	props = props or {}
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = face
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = props.PPS or 24
-	gui.LightInfluence = props.LightInfluence or 0.2
-	gui.Parent = target
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextScaled = true
-	label.Font = props.Font or Enum.Font.GothamBlack
-	label.TextColor3 = props.Color or C.White
-	label.TextStrokeTransparency = props.Stroke or 1
-	label.Parent = gui
-	return label, gui
-end
-
--- Yellow / black hazard stripes along X between two points at height y.
-local function hazardStrip(cf, length, width, count, parent)
-	local seg = length / count
-	for i = 0, count - 1 do
-		deco({ Size = Vector3.new(seg, 0.12, width), CFrame = cf * CFrame.new(-length / 2 + seg * (i + 0.5), 0, 0), Color = if i % 2 == 0 then C.Yellow else C.Black, Parent = parent })
-	end
-end
+local rgb = Kit.rgb
+local M = Kit.M
+local CYL = Kit.CYL
+local C = Kit.C
+local part, deco, sub, surfaceText, hazardStrip, key = Kit.part, Kit.deco, Kit.sub, Kit.surfaceText, Kit.hazardStrip, Kit.key
+local ORIGIN = Vector3.new(0, 0, 0) -- the hub course sits at the world origin
 
 ---------------------------------------------------------------------------------------------
 -- Lobby
@@ -155,7 +66,7 @@ local function buildLobby(world)
 	spawn.Color = C.SteelDark
 	spawn.TopSurface = Enum.SurfaceType.Smooth
 	spawn.Parent = lobby
-	partCount += 1
+	Kit.add(1)
 	world.spawn = spawn
 	hazardStrip(CFrame.new(0, 1.02, z0 - 37), 14, 1, 7, lobby)
 
@@ -177,7 +88,7 @@ local function buildLobby(world)
 		local dummy = DummyModel.build(skin, cf, { ragdoll = false })
 		dummy.Name = "DisplayDummy"
 		dummy.Parent = lobby
-		partCount += #dummy:GetDescendants()
+		Kit.add(#dummy:GetDescendants())
 		table.insert(world.displayDummies, dummy)
 	end
 	local plaque = deco({ Size = Vector3.new(30, 3, 0.6), CFrame = CFrame.new(0, 1.6, z0 + 0.9), Color = C.Black, Parent = lobby })
@@ -287,22 +198,25 @@ local function buildLobby(world)
 		deco({ Size = Vector3.new(0.5, 3, 0.5), CFrame = CFrame.new(x, 20.5, z0 + 64), Color = C.Steel, Parent = lobby })
 	end
 
-	-- Facility gate (future facilities, unlocked by real progression).
+	-- Facility transit gate: opens the Facilities menu (unlock + travel). The Space Launch
+	-- Facility's door next to it is boarded up: the only one still under construction.
 	local gateCF = CFrame.new(99, 0, z0 + 20)
 	part({ Name = "GateFrame", Size = Vector3.new(4, 26, 40), CFrame = gateCF * CFrame.new(0, 13, 0), Color = C.SteelDark, Material = M.Metal, Parent = lobby })
 	local door = part({ Name = "GateDoor", Size = Vector3.new(1, 20, 30), CFrame = gateCF * CFrame.new(-2.6, 10, 0), Color = C.Yellow, Material = M.DiamondPlate, Parent = lobby })
 	hazardStrip(CFrame.new(96.5, 20.6, z0 + 20) * CFrame.Angles(0, math.rad(90), 0), 30, 0.8, 10, lobby)
 	local gateSign = deco({ Size = Vector3.new(0.5, 4, 26), CFrame = gateCF * CFrame.new(-3.4, 23, 0), Color = C.Black, Parent = lobby })
-	local gateLabel = surfaceText(gateSign, Enum.NormalId.Left, "FUTURE FACILITIES", { Color = C.Yellow, PPS = 16 })
-	local gatePrompt = Instance.new("ProximityPrompt")
-	gatePrompt.ActionText = "View"
-	gatePrompt.ObjectText = "Facility Access"
-	gatePrompt.KeyboardKeyCode = Enum.KeyCode.E
-	gatePrompt.GamepadKeyCode = Enum.KeyCode.ButtonX
-	gatePrompt.MaxActivationDistance = 14
-	gatePrompt.RequiresLineOfSight = false
-	gatePrompt.Parent = door
+	local gateLabel = surfaceText(gateSign, Enum.NormalId.Left, "FACILITY TRANSIT", { Color = C.Yellow, PPS = 16 })
+	local gatePrompt = Kit.prompt(door, "Travel", "Facility Transit", 14)
 	world.gate = { door = door, prompt = gatePrompt, label = gateLabel }
+	local spaceCF = CFrame.new(99, 0, z0 - 26)
+	part({ Name = "SpaceGateFrame", Size = Vector3.new(4, 20, 24), CFrame = spaceCF * CFrame.new(0, 10, 0), Color = C.SteelDark, Material = M.Metal, Parent = lobby })
+	part({ Name = "SpaceGateDoor", Size = Vector3.new(1, 16, 18), CFrame = spaceCF * CFrame.new(-2.6, 8, 0), Color = rgb(70, 74, 84), Material = M.DiamondPlate, Parent = lobby })
+	for k, y in ipairs({ 5, 11 }) do
+		deco({ Size = Vector3.new(0.4, 1.2, 21), CFrame = spaceCF * CFrame.new(-3.3, y, 0) * CFrame.Angles(math.rad(if k == 1 then 14 else -14), 0, 0), Color = rgb(150, 110, 70), Material = M.WoodPlanks, Parent = lobby })
+	end
+	hazardStrip(CFrame.new(96.4, 17.2, z0 - 26) * CFrame.Angles(0, math.rad(90), 0), 18, 0.8, 8, lobby)
+	local spaceSign = deco({ Size = Vector3.new(0.5, 3.4, 20), CFrame = spaceCF * CFrame.new(-3.4, 19, 0), Color = C.Black, Parent = lobby })
+	world.spaceGateLabel = surfaceText(spaceSign, Enum.NormalId.Left, "SPACE LAUNCH - UNDER CONSTRUCTION", { Color = C.Orange, PPS = 16 })
 
 	-- Exhibit: a test car crumpled against a barrier (the lab's "greatest hit").
 	local carCF = CFrame.new(34, 0, z0 - 6) * CFrame.Angles(0, math.rad(-25), 0)
@@ -318,7 +232,7 @@ local function buildLobby(world)
 	hazardStrip(carCF * CFrame.new(0, 5.06, -7.8), 9, 2, 6, lobby)
 	local passenger = DummyModel.build("Default", carCF * CFrame.new(0, 5.2, 1.6) * CFrame.Angles(math.rad(-25), 0, 0), { ragdoll = false })
 	passenger.Parent = lobby
-	partCount += #passenger:GetDescendants()
+	Kit.add(#passenger:GetDescendants())
 	-- Safety pillars, tyre stacks and barrels around the hall.
 	for _, spot in ipairs({ { -96, z0 - 66 }, { 96, z0 - 66 }, { -96, z0 + 66 }, { 96, z0 + 66 } }) do
 		for k = 0, 5 do
@@ -385,48 +299,7 @@ local function buildDeck(world)
 	end
 	-- Ramp from the lobby floor up onto the deck.
 	part({ Class = "WedgePart", Name = "DeckRamp", Size = Vector3.new(60, deckTop, 6), CFrame = CFrame.new(0, deckTop / 2, -26), Color = C.SteelDark, Material = M.DiamondPlate, Parent = deck })
-	world.pads = {}
-	local count = GameConfig.PadCount
-	for i = 1, count do
-		local x = (i - (count + 1) / 2) * GameConfig.PadSpacing
-		-- Pads aim slightly toward the centre line (they converge ~280 studs out).
-		local yaw = math.atan2(-x, 280)
-		local cf = CFrame.new(x, deckTop, 0) * CFrame.Angles(0, yaw, 0)
-		local pad = part({ Name = "Pad" .. i, Size = Vector3.new(13, 0.3, 13), CFrame = cf * CFrame.new(0, 0.15, 0), Color = rgb(40, 44, 52), Material = M.Metal, Parent = deck })
-		local glow = deco({ Name = "PadGlow", Size = Vector3.new(13.4, 0.15, 13.4), CFrame = cf * CFrame.new(0, 0.05, 0), Color = C.Green, Material = M.Neon, Parent = deck })
-		local numberPost = deco({ Size = Vector3.new(3, 3, 0.4), CFrame = cf * CFrame.new(5, 4, -6.4), Color = C.Black, Parent = deck })
-		local label = surfaceText(numberPost, Enum.NormalId.Front, tostring(i), { Color = C.Yellow, PPS = 30 })
-		deco({ Size = Vector3.new(0.4, 2.5, 0.4), CFrame = cf * CFrame.new(5, 1.25, -6.4), Color = C.Steel, Parent = deck })
-		local ownerBoard = deco({ Size = Vector3.new(8, 1.6, 0.3), CFrame = cf * CFrame.new(0, 9.5, -6.6), Color = C.Black, Parent = deck })
-		local ownerLabel = surfaceText(ownerBoard, Enum.NormalId.Front, "FREE  -  PRESS E", { Color = C.Green, PPS = 30, LightInfluence = 0 })
-		deco({ Size = Vector3.new(0.4, 8, 0.4), CFrame = cf * CFrame.new(-3.6, 5.6, -6.6), Color = C.Steel, Parent = deck })
-		deco({ Size = Vector3.new(0.4, 8, 0.4), CFrame = cf * CFrame.new(3.6, 5.6, -6.6), Color = C.Steel, Parent = deck })
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = "Use Launcher"
-		prompt.ObjectText = "Launch Pad " .. i
-		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
-		prompt.MaxActivationDistance = 11
-		prompt.RequiresLineOfSight = false
-		prompt.Parent = pad
-		local slot = sub("Machine", deck)
-		slot.Name = "PadMachine" .. i
-		-- Where the owner stands while launching: behind the machine, FACING down the course
-		-- (a character faces its LookVector, -Z, so turn half way round).
-		local stand = cf * CFrame.new(0, 3, -10) * CFrame.Angles(0, math.pi, 0)
-		table.insert(world.pads, {
-			index = i,
-			cframe = cf,
-			yaw = yaw,
-			part = pad,
-			glow = glow,
-			prompt = prompt,
-			slot = slot,
-			label = label,
-			ownerLabel = ownerLabel,
-			stand = stand,
-		})
-	end
+	world.facilities.IndustrialLab.pads = Kit.padRow(world, deck, ORIGIN, GameConfig.PadCount, GameConfig.PadSpacing, deckTop, "IndustrialLab")
 	-- Control booth at the end of the deck (off the players' camera line).
 	local boothX = -64
 	part({ Name = "ControlBooth", Size = Vector3.new(22, 10, 12), CFrame = CFrame.new(boothX, 14, -12), Color = C.Steel, Material = M.Metal, Parent = deck })
@@ -443,11 +316,6 @@ end
 ---------------------------------------------------------------------------------------------
 -- Arena
 ---------------------------------------------------------------------------------------------
-
-local function key(p, id)
-	p:SetAttribute("CL_Key", id)
-	return p
-end
 
 local function buildArena(world)
 	local arena = sub("Arena")
@@ -497,7 +365,6 @@ local function buildArena(world)
 	end
 
 	-- Distance markers every 50 studs: floor line + sign on both sides.
-	world.markers = {}
 	for d = CourseConfig.MarkerEvery, length - 40, CourseConfig.MarkerEvery do
 		local isGoal = table.find(CourseConfig.DistanceGoals, d) ~= nil
 		local col = if isGoal then C.Yellow else C.White
@@ -572,20 +439,9 @@ local function buildArena(world)
 	end
 
 	-- Destructible props.
-	world.props = {}
 	local propsFolder = sub("Props", arena)
-	local propCounter = 0
 	local function prop(kindId, size, cf, groupName)
-		propCounter += 1
-		local kind = CourseConfig.DestructibleKinds[kindId]
-		local id = kindId .. propCounter
-		local p = part({ Name = id, Size = size, CFrame = cf, Color = Color3.fromRGB(kind.Color[1], kind.Color[2], kind.Color[3]), Material = M[kind.Material] or M.SmoothPlastic, Parent = propsFolder })
-		if kindId == "Panel" then
-			p.Transparency = 0.35
-		end
-		p:SetAttribute("CL_Prop", id)
-		world.props[id] = { id = id, kind = kindId, group = groupName, part = p, cframe = cf, size = size, broken = false }
-		return p
+		return Kit.prop(world, kindId, size, cf, groupName, propsFolder, "IndustrialLab")
 	end
 	-- Cardboard box stacks.
 	for _, spot in ipairs({ { -22, 95 }, { 22, 95 }, { -10, 142 }, { 10, 142 }, { -42, 228 }, { 42, 228 } }) do
@@ -623,90 +479,16 @@ local function buildArena(world)
 		end
 	end
 
-	-- Rings (fly-through: the ring itself doesn't collide; its posts do).
-	world.rings = {}
+	-- Rings (fly-through: the ring itself doesn't collide; its posts do), targets (moving
+	-- ones are moved by CourseService) and landing zones.
 	for _, def in ipairs(CourseConfig.Rings) do
-		local ringFolder = sub(def.Id, arena)
-		local col = Color3.fromRGB(def.Color[1], def.Color[2], def.Color[3])
-		local segments = 20
-		for s = 0, segments - 1 do
-			local a = s / segments * math.pi * 2
-			local p = def.Position + Vector3.new(math.cos(a) * def.Radius, math.sin(a) * def.Radius, 0)
-			deco({ Size = Vector3.new(1.2, def.Radius * 2 * math.pi / segments + 0.5, 1.2), CFrame = CFrame.new(p) * CFrame.Angles(0, 0, a), Color = col, Material = M.Neon, Parent = ringFolder })
-		end
-		for _, side in ipairs({ -1, 1 }) do
-			local postX = def.Position.X + side * (def.Radius + 1.5)
-			local post = part({ Name = "RingPost", Size = Vector3.new(1.2, def.Position.Y, 1.2), CFrame = CFrame.new(postX, def.Position.Y / 2, def.Position.Z), Color = C.Steel, Material = M.Metal, Parent = ringFolder })
-			key(post, def.Id .. "Post")
-		end
-		local glow = Instance.new("PointLight")
-		glow.Color = col
-		glow.Range = 18
-		glow.Brightness = 0.8
-		glow.Parent = ringFolder:FindFirstChildWhichIsA("BasePart")
-		world.rings[def.Id] = { def = def, folder = ringFolder }
+		Kit.ring(world, def, ORIGIN, arena)
 	end
-
-	-- Targets (moving ones are moved by CourseService).
-	world.targets = {}
 	for _, def in ipairs(CourseConfig.Targets) do
-		local tFolder = sub(def.Id, arena)
-		local face = CFrame.new(def.Position) * CFrame.Angles(0, math.rad(90), 0)
-		local hit = part({ Name = def.Id, Size = Vector3.new(1.4, def.Radius * 2, def.Radius * 2), CFrame = face, Shape = CYL, Color = C.White, Material = M.SmoothPlastic, Parent = tFolder })
-		hit:SetAttribute("CL_Target", def.Id)
-		local rings = {}
-		for k, rr in ipairs({ 0.75, 0.5, 0.25 }) do
-			local ringPart = deco({ Size = Vector3.new(1.5 + k * 0.05, def.Radius * 2 * rr, def.Radius * 2 * rr), CFrame = face, Shape = CYL, Color = if k % 2 == 1 then C.Red else C.White, Parent = tFolder })
-			table.insert(rings, ringPart)
-		end
-		local movers = { hit }
-		for _, r in ipairs(rings) do
-			table.insert(movers, r)
-		end
-		if def.Motion then
-			-- Overhead track / rail.
-			local trackY = if def.Motion.Kind == "Swing" then def.Position.Y + def.Radius + 10 else 0.6
-			part({ Name = "Track", Size = Vector3.new(def.Motion.Amplitude * 2 + 20, 1, 1.6), CFrame = CFrame.new(def.Position.X, trackY, def.Position.Z), Color = C.SteelDark, Material = M.Metal, Parent = tFolder })
-			if def.Motion.Kind == "Swing" then
-				for _, side in ipairs({ -1, 1 }) do
-					part({ Name = "TrackPost", Size = Vector3.new(1.4, trackY, 1.4), CFrame = CFrame.new(def.Position.X + side * (def.Motion.Amplitude + 10), trackY / 2, def.Position.Z), Color = C.Steel, Material = M.Metal, Parent = tFolder })
-				end
-				local rod = deco({ Size = Vector3.new(0.4, 10, 0.4), CFrame = CFrame.new(def.Position + Vector3.new(0, def.Radius + 5, 0)), Color = C.Steel, Parent = tFolder })
-				table.insert(movers, rod)
-			else
-				local carriage = deco({ Size = Vector3.new(4, 2, 3), CFrame = CFrame.new(def.Position.X, 1.6, def.Position.Z), Color = C.Yellow, Parent = tFolder })
-				local mast = deco({ Size = Vector3.new(0.6, def.Position.Y - def.Radius - 1, 0.6), CFrame = CFrame.new(def.Position.X, (def.Position.Y - def.Radius) / 2 + 1, def.Position.Z), Color = C.Steel, Parent = tFolder })
-				table.insert(movers, carriage)
-				table.insert(movers, mast)
-			end
-		else
-			-- The gong's frame.
-			for _, side in ipairs({ -1, 1 }) do
-				part({ Name = "GongPost", Size = Vector3.new(2, def.Position.Y + def.Radius + 4, 2), CFrame = CFrame.new(def.Position.X + side * (def.Radius + 3), (def.Position.Y + def.Radius + 4) / 2, def.Position.Z), Color = C.SteelDark, Material = M.Metal, Parent = tFolder })
-			end
-			part({ Name = "GongBeam", Size = Vector3.new(def.Radius * 2 + 10, 2, 2), CFrame = CFrame.new(def.Position.X, def.Position.Y + def.Radius + 4, def.Position.Z), Color = C.SteelDark, Material = M.Metal, Parent = tFolder })
-			hit.Color = rgb(214, 170, 60)
-			hit.Material = M.Metal
-			for _, r in ipairs(rings) do
-				r.Color = rgb(190, 140, 40)
-				r.Material = M.Metal
-			end
-		end
-		local base = {}
-		for _, m in ipairs(movers) do
-			base[m] = CFrame.new(def.Position):ToObjectSpace(m.CFrame)
-		end
-		world.targets[def.Id] = { def = def, part = hit, movers = movers, base = base, origin = def.Position }
+		Kit.target(world, def, ORIGIN, arena)
 	end
-
-	-- Landing zones.
-	world.zones = {}
 	for _, def in ipairs(CourseConfig.LandingZones) do
-		local col = Color3.fromRGB(def.Color[1], def.Color[2], def.Color[3])
-		local disc = deco({ Size = Vector3.new(0.12, def.Radius * 2, def.Radius * 2), CFrame = CFrame.new(def.Position + Vector3.new(0, 0.07, 0)) * CFrame.Angles(0, 0, math.rad(90)), Shape = CYL, Color = col, Material = M.Neon, Transparency = 0.25, Parent = arena })
-		deco({ Size = Vector3.new(0.14, def.Radius * 1.2, def.Radius * 1.2), CFrame = disc.CFrame, Shape = CYL, Color = C.White, Material = M.SmoothPlastic, Parent = arena })
-		deco({ Size = Vector3.new(0.16, def.Radius * 0.5, def.Radius * 0.5), CFrame = disc.CFrame, Shape = CYL, Color = col, Material = M.Neon, Parent = arena })
-		world.zones[def.Id] = { def = def, part = disc }
+		Kit.zone(world, def, ORIGIN, arena)
 	end
 
 	-- Gantries overhead (well above most arcs) + industrial light towers.
@@ -776,18 +558,35 @@ local function buildArena(world)
 	fanHum:SetAttribute("Ambient", "Machinery")
 end
 
+local NEW_FACILITIES = { "Destruction", "HighAltitude", "GravityLab" }
+
 function FacilityBuilder.build()
-	partCount = 0
 	local existing = Workspace:FindFirstChild("CrashLabFacility")
 	if existing then
 		existing:Destroy()
 	end
-	folder = Instance.new("Folder")
+	local folder = Instance.new("Folder")
 	folder.Name = "CrashLabFacility"
-	local world = {}
+	Kit.reset(folder)
+	local world = { pads = {}, rings = {}, targets = {}, zones = {}, props = {}, markers = {}, facilities = {} }
+	local hub = CourseConfig.Courses.IndustrialLab
+	world.facilities.IndustrialLab = { id = "IndustrialLab", course = hub, origin = hub.Origin, folder = folder }
 	buildLobby(world)
 	buildDeck(world)
 	buildArena(world)
+	world.facilities.IndustrialLab.spawn = world.spawn.CFrame * CFrame.new(0, 4, 0)
+	world.facilities.IndustrialLab.parts = Kit.count()
+	-- The other facilities, each in its own folder far from the hub.
+	local others = Kit.sub("Facilities", folder)
+	for _, id in ipairs(NEW_FACILITIES) do
+		local before = Kit.count()
+		local course = CourseConfig.Courses[id]
+		local fFolder = Kit.sub(id, others)
+		local entry = { id = id, course = course, origin = course.Origin, folder = fFolder }
+		world.facilities[id] = entry
+		require(Facilities[id]).build(world, entry)
+		entry.parts = Kit.count() - before
+	end
 	local dummies = Instance.new("Folder")
 	dummies.Name = "Dummies"
 	dummies.Parent = folder
@@ -798,7 +597,7 @@ function FacilityBuilder.build()
 	world.folder = folder
 	world.dummyFolder = dummies
 	world.debrisFolder = debris
-	world.partCount = partCount
+	world.partCount = Kit.count()
 	world.arena = GameConfig.Arena
 	return world
 end

@@ -152,4 +152,58 @@ test("ring crossing and landing zones", function()
 	assert(not Scoring.insideZone(Vector3.new(0, 40, 150), Vector3.new(0, 0, 150), 15), "hovering above counts as landed")
 end)
 
+test("destruction combo: chains within the window, points per step, capped per run", function()
+	local CourseConfig = L.shared("Config/CourseConfig")
+	local combo = CourseConfig.Courses.Destruction.Tuning.Combo
+	local run = Scoring.Run.new(Vector3.new(0, 0, 0), FORWARD, { startTime = 0, tuning = { Combo = combo } })
+	assert(run:breakChain(1) == 1 and run.comboPoints == 0, "a single break is not a combo")
+	assert(run:breakChain(1 + combo.Window * 0.9) == 2 and run.comboPoints == combo.PerStep)
+	assert(run:breakChain(1 + combo.Window * 1.8) == 3 and run.comboPoints == combo.PerStep * 3)
+	-- Gap longer than the window: new chain, points kept.
+	assert(run:breakChain(10) == 1 and run.comboPoints == combo.PerStep * 3 and run.comboBest == 3)
+	for i = 1, 40 do
+		run:breakChain(10 + i * 0.1)
+		assert(run.comboPoints <= combo.Cap, "combo over the cap")
+	end
+	assert(run.comboPoints == combo.Cap and run.comboBest == 41)
+	-- Courses without a combo never award one.
+	local plain = Scoring.Run.new(Vector3.new(0, 0, 0), FORWARD, { startTime = 0 })
+	assert(plain:breakChain(1) == 0 and plain:breakChain(1.1) == 0 and plain.comboPoints == 0)
+end)
+
+test("free-fall bonus: height lost from the run's peak, min / max, only where tuned", function()
+	local CourseConfig = L.shared("Config/CourseConfig")
+	local ff = CourseConfig.Courses.HighAltitude.Tuning.FreeFall
+	local run = Scoring.Run.new(Vector3.new(0, 0, 0), FORWARD, { startTime = 0, tuning = { FreeFall = ff }, maxSpeed = 420 })
+	run.last = Vector3.new(0, 5, 0)
+	local t = 0
+	local function go(y, z)
+		t += 0.1
+		assert(run:sample(Vector3.new(0, y, z), t) == "ok")
+	end
+	go(20, 10)
+	go(30, 20) -- peak 30
+	go(25, 30)
+	assert(run:freeFallPoints() == 0, "a 5-stud drop shouldn't pay")
+	for k = 1, 30 do
+		go(30 - k * 10, 30 + k * 10)
+	end
+	assert(math.abs(run.freeFall - 300) < 1e-6, "drop " .. run.freeFall)
+	assert(run:freeFallPoints() == math.floor(ff.Max * ff.PerStud), "free fall not capped")
+	local hub = Scoring.Run.new(Vector3.new(0, 0, 0), FORWARD, { startTime = 0 })
+	hub.last = Vector3.new(0, 50, 0)
+	hub:sample(Vector3.new(0, 10, 10), 0.2)
+	assert(hub:freeFallPoints() == 0, "hub course pays a free-fall bonus")
+end)
+
+test("per-course run limits replace the global ones", function()
+	local CourseConfig = L.shared("Config/CourseConfig")
+	local limits = CourseConfig.limits(CourseConfig.Courses.GravityLab, GameConfig.Run)
+	assert(limits.MaxDuration == 18 and limits.SettleTime == GameConfig.Run.SettleTime and limits.MaxFloatTime == 7)
+	local run = Scoring.Run.new(Vector3.new(0, 0, 0), FORWARD, { startTime = 0, limits = limits })
+	assert(run:status(17.5) == nil or run:status(17.5) ~= "timeout", "timed out early")
+	assert(run:status(18.1) == "timeout", "course time limit ignored")
+	assert(GameConfig.Run.MaxDuration ~= 18, "global limits were modified")
+end)
+
 return cases

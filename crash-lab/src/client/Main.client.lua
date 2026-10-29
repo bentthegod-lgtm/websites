@@ -28,6 +28,7 @@ local ORDER = {
 	"EffectsController",
 	"TutorialController",
 	"MenuController",
+	"LightingController",
 }
 
 for _, name in ipairs(ORDER) do

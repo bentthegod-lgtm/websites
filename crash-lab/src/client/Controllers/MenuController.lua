@@ -7,7 +7,8 @@
 	              duel challenges and codes
 	  Locker      dummy designs, trails and launch effects (coins / achievements / optional
 	              Robux cosmetics)
-	  Facilities  the facility progression (only the Industrial Crash Lab is built yet)
+	  Facilities  the four facilities: requirement, one-time price, UNLOCK / TRAVEL, your
+	              best there (the Space Launch Facility is still under construction)
 	  Settings    volumes, sensitivity, camera shake, follow cam, reduced effects, tutorial
 	  Help        controls for PC, gamepad and touch
 	Buttons only send requests; the server validates and replies with a new profile.
@@ -409,13 +410,62 @@ end
 
 -- Facilities ----------------------------------------------------------------------------
 
+-- Builds the view from the static config when the server's view isn't there yet.
+local function facilityList(p)
+	if p.facilityView then
+		return p.facilityView
+	end
+	local list = {}
+	for _, f in ipairs(CourseConfig.Facilities) do
+		table.insert(list, { id = f.Id, name = f.Name, built = f.Built, owned = p.facilities[f.Id] == true, eligible = false, cost = f.Cost or 0, text = f.Text, blurb = f.Blurb, here = false, bestScore = 0, bestDistance = 0 })
+	end
+	return list
+end
+
 renderers.Facilities = function(p)
 	local scroll = Ui.scroll(content, { Size = UDim2.fromScale(1, 1) })
 	Ui.list(scroll, 8)
-	for i, f in ipairs(CourseConfig.Facilities) do
-		local unlocked = p.facilities[f.Id] == true
-		local status = if f.Built then "OPEN" elseif unlocked then "ACCESS GRANTED - under construction (coming in a future update)" else "LOCKED"
-		row(scroll, f.Name, if unlocked then status else ("Requires: " .. f.Text), nil, i, if f.Built then C.Green elseif unlocked then C.Accent else nil)
+	for i, f in ipairs(facilityList(p)) do
+		local card = Ui.panel({ Size = UDim2.new(1, -8, 0, 84), BackgroundColor3 = C.PanelLight, LayoutOrder = i, Parent = scroll }, 10)
+		if f.here then
+			Ui.stroke(card, C.Accent, 2, 0)
+		end
+		local status, color
+		if not f.built then
+			status, color = if f.owned then "ACCESS GRANTED - UNDER CONSTRUCTION (coming in a future update)" else "UNDER CONSTRUCTION  -  " .. f.text, C.Dim
+		elseif f.here then
+			status, color = "YOU ARE HERE", C.Accent
+		elseif f.owned then
+			status, color = "OPEN", C.Green
+		elseif f.eligible then
+			status, color = string.format("AVAILABLE  -  unlock for %s coins", Format.short(f.cost)), C.Accent
+		else
+			status, color = "LOCKED  -  requires: " .. f.text, C.Red
+		end
+		Ui.label(f.name, { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -170, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, TextSize = 15, Font = Ui.Fonts.Bold, Parent = card })
+		Ui.label(status, { Position = UDim2.fromOffset(12, 26), Size = UDim2.new(1, -170, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextSize = 12, Font = Ui.Fonts.Bold, TextColor3 = color, TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+		local detail = f.blurb or ""
+		if f.built and f.owned and (f.bestScore or 0) > 0 then
+			detail = string.format("Your best here: %s pts  -  %s studs", Format.short(f.bestScore), Format.stat(f.bestDistance or 0))
+		end
+		Ui.label(detail, { Position = UDim2.fromOffset(12, 44), Size = UDim2.new(1, -170, 0, 34), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, TextSize = 11, TextColor3 = C.Dim, Parent = card })
+		local action
+		if f.built and f.owned and not f.here then
+			action = Ui.button(if f.id == CourseConfig.StartFacility then "RETURN TO HUB" else "TRAVEL", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(140, 40), TextSize = 14 }, C.Green)
+			action.Activated:Connect(function()
+				fire("Travel", f.id)
+				Ui.closeWindow("Menu")
+			end)
+		elseif f.built and not f.owned then
+			local affordable = f.eligible and p.coins >= f.cost
+			action = Ui.button(string.format("UNLOCK  %s", Format.short(f.cost)), { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(140, 40), TextSize = 14 }, if affordable then C.Accent else C.PanelLighter)
+			action.Activated:Connect(function()
+				fire("UnlockFacility", f.id)
+			end)
+		end
+		if action then
+			action.Parent = card
+		end
 	end
 end
 

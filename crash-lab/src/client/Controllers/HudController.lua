@@ -99,7 +99,13 @@ local POPUP_TEXT = {
 		return "NEW MACHINE", d.name .. " unlocked!", "MachineUnlock"
 	end,
 	Facility = function(d)
-		return "FACILITY ACCESS", d.name .. (if d.built then " is open!" else " - access granted. Under construction: opens in a future update."), "MachineUnlock"
+		return "FACILITY ACCESS", d.name .. (if d.built then " unlocked! Travel there from the Facilities menu (M) or the hub's transit gate." else " - access granted. Under construction: opens in a future update."), "MachineUnlock"
+	end,
+	FacilityReady = function(d)
+		return "NEW FACILITY AVAILABLE", string.format("%s - unlock it for %s coins in the Facilities menu (M).", d.name, Format.short(d.cost or 0)), "ObjectiveDone"
+	end,
+	Arrived = function(d)
+		return string.upper(d.name), "Claim a launch pad here. HUB TRANSIT kiosk (behind the deck) takes you back.", "TransitWhoosh"
 	end,
 	Prestige = function(d)
 		return "LAB CERTIFIED", string.format("+%d Lab Credits (total %d)", d.credits, d.total), "NewRecord"

@@ -28,6 +28,8 @@ Net.Names = {
 	"ShopBuy", -- (key: string)   Robux cosmetics
 	"RedeemCode", -- (code: string)
 	"SaveSettings", -- (settings: table)
+	"UnlockFacility", -- (facilityId: string)   requirement + coin price, checked on the server
+	"Travel", -- (facilityId: string)   go to an unlocked facility ("IndustrialLab" = the hub)
 
 	-- server -> client
 	"Profile", -- (snapshot)

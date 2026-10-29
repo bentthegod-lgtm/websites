@@ -12,6 +12,7 @@ local specs = {
 	require("./config.spec"),
 	require("./grades.spec"),
 	require("./motion.spec"),
+	require("./hazards.spec"),
 }
 
 local passed, failed = 0, 0

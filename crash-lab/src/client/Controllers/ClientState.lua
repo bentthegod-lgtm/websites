@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("CrashLab")
 local Net = require(Shared.Net)
 local Signal = require(Shared.Signal)
+local CourseConfig = require(Shared.Config.CourseConfig)
 
 local ClientState = {}
 
@@ -33,6 +34,7 @@ ClientState.RunEvent = Signal.new() -- (userId, kind, data)
 ClientState.RunEnded = Signal.new() -- (userId, summary)
 ClientState.Results = Signal.new() -- (breakdown)
 ClientState.DuelChanged = Signal.new()
+ClientState.FacilityChanged = Signal.new() -- (facilityId) the local character moved to another facility
 
 function ClientState.player()
 	return Players.LocalPlayer
@@ -41,6 +43,15 @@ end
 function ClientState.root()
 	local character = Players.LocalPlayer and Players.LocalPlayer.Character
 	return character and character:FindFirstChild("HumanoidRootPart")
+end
+
+-- The course a world position belongs to (defaults to where the local character is).
+function ClientState.course(position)
+	if not position then
+		local root = ClientState.root()
+		position = root and root.Position
+	end
+	return CourseConfig.facilityAt(position)
 end
 
 function ClientState.myPad()
