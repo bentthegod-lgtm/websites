@@ -1,0 +1,5 @@
+build/*
+!build/*.png
+*.rbxlx
+*.rbxl
+node_modules/

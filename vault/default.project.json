@@ -1,0 +1,59 @@
+{
+  "name": "Vault",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Vault": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "VaultServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 16,
+        "CharacterJumpPower": 50,
+        "CameraMaxZoomDistance": 40,
+        "CameraMinZoomDistance": 6,
+        "EnableMouseLockOption": true
+      },
+      "StarterPlayerScripts": {
+        "VaultClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2,
+        "FallenPartsDestroyHeight": -3000
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 1.2,
+        "ClockTime": 12,
+        "EnvironmentDiffuseScale": 0.45,
+        "EnvironmentSpecularScale": 0.7
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
