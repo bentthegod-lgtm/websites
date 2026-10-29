@@ -512,7 +512,7 @@ MenuController.HelpText = [[HOW TO PLAY
 5. Spend coins on upgrades and new machines. Try the FEATURED OBJECTIVE for a big bonus.
 
 PC        E use pad / stations   F launch   1/2 power   3/4 angle   5/6 aim   7 spin
-          U upgrades   M menu   H help   Space skip camera   WASD move, mouse camera, Space jump
+          U upgrades   M menu   H help   Space skip camera   R retry (results)   WASD move, Space jump
 GAMEPAD   X use   R2 launch   D-pad up/down power   D-pad left/right angle   L1/R1 aim
           Y spin   L2 menu   B skip camera / close
 TOUCH     tap prompts, drag the POWER bar, use - / + buttons, LAUNCH, SKIP and the menu buttons]]

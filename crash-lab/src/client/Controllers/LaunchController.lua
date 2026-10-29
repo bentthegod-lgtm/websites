@@ -194,12 +194,65 @@ function LaunchController.build()
 	refs.leave.Activated:Connect(function()
 		Net.event("LeavePad"):FireServer()
 	end)
+	-- Charge overlay: machine-specific wind-up label, a charge ramp and a 3-2-1 countdown.
+	refs.charge = Ui.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(420, 150), BackgroundTransparency = 1, Visible = false, Parent = gui })
+	refs.chargeCount = Ui.title("3", { Size = UDim2.new(1, 0, 0, 90), TextSize = 86, TextColor3 = C.Accent, TextStrokeTransparency = 0.2, Parent = refs.charge })
+	refs.chargeLabel = Ui.title("", { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 0, 24), TextSize = 20, TextStrokeTransparency = 0.4, Parent = refs.charge })
+	local back, fill = Ui.bar(refs.charge, { Position = UDim2.fromOffset(40, 122), Size = UDim2.new(1, -80, 0, 14) }, C.Red)
+	refs.chargeBack, refs.chargeFill = back, fill
 	refs.skip = Ui.button("SKIP CAMERA  (SPACE)", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -236), Size = UDim2.fromOffset(220, 34), TextSize = 14, Visible = false }, C.PanelLighter)
 	refs.skip.Parent = gui
 	refs.skip.Activated:Connect(function()
 		require(script.Parent.CameraController).stopFollow()
 	end)
 end
+
+-- Wind-up text per machine (matches its animation and sound).
+LaunchController.WindUp = {
+	Standard = "COCKING THE ARM",
+	Spring = "COMPRESSING THE SPRING",
+	AirCannon = "PRESSURISING - STAND CLEAR",
+}
+
+-- Pure: the countdown number (3, 2, 1) shown at `elapsed` seconds into a charge.
+function LaunchController.countdownStep(elapsed, duration)
+	if duration <= 0 then
+		return 1
+	end
+	local f = math.clamp(elapsed / duration, 0, 0.9999)
+	return 3 - math.floor(f * 3)
+end
+
+local charge = nil -- { start, duration, machineId, shown }
+local function stepCharge()
+	if not refs.charge then
+		return
+	end
+	if not charge then
+		refs.charge.Visible = false
+		return
+	end
+	local elapsed = os.clock() - charge.start
+	if charge.fired then
+		refs.charge.Visible = elapsed < charge.duration + 0.6
+		return
+	end
+	refs.charge.Visible = true
+	local n = LaunchController.countdownStep(elapsed, charge.duration)
+	if n ~= charge.shown then
+		charge.shown = n
+		refs.chargeCount.Text = tostring(n)
+		require(script.Parent.AudioController).play("Countdown", nil, true)
+		local scale = refs.chargeCount:FindFirstChildOfClass("UIScale") or Ui.new("UIScale", { Parent = refs.chargeCount })
+		scale.Scale = if ClientState.setting("ReducedEffects") then 1 else 1.5
+		game:GetService("TweenService"):Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	end
+	local f = math.clamp(elapsed / charge.duration, 0, 1)
+	-- Ramp eases in: slow start, fast finish - it should feel like pressure building.
+	refs.chargeFill.Size = UDim2.fromScale(f * f, 1)
+	refs.chargeFill.BackgroundColor3 = C.Accent:Lerp(C.Red, f)
+end
+LaunchController.stepCharge = stepCharge
 
 function LaunchController.render()
 	if not panel then
@@ -267,14 +320,25 @@ function LaunchController.init()
 		end
 		if phase == "Charge" then
 			chargingUntil = os.clock() + (data.time or 1)
+			charge = { start = os.clock(), duration = data.time or 1, machineId = machineId }
+			refs.chargeLabel.Text = LaunchController.WindUp[machineId] or "CHARGING"
 		elseif phase == "Fire" then
 			chargingUntil = nil
 			cooldownUntil = os.clock() + Economy.cooldown(MachineConfig.ById[machineId], LaunchController.stats())
+			if charge then
+				charge.fired = true
+				charge.duration = os.clock() - charge.start
+				refs.chargeCount.Text = "LAUNCH!"
+				refs.chargeLabel.Text = ""
+				refs.chargeFill.Size = UDim2.fromScale(1, 1)
+			end
 		elseif phase == "Rest" then
 			chargingUntil = nil
+			charge = nil
 		end
 		LaunchController.render()
 	end)
+	game:GetService("RunService").RenderStepped:Connect(stepCharge)
 	task.spawn(function()
 		while gui and gui.Parent do
 			LaunchController.render()

@@ -20,14 +20,14 @@ return {
 	AirPressure = { Id = "rbxassetid://9112889082", Volume = 0.45, Pitch = 1.6, Group = "Effects", Duration = 3 },
 	AirWarning = { Id = "rbxassetid://9113880475", Volume = 0.45, Pitch = 1.3, Group = "Effects" },
 	AirBlast = { Id = "rbxassetid://9119631707", Volume = 0.9, Pitch = 0.7, Group = "Effects", Duration = 3 },
-	AirHiss = { Id = "", Volume = 0.4, Group = "Effects" }, -- add: rising pneumatic hiss
-	Whoosh = { Id = "", Volume = 0.35, Group = "Effects" }, -- add: air movement / flight whoosh
+	AirHiss = { Id = "rbxassetid://9125446564", Volume = 0.35, Pitch = 2.4, Group = "Effects", Duration = 1.2 }, -- ventilation loop pitched up (swap for a real hiss)
+	Whoosh = { Id = "rbxassetid://9125446564", Volume = 0.3, Pitch = 2, Group = "Effects", Duration = 0.8 }, -- ventilation loop pitched up (swap for a real whoosh)
 	-- Crash impacts by tier
 	ImpactLight = { Id = "rbxassetid://9120851227", Volume = 0.4, Pitch = 1.2, Group = "Effects" },
 	ImpactMedium = { Id = "rbxassetid://9116537007", Volume = 0.5, Pitch = 1.05, Group = "Effects" },
 	ImpactHeavy = { Id = "rbxassetid://9113134899", Volume = 0.75, Pitch = 1, Group = "Effects", MaxDistance = 220 },
 	ImpactMetal = { Id = "rbxassetid://9116537007", Volume = 0.6, Pitch = 0.8, Group = "Effects" },
-	SoftLanding = { Id = "", Volume = 0.4, Group = "Effects" }, -- add: soft cushion thump
+	SoftLanding = { Id = "rbxassetid://9120851227", Volume = 0.4, Pitch = 0.6, Group = "Effects" }, -- light impact pitched down
 	Boing = { Id = "", Volume = 0.45, Group = "Effects" }, -- add: comedic boing for crash pads
 	-- Destructibles
 	BoxCrunch = { Id = "rbxassetid://9120851227", Volume = 0.55, Pitch = 0.8, Group = "Effects" },
@@ -45,8 +45,8 @@ return {
 	Denied = { Id = "rbxassetid://9043338697", Volume = 0.35, Pitch = 1.6, Group = "UI" },
 	Click = { Id = "rbxassetid://9114480271", Volume = 0.35, Pitch = 1.2, Group = "UI" },
 	MachineUnlock = { Id = "rbxassetid://1837953706", Volume = 0.7, Pitch = 0.9, Group = "UI" },
-	Achievement = { Id = "", Volume = 0.55, Group = "UI" }, -- add: achievement jingle
-	ChallengeDone = { Id = "", Volume = 0.55, Group = "UI" }, -- add: challenge complete jingle
+	Achievement = { Id = "rbxassetid://1837953706", Volume = 0.55, Pitch = 1.3, Group = "UI" }, -- objective chime pitched up
+	ChallengeDone = { Id = "rbxassetid://9113722650", Volume = 0.55, Pitch = 1.2, Group = "UI" }, -- purchase chime pitched up
 	Countdown = { Id = "rbxassetid://9113880475", Volume = 0.4, Group = "UI" },
 	-- Ambient (3D emitters placed by the facility builder)
 	Ventilation = { Id = "rbxassetid://9125446564", Volume = 0.14, Looped = true, Group = "Ambient" },

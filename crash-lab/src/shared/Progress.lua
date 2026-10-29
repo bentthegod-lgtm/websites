@@ -55,16 +55,30 @@ function Progress.dailyFor(day, userId, stats, ownedMachines)
 	return list
 end
 
--- Prestige ("Lab Certification"): needs the Air Cannon and a best score of 3,000.
+-- Prestige ("Lab Certification"): needs the Air Cannon AND a score of 3,000 earned in the
+-- CURRENT cycle. The per-cycle best (Stats.CycleBestScore) is reset by every prestige, so
+-- the requirement has to be beaten again each time - an old all-time record can't be
+-- re-used to farm credits. (Profiles from before this stat existed fall back to their
+-- all-time best for their first certification only.)
 Progress.PrestigeScore = 3000
-function Progress.prestige(profile)
+function Progress.cycleBest(profile)
 	local stats = profile.Stats or {}
-	local eligible = profile.Machines and profile.Machines.AirCannon == true and Progress.statValue(stats, "BestScore") >= Progress.PrestigeScore
+	if stats.CycleBestScore ~= nil then
+		return stats.CycleBestScore
+	end
+	local count = (profile.Prestige and profile.Prestige.Count) or 0
+	return if count == 0 then Progress.statValue(stats, "BestScore") else 0
+end
+
+function Progress.prestige(profile)
+	local cycleBest = Progress.cycleBest(profile)
+	local eligible = profile.Machines and profile.Machines.AirCannon == true and cycleBest >= Progress.PrestigeScore
 	local credits = math.max(1, math.floor((profile.RunEarned or 0) / 60000) + 1)
 	return {
 		eligible = eligible == true,
 		credits = credits,
 		needScore = Progress.PrestigeScore,
+		cycleBest = cycleBest,
 		resets = { "Coins", "All upgrades", "Spring Cannon and Air Cannon (buy them again)" },
 		keeps = { "Lab Credits (+5% coins each)", "Achievements", "Personal records", "Cosmetics", "Settings", "Facility access" },
 	}

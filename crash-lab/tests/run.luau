@@ -10,6 +10,8 @@ local specs = {
 	require("./scoring.spec"),
 	require("./progress.spec"),
 	require("./config.spec"),
+	require("./grades.spec"),
+	require("./motion.spec"),
 }
 
 local passed, failed = 0, 0

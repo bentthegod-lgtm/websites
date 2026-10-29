@@ -1,8 +1,9 @@
 --[[
 	CourseService - the course's moving and breakable parts, and facility unlocks.
 
-	* Moving targets: anchored, moved by the server every Heartbeat (sine motion from
-	  CourseConfig), so every client sees the same position the server tests against.
+	* Moving targets: anchored, moved by the server every Heartbeat (Motion: sine motion
+	  from CourseConfig) with a matching AssemblyLinearVelocity, so every client sees the
+	  same position the server tests against and contacts push instead of fling.
 	* Destructible props (controlled destruction): hitProp() breaks a prop only if the
 	  dummy is fast enough AND heavy enough (prop Strength vs dummy class). The prop is
 	  hidden (not destroyed), a LIMITED number of debris parts spawn (server-wide cap),
@@ -18,6 +19,7 @@ local Shared = ReplicatedStorage:WaitForChild("CrashLab")
 local CourseConfig = require(Shared.Config.CourseConfig)
 local PerformanceConfig = require(Shared.Config.PerformanceConfig)
 local Economy = require(Shared.Economy)
+local Motion = require(Shared.Motion)
 
 local CourseService = {}
 
@@ -38,28 +40,26 @@ end
 -- Moving targets ----------------------------------------------------------------------
 
 function CourseService.targetPosition(id, t)
-	local target = world.targets[id]
-	local motion = target.def.Motion
-	if not motion then
-		return target.origin
-	end
-	local phase = math.sin((t or clock) / motion.Period * math.pi * 2)
-	local offset = phase * motion.Amplitude
-	if motion.Kind == "Swing" then
-		-- Pendulum: a slight lift at the ends of the swing.
-		return target.origin + Vector3.new(offset, (phase * phase) * 3, 0)
-	end
-	return target.origin + Vector3.new(offset, 0, 0)
+	return Motion.position(world.targets[id].def, t or clock)
 end
 
+function CourseService.targetVelocity(id, t)
+	return Motion.velocity(world.targets[id].def, t or clock)
+end
+
+-- Moves the anchored target parts AND gives them the matching velocity, so the solver
+-- treats them as really moving (contacts push with the target's speed rather than the
+-- part teleporting into the dummy each frame and flinging it).
 function CourseService.step(dt)
 	clock += dt
 	for id, target in pairs(world.targets) do
 		if target.def.Motion then
 			local p = CourseService.targetPosition(id, clock)
+			local v = CourseService.targetVelocity(id, clock)
 			local frame = CFrame.new(p)
 			for _, m in ipairs(target.movers) do
 				m.CFrame = frame * target.base[m]
+				m.AssemblyLinearVelocity = v
 			end
 		end
 	end

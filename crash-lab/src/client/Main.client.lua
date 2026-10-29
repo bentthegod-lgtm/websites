@@ -24,6 +24,7 @@ local ORDER = {
 	"LaunchController",
 	"HudController",
 	"ResultsController",
+	"JuiceController",
 	"EffectsController",
 	"TutorialController",
 	"MenuController",

@@ -16,6 +16,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("CrashLab")
 local CourseConfig = require(Shared.Config.CourseConfig)
 local Format = require(Shared.Format)
+local Grades = require(Shared.Grades)
+local Progress = require(Shared.Progress)
 
 local ScoringService = {}
 
@@ -93,6 +95,9 @@ function ScoringService.finish(run, objectives, reason)
 	if #objectives > 0 then
 		DS.bump(player, "Objectives", #objectives)
 	end
+	-- Grade + delta are judged against the state BEFORE this run.
+	local previousBest = data.Stats.BestScore or 0
+	local lastScore = data.Stats.LastScore
 	result.records = {}
 	if not result.voided then
 		for key, value in pairs({ BestScore = result.score, BestDistance = math.floor(result.distance), BestHeight = math.floor(result.height), BestImpacts = result.impacts }) do
@@ -102,6 +107,17 @@ function ScoringService.finish(run, objectives, reason)
 		end
 	end
 	result.personalBest = data.Stats.BestScore or 0
+	result.previousBest = previousBest
+	result.lastScore = lastScore
+	result.grade = if result.voided then "D" else Grades.grade(result.score, previousBest)
+	result.delta = if result.voided then nil else Grades.delta(result.score, lastScore)
+	if not result.voided then
+		data.Stats.LastScore = result.score
+		-- Best score of the current prestige cycle (reset on every certification).
+		if result.score > Progress.cycleBest(data) then
+			data.Stats.CycleBestScore = result.score
+		end
+	end
 	services.QuestService.onRun(player, result, run)
 	services.DuelService.onRunFinished(player, result)
 	services.QuestService.tutorialEvent(player, "RunDone")

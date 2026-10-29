@@ -59,4 +59,21 @@ test("prestige needs the Air Cannon and the score", function()
 	assert(#Progress.prestige(p).resets > 0 and #Progress.prestige(p).keeps > 0)
 end)
 
+test("prestige: every cycle must beat the requirement again (per-cycle best)", function()
+	local p = { Stats = { BestScore = 9000 }, Machines = { Standard = true, AirCannon = true }, RunEarned = 0, Prestige = { Count = 0 } }
+	assert(Progress.cycleBest(p) == 9000, "first cycle should use the all-time best")
+	assert(Progress.prestige(p).eligible)
+	-- After a prestige: CycleBestScore reset to 0 - the old 9000 best no longer counts.
+	p.Prestige.Count = 1
+	p.Stats.CycleBestScore = 0
+	assert(Progress.cycleBest(p) == 0 and not Progress.prestige(p).eligible, "old best carried into the new cycle")
+	-- Older saves that prestiged before CycleBestScore existed start the cycle at 0 too.
+	p.Stats.CycleBestScore = nil
+	assert(Progress.cycleBest(p) == 0 and not Progress.prestige(p).eligible)
+	p.Stats.CycleBestScore = 3000
+	assert(Progress.prestige(p).eligible and Progress.prestige(p).cycleBest == 3000)
+	p.Stats.CycleBestScore = 2999
+	assert(not Progress.prestige(p).eligible, "eligible below the requirement")
+end)
+
 return cases

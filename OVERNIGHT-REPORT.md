@@ -9,7 +9,7 @@ Everything is on GitHub: `bentthegod-lgtm/websites`, branch `claude/new-game-yhh
 | **Sprout Valley** | `sprout-valley/` | real-time farming (Grow a Garden) | lint 0 · compile 42/42 · unit 43/43 · harness 25/25 |
 | **Rebound Rumble** | `rebound-rumble/` | parry-ball PvP (Blade Ball) | lint 0 · compile 41/41 · unit 34/34 · harness 22/22 |
 | **MAGNET MAYHEM** | `magnet-mayhem/` | magnet scrap simulator (your spec) | lint 0 · compile 47/47 · unit 33/33 · harness 29/29 |
-| **CRASH LAB** | `crash-lab/` | physics crash-test launcher (your spec) | lint 0 · compile 47/47 · unit 25/25 · harness 27/27 |
+| **CRASH LAB** | `crash-lab/` | physics crash-test launcher (your spec) | lint 0 · compile 50/50 · unit 29/29 · harness 28/28 |
 | **PHONES AWAY!** | `phones-away/` | high-school test cheating with your phone (Cheating During Testing) | lint 0 · compile 47/47 · unit 53/53 · harness 39/39 |
 
 I reran every check myself after each game was built, after its bug review, and after my

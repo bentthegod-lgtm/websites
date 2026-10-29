@@ -92,6 +92,59 @@ function CameraController.stopFollow()
 	end
 end
 
+-- Impact feel by tier: FOV punch strength, shake amount, hit-stop length (seconds).
+CameraController.TierFeel = {
+	Light = { punch = 0, shake = 0, stop = 0 },
+	Medium = { punch = 0.25, shake = 0.15, stop = 0 },
+	Heavy = { punch = 0.6, shake = 0.45, stop = 0 },
+	Massive = { punch = 1.2, shake = 0.8, stop = 0.12 },
+}
+
+-- Hit-stop: a short slow-motion beat on the CAMERA only (the follow cam nearly freezes,
+-- then eases back) plus a quick brightness flash. The server's physics never pauses.
+local timeScale = 1
+local stopUntil = 0
+local flash
+function CameraController.hitStop(duration)
+	if not effectsAllowed() or (duration or 0) <= 0 then
+		return false
+	end
+	stopUntil = os.clock() + duration
+	timeScale = 0.06
+	local camera = workspace.CurrentCamera
+	if camera then
+		if not flash or not flash.Parent then
+			flash = Instance.new("ColorCorrectionEffect")
+			flash.Name = "CL_HitFlash"
+			flash.Parent = camera
+		end
+		flash.Brightness = 0.25
+		flash.Contrast = 0.15
+		TweenService:Create(flash, TweenInfo.new(0.3), { Brightness = 0, Contrast = 0 }):Play()
+	end
+	return true
+end
+
+function CameraController.timeScale()
+	return timeScale
+end
+
+function CameraController.impact(tier)
+	local feel = CameraController.TierFeel[tier]
+	if not feel then
+		return
+	end
+	if feel.punch > 0 then
+		CameraController.punch(feel.punch)
+	end
+	if feel.shake > 0 then
+		CameraController.shake(feel.shake)
+	end
+	if feel.stop > 0 then
+		CameraController.hitStop(feel.stop)
+	end
+end
+
 -- Pure camera maths for one frame (exposed for tests).
 function CameraController.followFrame(current, target, dt)
 	local behind = target + Vector3.new(0, 14, -30)
@@ -112,7 +165,10 @@ function CameraController.step(dt)
 			return
 		end
 		transition = math.min(1, transition + dt * 1.5)
-		following.cf = CameraController.followFrame(following.cf, following.root.Position, dt)
+		if os.clock() >= stopUntil and timeScale < 1 then
+			timeScale = math.min(1, timeScale + dt * 4) -- ease back over ~0.25 s
+		end
+		following.cf = CameraController.followFrame(following.cf, following.root.Position, dt * timeScale)
 		local cf = following.cf
 		if shake > 0 then
 			local s = shake * 0.4
@@ -143,8 +199,8 @@ function CameraController.init()
 		end
 	end)
 	ClientState.RunEvent:Connect(function(userId, kind, data)
-		if userId == player.UserId and kind == "Impact" and (data.tier == "Heavy" or data.tier == "Massive") then
-			CameraController.shake(if data.tier == "Massive" then 0.8 else 0.45)
+		if userId == player.UserId and kind == "Impact" then
+			CameraController.impact(data.tier)
 		end
 	end)
 	RunService:BindToRenderStep("CrashLabCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)

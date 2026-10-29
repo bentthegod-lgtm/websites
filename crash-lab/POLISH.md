@@ -52,12 +52,14 @@ look. Keep part names and attributes, because the server checks `CL_Floor`, `CL_
 ## Sound slots to fill (`src/shared/Config/AudioAssets.lua`)
 
 Empty (silent until filled):
-- `AirHiss`: rising pneumatic hiss.
-- `Whoosh`: flight whoosh.
-- `SoftLanding`: cushion thump.
-- `Boing`: comedic bounce.
-- `Achievement` / `ChallengeDone`: short jingles.
+- `Boing`: comedic bounce for crash pads.
 - `MusicLobby` / `MusicRun`: licensed, upbeat, quieter than effects.
+
+Filled in the polish pass with pitched DEAD AIR reuses (placeholders, replace when you can):
+- `AirHiss` and `Whoosh`: the ventilation loop pitched up (x2.4 / x2), cut short.
+- `SoftLanding`: the light impact pitched down (x0.6).
+- `Achievement`: the objective chime pitched up (x1.3).
+- `ChallengeDone`: the purchase chime pitched up (x1.2).
 
 Reused from DEAD AIR (some are dark, so consider brighter replacements):
 - `StandardPrep`, `StandardRelease`, `SpringCompress`, `SpringSnap`, `AirPressure`,

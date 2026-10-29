@@ -1094,6 +1094,13 @@ check("machines: unlock needs requirement + coins, selection rebuilds the pad ma
 	tick(2)
 	local run = CS.runOf(alice)
 	assert(run.machine.Id == "Spring" and run.launch.Elevation < 45, "spring should fire flatter")
+	-- Unlocking mid-launch doesn't claim "selected": it queues and switches after the run.
+	local payload = p.Upgrades.Payload
+	p.Upgrades.Payload = 1
+	p.Stats.BestDistance = math.max(p.Stats.BestDistance, 300)
+	local unlocked, unlockMsg = US.unlockMachine(alice, "AirCannon")
+	assert(unlocked and string.find(unlockMsg, "as soon as", 1, true), "mid-run unlock message: " .. tostring(unlockMsg))
+	assert(p.Selected == "Spring" and US.pending(alice) == "AirCannon", "mid-run unlock changed the selection / not queued")
 	-- Backspin is applied to the whole ragdoll as one rigid body (w on every part, v + w x r).
 	local omega = run.root.AssemblyAngularVelocity
 	assert(omega.Magnitude > 1, "spring backspin not applied")
@@ -1113,7 +1120,25 @@ check("machines: unlock needs requirement + coins, selection rebuilds the pad ma
 	local hit = run.tracker.impacts[#run.tracker.impacts]
 	assert(hit and hit.key == "Bumper1" and hit.tier == "Heavy", "wall impact tiered from post-contact speed")
 	tick(6, ballistic(run))
+	assert(p.Selected == "AirCannon" and US.pending(alice) == nil, "queued machine not selected after the run")
 	assert(US.select(alice, "Standard"))
+	p.Machines.AirCannon = nil
+	p.Upgrades.Payload = payload
+end)
+
+check("moving targets: anchored movers get the velocity that matches their motion", function()
+	local Course = registry.CourseService
+	for _, id in ipairs({ "SwingTarget", "SlideTarget" }) do
+		local target = world.targets[id]
+		Course.step(0.37)
+		local v = Course.targetVelocity(id)
+		assert(v.Magnitude > 0.1, id .. " not moving")
+		for _, m in ipairs(target.movers) do
+			assert((m.AssemblyLinearVelocity - v).Magnitude < 1e-3, id .. " mover " .. m.Name .. " has the wrong velocity " .. tostring(m.AssemblyLinearVelocity) .. " vs " .. tostring(v))
+		end
+		local expected = Course.targetPosition(id)
+		assert((target.part.CFrame.Position - (CF.new(expected) * target.base[target.part]).Position).Magnitude < 1e-3, id .. " not where its motion says")
+	end
 end)
 
 check("daily challenges and codes reward exactly once", function()
@@ -1172,6 +1197,7 @@ check("prestige: needs confirmation + eligibility, resets exactly what it says",
 	assert(not US.prestige(alice, "CERTIFY"), "prestige without the Air Cannon")
 	p.Machines.AirCannon = true
 	p.Stats.BestScore = 5000
+	p.Stats.CycleBestScore = 5000
 	local achievements = 0
 	for _ in pairs(p.Achievements) do
 		achievements += 1
@@ -1187,6 +1213,12 @@ check("prestige: needs confirmation + eligibility, resets exactly what it says",
 	end
 	assert(after >= achievements and p.Achievements.Certified, "achievements lost / certified missing")
 	assert(US.statsFor(alice).CoinMultiplier > 1, "credits give no bonus")
+	-- Each cycle must beat the requirement again: the old best doesn't carry over.
+	assert(p.Stats.CycleBestScore == 0, "cycle best not reset")
+	p.Machines.AirCannon = true
+	local ok, msg = US.prestige(alice, "CERTIFY")
+	assert(not ok and p.Prestige.Count == 1, "prestiged twice on the old best: " .. tostring(msg))
+	p.Machines.AirCannon = nil
 end)
 
 check("cosmetics: coins purchase, achievement unlock, equip only owned, nothing changes stats", function()
@@ -1362,7 +1394,7 @@ check("client controllers initialise and render real server data", function()
 	camera.Parent = workspaceService
 	workspaceService.CurrentCamera = camera
 	local folder = place:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts"):FindFirstChild("CrashLabClient"):FindFirstChild("Controllers")
-	local names = { "ClientState", "AudioController", "CameraController", "InputController", "LaunchController", "HudController", "ResultsController", "EffectsController", "TutorialController", "MenuController" }
+	local names = { "ClientState", "AudioController", "CameraController", "InputController", "LaunchController", "HudController", "ResultsController", "JuiceController", "EffectsController", "TutorialController", "MenuController" }
 	local controllers = {}
 	for _, name in ipairs(names) do
 		controllers[name] = requireModule(folder[name])
@@ -1411,6 +1443,22 @@ check("client controllers initialise and render real server data", function()
 	local result = lastFor("Results", bob).args[1]
 	controllers.ResultsController.show(result)
 	assert(controllers.ResultsController.isOpen(), "results not shown")
+	assert(result.grade and string.find("SABCD", result.grade, 1, true), "results carry no grade")
+	local compact = controllers.ResultsController.layout(roblox.Vector2.new(800, 400))
+	assert(compact.compact and compact.position.Y.Offset + compact.size.Y <= 400 - 90, "compact results overlap the Jump button row")
+	assert(not controllers.ResultsController.layout(roblox.Vector2.new(1920, 1080)).compact, "desktop got the compact card")
+	-- (retry() itself fires a remote, which the headless client can't; check its guard.)
+	controllers.ResultsController.close()
+	assert(not controllers.ResultsController.retry(), "retry with the card closed")
+	controllers.ResultsController.show(result)
+	-- Juice maths: countdown, combos, speed lines.
+	local LC = controllers.LaunchController
+	assert(LC.countdownStep(0, 1.5) == 3 and LC.countdownStep(0.75, 1.5) == 2 and LC.countdownStep(1.49, 1.5) == 1, "countdown wrong")
+	local J = controllers.JuiceController
+	local combo = { count = 0, last = -math.huge }
+	assert(J.comboStep(combo, 1) == 1 and J.comboStep(combo, 1.5) == 2 and J.comboStep(combo, 2.2) == 3 and J.comboStep(combo, 9) == 1, "combo chain wrong")
+	assert(J.speedLineCount(50) == 0 and J.speedLineCount(1e6) == J.MaxSpeedLines and J.speedLineCount(0 / 0) == 0, "speed lines not capped")
+	assert(J.celebrate({ records = { BestScore = 1 } }) and not J.celebrate({ records = {} }), "record celebration")
 	-- Machine animation maths: charge cocks back, fire swings through, rest returns.
 	local E = controllers.EffectsController
 	local restA = E.moverAngle("Standard", "Rest", 0, 1, 45)

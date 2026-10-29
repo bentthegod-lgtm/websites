@@ -5,8 +5,8 @@
 	current objective (featured objective or the next tutorial step / goal). Bottom-left:
 	menu buttons with an "upgrade available" badge. Right: toasts (notifications) and
 	popups (achievements, challenges, machine unlocks, records, facilities, prestige).
-	Top-centre: announcements. During your own run: a live flight readout (an ESTIMATE
-	from the replicated dummy - the real numbers come from the server's results).
+	Top-centre: announcements. (The live flight readout, combos and popups during your own
+	run live in JuiceController.)
 	Duel invites / status appear above the launch panel.
 ]]
 
@@ -170,12 +170,6 @@ function HudController.tick()
 	local status = if pad then LaunchController.status() else "NoPad"
 	refs.status.Text = ({ NoPad = "No pad claimed", Ready = "READY TO LAUNCH", Charging = "CHARGING...", Cooldown = "COOLING DOWN", Flight = "DUMMY IN FLIGHT" })[status] or status
 	refs.status.TextColor3 = if status == "Ready" then C.Green elseif status == "Charging" then C.Red else C.Dim
-	local run = ClientState.myRun
-	local root = run and run.model and run.model:FindFirstChild("Root")
-	refs.live.Visible = root ~= nil
-	if root then
-		refs.live.Text = string.format("~%d studs   ~%d high   (live estimate)", math.max(0, math.floor(root.Position.Z)), math.max(0, math.floor(root.Position.Y)))
-	end
 	local duel = ClientState.duel
 	refs.duel.Visible = duel ~= nil or refs.invite.Visible
 	if duel then
@@ -201,8 +195,6 @@ function HudController.build()
 	refs.machine = Ui.label("", { Position = UDim2.fromOffset(14, 62), Size = UDim2.new(1, -28, 0, 18), TextSize = 13, TextColor3 = C.Dim, TextXAlignment = Enum.TextXAlignment.Left, Parent = top })
 	refs.goal = Ui.label("", { Position = UDim2.fromOffset(14, 82), Size = UDim2.new(1, -28, 0, 24), TextSize = 14, Font = Ui.Fonts.Bold, TextWrapped = true, TextColor3 = C.Accent, TextXAlignment = Enum.TextXAlignment.Left, Parent = top })
 	refs.saving = Ui.label("Saving unavailable here", { Position = UDim2.fromOffset(16, 132), Size = UDim2.fromOffset(300, 16), TextSize = 12, TextColor3 = C.Red, TextXAlignment = Enum.TextXAlignment.Left, Visible = false, Parent = gui })
-	-- Live flight readout.
-	refs.live = Ui.title("", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 56), Size = UDim2.fromOffset(520, 28), TextSize = 20, TextStrokeTransparency = 0.4, Visible = false, Parent = gui })
 	-- Menu buttons (bottom-left).
 	local buttons = Ui.new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -16), Size = UDim2.fromOffset(130, 290), BackgroundTransparency = 1, Parent = gui })
 	Ui.list(buttons, 8, Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Bottom)

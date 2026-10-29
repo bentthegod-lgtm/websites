@@ -23,6 +23,7 @@ local UpgradeService = {}
 
 local services
 local cache = {}
+local pendingSelect = {} -- [player] = machine id to select once the current launch ends
 local limiter = RateLimit.new(6, 6)
 
 function UpgradeService.init(registry)
@@ -111,9 +112,32 @@ function UpgradeService.unlockMachine(player, machineId)
 	services.DataService.setStat(player, "Machines", count)
 	services.Analytics.funnel(player, "FirstMachine")
 	services.Remotes.Popup:FireClient(player, "Machine", { id = machineId, name = def.Name })
-	UpgradeService.select(player, machineId)
 	services.Remotes.Announce:FireAllClients(player.DisplayName .. " unlocked the " .. def.Name .. "!", { 255, 200, 60 })
-	return true, def.Name .. " unlocked and selected!"
+	if UpgradeService.select(player, machineId) then
+		return true, def.Name .. " unlocked and selected!"
+	end
+	-- Mid-launch the pad can't be rebuilt: queue it and switch when the run is over.
+	pendingSelect[player] = machineId
+	services.DataService.sendProfile(player)
+	return true, def.Name .. " unlocked! It will be selected as soon as this launch is over."
+end
+
+-- Applies a selection queued during a launch (called when the run is cleaned up).
+function UpgradeService.applyPending(player)
+	local id = pendingSelect[player]
+	if not id or not player.Parent or services.LaunchService.isBusy(player) then
+		return false
+	end
+	pendingSelect[player] = nil
+	local ok, message = UpgradeService.select(player, id)
+	if ok then
+		notify(player, message, "good")
+	end
+	return ok
+end
+
+function UpgradeService.pending(player)
+	return pendingSelect[player]
 end
 
 function UpgradeService.select(player, machineId)
@@ -147,7 +171,7 @@ function UpgradeService.prestige(player, confirm)
 	end
 	local preview = Progress.prestige(data)
 	if not preview.eligible then
-		return false, string.format("Lab Certification needs the Air Cannon and a best score of %s.", Format.short(preview.needScore))
+		return false, string.format("Lab Certification needs the Air Cannon and a score of %s this cycle (best so far: %s).", Format.short(preview.needScore), Format.short(preview.cycleBest))
 	end
 	data.Prestige.Credits += preview.credits
 	data.Prestige.Count += 1
@@ -161,6 +185,8 @@ function UpgradeService.prestige(player, confirm)
 	services.DataService.setStat(player, "Payload", 0)
 	services.DataService.setStat(player, "Machines", 1)
 	services.DataService.setStat(player, "Prestige", data.Prestige.Count)
+	-- The next certification needs a fresh qualifying score from this new cycle.
+	data.Stats.CycleBestScore = 0
 	services.PadService.refreshMachine(player)
 	services.Analytics.funnel(player, "FirstPrestige")
 	services.Remotes.Popup:FireClient(player, "Prestige", { credits = preview.credits, total = data.Prestige.Credits })
@@ -199,6 +225,7 @@ end
 
 function UpgradeService.onPlayerRemoving(player)
 	cache[player] = nil
+	pendingSelect[player] = nil
 	limiter:forget(player)
 end
 

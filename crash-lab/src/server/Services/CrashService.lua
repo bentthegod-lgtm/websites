@@ -398,6 +398,8 @@ function CrashService.finish(run, reason)
 			runs[player] = nil
 		end
 		if player.Parent then
+			-- A machine unlocked mid-launch is selected now that the pad is free.
+			services.UpgradeService.applyPending(player)
 			services.PadService.broadcast()
 		end
 	end)

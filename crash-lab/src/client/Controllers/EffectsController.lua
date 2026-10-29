@@ -125,7 +125,8 @@ local function animate(padIndex, anim, now)
 		local light = beacon and beacon:FindFirstChildOfClass("PointLight")
 		local on = anim.phase == "Charge" and math.floor(t * 6) % 2 == 0
 		if light then
-			light.Brightness = if on then 4 else 0
+			-- Kept modest so the neon + light stay under the bloom threshold most of the time.
+			light.Brightness = if on then 2.5 else 0
 		end
 		if beacon then
 			beacon.Color = if on then Color3.fromRGB(255, 60, 30) else Color3.fromRGB(120, 40, 30)
@@ -180,6 +181,20 @@ function EffectsController.burst(position, count, props)
 	return true
 end
 
+-- A low, spreading dust puff where the dummy hits the floor (bigger for harder landings).
+local DUST_COUNT = { Light = 8, Medium = 14, Heavy = 22, Massive = 30 }
+function EffectsController.dust(position, tier)
+	return EffectsController.burst(Vector3.new(position.X, 0.6, position.Z), DUST_COUNT[tier] or 10, {
+		color = ColorSequence.new(Color3.fromRGB(196, 186, 170)),
+		size = NumberSequence.new(1.2, 3.2),
+		speed = NumberRange.new(6, 16),
+		lifetime = NumberRange.new(0.6, 1.2),
+		accel = Vector3.new(0, 3, 0),
+		drag = 4,
+		light = 0,
+	})
+end
+
 local TIER_FX = {
 	Light = { 6, { size = NumberSequence.new(0.4, 0), color = ColorSequence.new(Color3.fromRGB(230, 230, 230)) } },
 	Medium = { 12, { size = NumberSequence.new(0.7, 0) } },
@@ -219,6 +234,9 @@ local function onRunEvent(userId, kind, data)
 		local fx = TIER_FX[data.tier]
 		if fx then
 			EffectsController.burst(data.position, fx[1], fx[2])
+		end
+		if data.floor and data.position then
+			EffectsController.dust(data.position, data.tier)
 		end
 	elseif kind == "Prop" then
 		local def = CourseConfig.DestructibleKinds[data.kind]

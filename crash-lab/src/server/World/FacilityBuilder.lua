@@ -267,9 +267,24 @@ local function buildLobby(world)
 		surfaceText(s, Enum.NormalId.Front, text, { Color = C.Yellow, PPS = 20 })
 		deco({ Size = Vector3.new(0.5, 3, 0.5), CFrame = CFrame.new(-30 + (i - 1) * 30, 1.5, z0 + 45), Color = C.Steel, Parent = lobby })
 	end
-	-- Floor arrows toward the deck.
-	for i = 0, 4 do
-		deco({ Class = "WedgePart", Size = Vector3.new(4, 0.1, 3), CFrame = CFrame.new(0, 0.06, z0 + 22 + i * 9), Color = C.Yellow, Material = M.Neon, Parent = lobby })
+	-- Walkway from the spawn to the deck ramp: yellow edge lines + glowing chevrons that
+	-- point at the deck, and an overhead sign at the exit.
+	local walkStart, walkEnd = z0 - 22, z0 + 63
+	for _, x in ipairs({ -6, 6 }) do
+		deco({ Name = "WalkwayEdge", Size = Vector3.new(0.6, 0.04, walkEnd - walkStart), CFrame = CFrame.new(x, 0.035, (walkStart + walkEnd) / 2), Color = C.Yellow, Parent = lobby })
+	end
+	for i = 0, 8 do
+		local cz = walkStart + 6 + i * 9
+		for _, side in ipairs({ -1, 1 }) do
+			-- Two angled bars make a ">" pointing toward +Z (the deck).
+			deco({ Name = "Chevron", Size = Vector3.new(0.7, 0.06, 3.4), CFrame = CFrame.new(side * 1.15, 0.05, cz) * CFrame.Angles(0, math.rad(-side * 35), 0), Color = C.Yellow, Material = M.Neon, Parent = lobby })
+		end
+	end
+	local exitSign = deco({ Name = "DeckSign", Size = Vector3.new(26, 5, 0.6), CFrame = CFrame.new(0, 17, z0 + 64), Color = C.Black, Material = M.Metal, Parent = lobby })
+	surfaceText(exitSign, Enum.NormalId.Front, "LAUNCH DECK  >>>", { Color = C.Yellow, PPS = 20, LightInfluence = 0 })
+	deco({ Size = Vector3.new(26.4, 0.5, 0.8), CFrame = CFrame.new(0, 14.4, z0 + 64), Color = C.Yellow, Material = M.Neon, Parent = lobby })
+	for _, x in ipairs({ -13.5, 13.5 }) do
+		deco({ Size = Vector3.new(0.5, 3, 0.5), CFrame = CFrame.new(x, 20.5, z0 + 64), Color = C.Steel, Parent = lobby })
 	end
 
 	-- Facility gate (future facilities, unlocked by real progression).
@@ -319,8 +334,8 @@ local function buildLobby(world)
 		local barrel = part({ Name = "Barrel", Size = Vector3.new(4.5, 3, 3), CFrame = CFrame.new(spot[1], 2.25, spot[2]) * CFrame.Angles(0, 0, math.rad(90)), Shape = CYL, Color = if i % 2 == 0 then C.Blue else C.Orange, Material = M.Metal, Parent = lobby })
 		deco({ Size = Vector3.new(0.3, 3.1, 3.1), CFrame = barrel.CFrame, Shape = CYL, Color = C.White, Parent = lobby })
 	end
-	-- Floor logo stripe down the centre aisle.
-	deco({ Size = Vector3.new(10, 0.05, 50), CFrame = CFrame.new(0, 0.03, z0 + 40), Color = rgb(56, 58, 64), Parent = lobby })
+	-- Walkway paint between the edge lines.
+	deco({ Size = Vector3.new(11.4, 0.03, walkEnd - walkStart), CFrame = CFrame.new(0, 0.02, (walkStart + walkEnd) / 2), Color = rgb(70, 72, 80), Parent = lobby })
 
 	-- Ceiling lights over the lobby.
 	for _, x in ipairs({ -50, 0, 50 }) do
@@ -350,6 +365,24 @@ local function buildDeck(world)
 	floor:SetAttribute("CL_Floor", true)
 	hazardStrip(CFrame.new(0, deckTop + 0.06, 6.4), 150, 1.2, 30, deck)
 	hazardStrip(CFrame.new(0, deckTop + 0.06, -22.4), 150, 1.2, 30, deck)
+	-- Hazard stripes on the deck's side ends and a warm work-light bar over the pads.
+	hazardStrip(CFrame.new(-74.4, deckTop + 0.06, -8) * CFrame.Angles(0, math.rad(90), 0), 30, 1.2, 8, deck)
+	hazardStrip(CFrame.new(74.4, deckTop + 0.06, -8) * CFrame.Angles(0, math.rad(90), 0), 30, 1.2, 8, deck)
+	deco({ Name = "LightBar", Size = Vector3.new(124, 1, 1.6), CFrame = CFrame.new(0, 26, -4), Color = C.SteelDark, Material = M.Metal, Parent = deck })
+	for _, x in ipairs({ -66, 66 }) do
+		part({ Name = "LightBarPost", Size = Vector3.new(1.4, 25, 1.4), CFrame = CFrame.new(x, 13.5, -4), Color = C.Steel, Material = M.Metal, Parent = deck })
+	end
+	for _, x in ipairs({ -40, 0, 40 }) do
+		local lamp = deco({ Name = "WorkLight", Size = Vector3.new(8, 0.5, 2), CFrame = CFrame.new(x, 25.3, -4), Color = rgb(255, 226, 170), Material = M.Neon, Parent = deck })
+		local light = Instance.new("SpotLight")
+		light.Face = Enum.NormalId.Bottom
+		light.Angle = 95
+		light.Range = 40
+		light.Brightness = 1.3
+		light.Color = rgb(255, 214, 160) -- warm work light
+		light.Shadows = false
+		light.Parent = lamp
+	end
 	-- Ramp from the lobby floor up onto the deck.
 	part({ Class = "WedgePart", Name = "DeckRamp", Size = Vector3.new(60, deckTop, 6), CFrame = CFrame.new(0, deckTop / 2, -26), Color = C.SteelDark, Material = M.DiamondPlate, Parent = deck })
 	world.pads = {}
@@ -431,8 +464,36 @@ local function buildArena(world)
 		local apron = part({ Name = "Apron", Size = Vector3.new(60, 2, length + 60), CFrame = CFrame.new(x * (half + 32), -1, length / 2), Color = rgb(116, 118, 118), Material = M.Concrete, Parent = arena })
 		apron:SetAttribute("CL_Floor", true)
 	end
-	for _, x in ipairs({ -40, 0, 40 }) do
-		deco({ Size = Vector3.new(0.4, 0.04, length), CFrame = CFrame.new(x, 0.02, length / 2 + 6), Color = rgb(230, 230, 224), Parent = arena })
+	-- Painted floor: lane lines, a dashed yellow centre line, red keep-out edges, a
+	-- start box in front of the deck, and scuff / tyre marks (thin dark parts - no images).
+	-- Heights are staggered (0.02 / 0.03 / 0.045) so overlapping paint never z-fights.
+	for _, x in ipairs({ -40, 40 }) do
+		deco({ Name = "LaneLine", Size = Vector3.new(0.5, 0.04, length), CFrame = CFrame.new(x, 0.02, length / 2 + 6), Color = rgb(236, 236, 228), CastShadow = false, Parent = arena })
+	end
+	for z = 14, length - 20, 12 do
+		deco({ Name = "CentreDash", Size = Vector3.new(0.7, 0.05, 6), CFrame = CFrame.new(0, 0.025, z), Color = C.Yellow, CastShadow = false, Parent = arena })
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		deco({ Name = "KeepOut", Size = Vector3.new(2, 0.04, length), CFrame = CFrame.new(side * (half - 2.5), 0.02, length / 2 + 6), Color = C.Red, CastShadow = false, Parent = arena })
+	end
+	hazardStrip(CFrame.new(0, 0.03, 20), 120, 1.6, 24, arena)
+	local function scuff(x, z, len, yaw, width)
+		deco({ Name = "Scuff", Size = Vector3.new(width or 0.9, 0.03, len), CFrame = CFrame.new(x, 0.03, z) * CFrame.Angles(0, yaw, 0), Color = rgb(70, 70, 72), Transparency = 0.55, CastShadow = false, Parent = arena })
+	end
+	for i = 1, 22 do
+		-- Deterministic scatter (same every build).
+		local z = 40 + ((i * 97) % 470)
+		local x = math.sin(i * 12.9898) * 52
+		local yaw = math.sin(i * 4.1) * 0.9
+		scuff(x, z, 6 + (i % 5) * 3, yaw)
+		if i % 3 == 0 then
+			-- Tyre marks: a pair of parallel curving skids.
+			for k = 0, 2 do
+				for _, off in ipairs({ -1.4, 1.4 }) do
+					scuff(x + 8 + off + k * 1.6, z + 6 + k * 5, 5.4, 0.35 * k, 0.6)
+				end
+			end
+		end
 	end
 
 	-- Distance markers every 50 studs: floor line + sign on both sides.
@@ -440,7 +501,12 @@ local function buildArena(world)
 	for d = CourseConfig.MarkerEvery, length - 40, CourseConfig.MarkerEvery do
 		local isGoal = table.find(CourseConfig.DistanceGoals, d) ~= nil
 		local col = if isGoal then C.Yellow else C.White
-		deco({ Size = Vector3.new(half * 2, 0.06, 0.8), CFrame = CFrame.new(0, 0.04, d), Color = col, Material = if isGoal then M.Neon else M.SmoothPlastic, Parent = arena })
+		deco({ Name = "MarkerLine", Size = Vector3.new(half * 2 - 6, 0.06, 0.8), CFrame = CFrame.new(0, 0.045, d), Color = col, Material = if isGoal then M.Neon else M.SmoothPlastic, CastShadow = false, Parent = arena })
+		-- Painted distance numbers on the floor (SurfaceGui text, readable from the deck).
+		for _, x in ipairs({ -22, 22 }) do
+			local paint = deco({ Name = "FloorNumber", Size = Vector3.new(12, 0.02, 7), CFrame = CFrame.new(x, 0.03, d + 5) * CFrame.Angles(0, math.rad(180), 0), Color = col, Transparency = 1, CastShadow = false, Parent = arena })
+			surfaceText(paint, Enum.NormalId.Top, tostring(d), { Color = if isGoal then C.Yellow else Color3.fromRGB(236, 236, 228), PPS = 12, LightInfluence = 1 })
+		end
 		for _, x in ipairs({ -1, 1 }) do
 			local post = deco({ Size = Vector3.new(0.6, 8, 0.6), CFrame = CFrame.new(x * (half - 3), 4, d), Color = C.Steel, Parent = arena })
 			local signPart = deco({ Size = Vector3.new(6, 3.4, 0.4), CFrame = post.CFrame * CFrame.new(0, 5, 0), Color = if isGoal then C.Yellow else C.Black, Parent = arena })

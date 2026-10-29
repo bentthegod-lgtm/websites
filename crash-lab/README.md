@@ -8,7 +8,7 @@ Everything (the facility, the machines, the dummies and the UI) is built from co
 Rojo project. There are no imported models and no free-model scripts.
 
 > **Honest status:** every check that can run in this environment passes (lint, compile,
-> 24 unit tests, a 27-check headless harness on the built place, preview renders). **No
+> 29 unit tests, a 28-check headless harness on the built place, preview renders). **No
 > Roblox Studio play-test has been possible here.** Lune does not simulate physics, so
 > the real ragdoll motion, how launches *feel*, bounce and slide behaviour and the
 > camera/UI on real devices are **unverified**. See [Studio testing checklist](#studio-testing-checklist).
@@ -51,6 +51,7 @@ which means roughly 15% further.
 | Aim left / right | 5 / 6 | L1 / R1 | - / + |
 | Spin mode | 7 | Y | SPIN |
 | Skip follow camera | Space (in flight) | B | SKIP |
+| Retry from results | R | - | RETRY |
 | Upgrades / Menu / Help | U / M / H | L2 (menu) | menu buttons |
 
 Movement, camera, jump and Escape keep Roblox's defaults. Tab, /, I/O and the arrow keys
@@ -154,9 +155,17 @@ Each machine has its own model, animation (client-side, purely visual) and sound
 
 ### UI
 - **HUD**: coins (exact on hover), machine, launch readiness, objective / next step,
-  "upgrade available" badge, live flight estimate, toasts, popups and announcements.
-- **Launch panel and results card**: animated tally, records, next recommended upgrade,
-  RETRY / CONFIGURE.
+  "upgrade available" badge, toasts, popups and announcements.
+- **Juice (client-only, visual)**: live DISTANCE / HEIGHT (with peak) readout, "x3 COMBO!"
+  counter in the tier colour, floating "+points" popups at the impact point, capped speed
+  lines, landing dust, camera punch and shake scaled by impact tier, a short hit-stop on
+  Massive hits (camera and effects only, never the physics), a 3-2-1 charge countdown with
+  a per-machine wind-up line, and a NEW RECORD banner with confetti. Reduced Effects and
+  Camera Shake settings turn these down or off.
+- **Launch panel and results card**: per-line count-up, D-S grade stamp against your
+  personal best, "+X% vs last run", records, next recommended upgrade, RETRY (R) and
+  BACK TO SETUP. Screens under 500 px tall get a compact top-centre card that stays clear
+  of the thumbstick and Jump button.
 - **Menu**: Upgrades, Machines, Lab Log, Locker, Facilities, Settings and Help.
 - **Tutorial**: six steps, each advanced by a real server event; skippable, replayable and
   saved.
@@ -168,7 +177,9 @@ Each machine has its own model, animation (client-side, purely visual) and sound
 - 3D impact sounds by tier, plus 3D ambient emitters.
 - Lobby and run music slots that fade.
 - **No audio IDs are invented.** Every filled slot reuses an ID from DEAD AIR's checked list,
-  and a unit test fails on any other ID. Empty slots are listed in POLISH.md.
+  and a unit test fails on any other ID. The polish pass filled `AirHiss`, `Whoosh`,
+  `SoftLanding`, `Achievement` and `ChallengeDone` with pitched reuses; `Boing`,
+  `MusicLobby` and `MusicRun` stay empty (see POLISH.md).
 
 ### Lighting
 - Bright industrial daylight: warm sun, cool ambient, light Atmosphere, restrained bloom and
@@ -260,6 +271,28 @@ server returns `NotProcessedYet` if the profile can't persist or is mid leave-sa
   control booth was moved off the camera line.
 - **Remaining:** see the Studio checklist below.
 
+### Polish pass
+- **Juice:** live readout, combos, score popups, speed lines, dust, tiered camera punch,
+  Massive hit-stop, charge countdown and wind-up, record banner and confetti (all
+  client-side, all respecting Reduced Effects / Camera Shake).
+- **Results:** count-up, grade stamp, delta vs last run, RETRY (R) / BACK TO SETUP,
+  compact phone layout. The server computes `grade` and `delta` (`src/shared/Grades.lua`).
+- **Fixes:** moving targets now get an `AssemblyLinearVelocity` matching their motion
+  (`src/shared/Motion.lua`); prestige needs the score requirement again every cycle
+  (`Stats.CycleBestScore`); a machine unlocked mid-launch says it will be selected after
+  the run and is selected when the run is cleaned up.
+- **Visuals:** lane lines, centre dashes, keep-out edges and distance numbers on the
+  arena floor; scuffs and tyre marks from thin parts; more deck hazard stripes; a warm
+  work-light bar over the deck; a walkway with chevrons from the lobby to an overhead
+  LAUNCH DECK sign; calmer Air Cannon beacon light. Previews re-rendered and checked (the
+  lobby chevrons were pointing the wrong way and were flipped).
+- **Tested:** prestige per-cycle requirement, grade / delta thresholds, velocity as the
+  exact derivative of target motion (unit); movers' velocity after `CourseService.step`,
+  mid-run unlock queue, compact results layout, countdown / combo / speed-line maths and
+  the record banner (harness).
+- **Not tested here:** how any of it feels. Hit-stop length, shake strength, popup
+  readability and the compact card on a real phone need a look in Studio.
+
 ## Saving
 
 Profiles live in `CrashLab_Profiles_v1` (and `_Studio` when in Studio). Each profile holds:
@@ -293,8 +326,8 @@ Key safety features:
 
 - **Shop IDs:** Developer Product IDs for `NeonDummy` and `Fireworks`, and the Game Pass
   ID for `RainbowTrail`, in `ShopConfig.lua`.
-- **Audio:** 8 empty slots: `AirHiss`, `Whoosh`, `SoftLanding`, `Boing`, `Achievement`,
-  `ChallengeDone`, `MusicLobby`, `MusicRun`, plus any you want to replace (see POLISH.md).
+- **Audio:** 3 empty slots: `Boing`, `MusicLobby`, `MusicRun`, plus any reused or
+  pitched placeholder you want to replace (see POLISH.md).
 - **Icon and thumbnails:** see the ComfyUI prompts in POLISH.md.
 - **Publishing:** publish the place and enable API access to use DataStores and
   leaderboards.
@@ -320,9 +353,11 @@ Key safety features:
    ceiling is 320, while the top Air Cannon arc peaks at about 251.
 3. Ragdoll stability at Chaos spin (about 13 rad/s), and knees and elbows bending 70° in
    every direction.
-4. Moving targets are CFramed every frame, so they can fling a dummy rather than push it.
+4. Moving targets are CFramed every frame. They now carry a matching velocity so contacts
+   should push rather than fling; confirm in Studio.
 5. Whether the camera sensitivity setting (`MouseDeltaSensitivity`) has a noticeable effect.
-6. On phones under 500 px tall, the results card overlaps the Jump button.
+6. The compact results card (screens under 500 px tall) is laid out to clear the Jump
+   button; confirm on a real phone or the device emulator.
 
 **Gameplay and UI:**
 - [ ] The first launch comes within a minute and the first upgrade within a few minutes.
@@ -343,8 +378,8 @@ Key safety features:
 cd crash-lab
 selene src                         # lint
 lune run tests/compile             # compile every file
-lune run tests/run                 # 24 unit tests
-rojo build -o build/CrashLab.rbxlx && lune run tests/harness build/CrashLab.rbxlx   # 27 checks
+lune run tests/run                 # 29 unit tests
+rojo build -o build/CrashLab.rbxlx && lune run tests/harness build/CrashLab.rbxlx   # 28 checks
 lune run tools/export_preview build/CrashLab.rbxlx build/preview.json && node tools/render_preview.mjs build/preview.json build/
 ```
 

@@ -9,6 +9,7 @@
 	  Aim left / right       5 / 6                  L1 / R1            - / +
 	  Spin mode              7                      Y                  SPIN button
 	  Skip follow camera     Space (while flying)   B                  SKIP button
+	  Retry from results     R  or RETRY            -                  RETRY button
 	  Upgrades               U                      -                  UPGRADES button
 	  Menu / Help            M / H                  L2 (menu)          MENU button
 	Movement, camera, jump and Escape keep Roblox's defaults. No key here is one Roblox
@@ -54,6 +55,9 @@ function InputController.handle(keyCode)
 	local LaunchController = require(script.Parent.LaunchController)
 	if (keyCode == Enum.KeyCode.Space or keyCode == Enum.KeyCode.ButtonB) and CameraController.following() then
 		CameraController.stopFollow()
+		return true
+	end
+	if keyCode == Enum.KeyCode.R and require(script.Parent.ResultsController).retry() then
 		return true
 	end
 	local action = KEYS[keyCode]
