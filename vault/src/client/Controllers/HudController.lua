@@ -347,9 +347,38 @@ function HudController.init()
 	-- Mobile pickup button.
 	pickupButton = Ui.button("PICKUP", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -150, 1, -150), Size = UDim2.fromOffset(110, 110), TextSize = 20, Visible = UserInputService.TouchEnabled, Parent = gui }, C.Accent)
 	Ui.corner(pickupButton, 55)
+	-- Sit just left of Roblox's touch Jump button (TouchJumpModule: 70 px at 25 / 20 px from
+	-- the corner on small screens, 120 px at 50 / 90 px otherwise), in screen pixels: the
+	-- HUD's UIScale would otherwise move the button into the jump button on tablets.
+	local hudScale = gui:FindFirstChildOfClass("UIScale")
+	local function placePickup()
+		local size = Ui.viewportSize()
+		local small = math.min(size.X, size.Y) <= 500
+		local s = if hudScale then hudScale.Scale else 1
+		local px = if small then 76 else 100
+		local right = if small then 25 + 70 + 14 else 50 + 120 + 14
+		local bottom = if small then 20 else 90
+		pickupButton.Size = UDim2.fromOffset(px / s, px / s)
+		pickupButton.Position = UDim2.new(1, -right / s, 1, -bottom / s)
+	end
+	placePickup()
+	if hudScale then
+		hudScale:GetPropertyChangedSignal("Scale"):Connect(placePickup)
+	end
+	if Workspace.CurrentCamera then
+		Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(placePickup)
+	end
 	pickupButton.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 			InputController.setHeld("touch", true)
+			-- A finger that slides off the button never fires its InputEnded: watch the touch itself.
+			local connection
+			connection = input:GetPropertyChangedSignal("UserInputState"):Connect(function()
+				if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
+					connection:Disconnect()
+					InputController.setHeld("touch", false)
+				end
+			end)
 		end
 	end)
 	pickupButton.InputEnded:Connect(function(input)

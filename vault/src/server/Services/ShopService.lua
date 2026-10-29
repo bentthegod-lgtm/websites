@@ -77,7 +77,23 @@ function ShopService.ownsPass(player, key)
 		cache[key] = owned == true
 		return cache[key]
 	end
+	-- Failed (throttled / outage): cache "not owned" so later calls never yield again, and
+	-- retry once in the background.
+	cache[key] = false
+	task.delay(30, function()
+		if passCache[player] == cache and cache[key] == false and player.Parent then
+			cache[key] = nil
+			ShopService.ownsPass(player, key)
+		end
+	end)
 	return false
+end
+
+-- Never yields: only what is already cached (stats() is used inside atomic claims and
+-- deposits, which must not yield between their checks and their writes).
+function ShopService.cachedPass(player, key)
+	local cache = passCache[player]
+	return cache ~= nil and cache[key] == true
 end
 
 function ShopService.owns(player, kind, id)

@@ -791,7 +791,7 @@ local function platinumReserve(ctx)
 	ctx.lights = {}
 	for _, x in ipairs({ -45, -10, 30 }) do
 		for _, z in ipairs({ -16, 18, 48 }) do
-			local _, l = Props.lightFixture(b, CFrame.new(x, y0 + ht - 3, z), coldLight, 2.4, 50, 12)
+			local _, l = Props.lightFixture(b, CFrame.new(x, y0 + ht - 3, z), coldLight, 1.8, 44, 12)
 			l.Shadows = x == -10 and z == 18
 			table.insert(ctx.lights, l)
 		end

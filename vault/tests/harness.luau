@@ -531,9 +531,7 @@ check("reachability: every spawn point, machine and exit is reachable on foot; l
 		assert(Reach.reachable(walk, record.exitDoorPosition, 3), "B" .. d .. " exit door unreachable (route blocked)")
 		-- The check itself can fail: a point buried in a wall and one in sealed space.
 		assert(not Reach.pointOk(idx, walk, V3.new(-GameConfig.RoomWidth / 2 - 1, y0 + 2, 0)), "a point inside the wall passed")
-		if d <= 5 then
-			assert(staged / #record.points >= 0.6, string.format("B%d: only %d of %d points are staged", d, staged, #record.points))
-		end
+		assert(staged / #record.points >= 0.6, string.format("B%d: only %d of %d points are staged", d, staged, #record.points))
 		table.insert(lines, string.format("B%d %d pts (%d%% staged)", d, #record.points, math.floor(staged / #record.points * 100 + 0.5)))
 	end
 	local b4 = world.depths[4]
@@ -810,6 +808,13 @@ check("deposit: prompt pays exactly once; a duplicate request and the auto zone 
 	local machine = world.machines.D1_1
 	local value = p.Carried.Value
 	local expected = Economy.depositPayout(value, DS.stats(alice))
+	-- Anywhere the machine's prompt can be triggered (at root height) passes the range check.
+	local promptPos = machine.prompt.Parent.Position
+	for i = 0, 7 do
+		local a = i / 8 * math.pi * 2
+		local at = V3.new(promptPos.X + math.cos(a) * machine.prompt.MaxActivationDistance, machine.cframe.Position.Y + 3, promptPos.Z + math.sin(a) * machine.prompt.MaxActivationDistance)
+		assert((at - machine.cframe.Position).Magnitude <= GameConfig.DepositRange, "prompt reaches past the server's deposit range")
+	end
 	-- Too far away first.
 	moveTo(aliceRoot, V3.new(30, 3, 20))
 	assert(not DepS.deposit(alice, "D1_1"), "deposited from across the room")
@@ -963,6 +968,15 @@ check("magnet pulls loot toward its owner; auto-collect picks up nearby loot", f
 	end
 	tick(4)
 	assert((p.Stats.Collect or 0) > collected0, "auto-collect / magnet never collected anything")
+	-- A full stack: Auto-Collect stops instead of repeating the "stack full" notice.
+	local slots0 = p.Carried.Slots
+	p.Carried.Slots = DS.stats(alice).Capacity
+	local fullPopups = count("Popup", "StackFull", alice)
+	local collectedFull = p.Stats.Collect or 0
+	tick(6)
+	assert(count("Popup", "StackFull", alice) == fullPopups, "auto-collect spammed the full notice")
+	assert((p.Stats.Collect or 0) == collectedFull, "auto-collect picked up past capacity")
+	p.Carried.Slots = slots0
 	p.Upgrades.CashMagnet, p.Upgrades.AutoCollect, p.Upgrades.CarryCapacity = nil, nil, 1
 	p.HighestDepth = 3
 end)
@@ -1117,6 +1131,24 @@ check("receipts: granted exactly once, refused when the profile can't persist li
 	registry.ShopService.buy(bob, "GoldenGlow")
 	isStudio = true
 	assert(not DS.getProfile(bob).Cosmetics.Owned["Theme:GoldenGlow"], "id-0 product granted in a live game")
+	-- stats() (used inside atomic claims / deposits) never calls the yielding pass lookup, and
+	-- a failed lookup is cached instead of retried on every call.
+	local vip = ShopConfig.Passes[1]
+	local market = stubServices.MarketplaceService
+	local lookups, ownsAsync = 0, market.UserOwnsGamePassAsync
+	vip.PassId = 4242
+	market.UserOwnsGamePassAsync = function()
+		lookups += 1
+		error("throttled")
+	end
+	registry.ShopService.onPlayerRemoving(bob)
+	DS.stats(bob)
+	assert(lookups == 0, "stats() made a pass lookup")
+	registry.ShopService.ownsPass(bob, "VIP")
+	registry.ShopService.ownsPass(bob, "VIP")
+	assert(lookups == 1, "a failed pass lookup was retried on every call")
+	vip.PassId = 0
+	market.UserOwnsGamePassAsync = ownsAsync
 	-- Cosmetics never change stats.
 	local before = DS.stats(bob)
 	registry.ShopService.buy(bob, "GoldenGlow")

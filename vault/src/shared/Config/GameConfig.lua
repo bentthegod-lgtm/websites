@@ -32,7 +32,7 @@ return {
 	MagnetTick = 0.1,
 	MagnetMaxPull = 8, -- loot items one player's magnet moves at once
 	AutoDepositCooldown = 1.5,
-	DepositRange = 12,
+	DepositRange = 15, -- the machine prompt reaches 11 studs from a point 1.8 in front of the machine, plus slack
 	ElevatorRange = 16,
 
 	-- Rare loot events

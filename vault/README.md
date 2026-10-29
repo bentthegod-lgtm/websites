@@ -77,17 +77,19 @@ All seven depths are playable. They share one facility language: the same arriva
 | B3 Diamond Chamber | Hexagonal hall: six glass display wings with open pedestals radiate from the faceted crystal in its laser ring; open velvet trays on the slanted walls; stepped ceiling rings, oculus and cool spotlights | 32 | centre, through a vestibule | 621 | 104 (81%) |
 | B4 Emerald Reserve | Narrow vaulted gallery (44 wide) under arch ribs; nine side alcoves behind green-lit arches, each with an emerald tower and premium cases; black stands down the nave; obelisk at the north end | 26 | far left (x -36), via a side passage | 711 | 102 (82%) |
 | B5 Platinum Reserve | Industrial hall: three rows of 14-stud warehouse racks on the left, a conveyor with three presses and output tables on the right, overhead catwalks, refinery vessel, alloy shelving, cold strip lights, corrugated walls | 38 | right (x 40) | 886 | 140 (86%) |
-| B6 Artifact Chamber | Classic chamber: stone columns and arches, mosaic runner, containment pods, sarcophagus | 30 | centre | 673 | 146 |
-| B7 Legendary Reserve | Classic chamber: monumental gold entrance, red carpet, gold columns, treasure heaps, tiered dais | 30 | centre | 658 | 142 |
+| B6 Artifact Chamber | Classic chamber: stone columns and arches, mosaic runner, containment pods, stepped display platforms, relic tables, sarcophagus | 30 | centre | 757 | 114 (77%) |
+| B7 Legendary Reserve | Classic chamber: monumental gold entrance, red carpet, gold columns, treasure heaps, stepped gold plinths, treasure tables, tiered dais | 30 | centre | 730 | 110 (76%) |
 
-The world totals **5,572 parts**; the harness budget is under 9,000. Live loot comes on top of that, at 48–64 pooled items per depth.
+The world totals **5,728 parts**; the harness budget is under 9,000. Live loot comes on top of that, at 48–64 pooled items per depth.
 
-**Loot staging (B1–B5).** Most spawn points sit on the furniture of each floor:
+**Loot staging.** Most spawn points sit on the furniture of each floor:
 - B1: rack shelves, counting tables, carts, open drawers and pallets.
 - B2: ring and wall racks, gold pallets.
 - B3: pedestals and trays.
 - B4: alcove cases and nave stands.
 - B5: rack shelves, the conveyor belt and the press output tables.
+- B6: stepped display platforms (top and lower-step corners) and relic tables.
+- B7: stepped gold plinths and treasure tables.
 
 The rest are loose floor items along the walking lanes, never on the routes (elevator → chamber → exit door), which are kept-out boxes.
 
@@ -222,12 +224,12 @@ To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build
    - Pickup cooldowns with a tolerance, rate limits, and NaN- and junk-safe remotes.
    - The stack is taken before payment, and claims are atomic.
 6. **Performance:**
-   - 5,572 static parts.
+   - 5,728 static parts.
    - Pooled loot.
    - One Heartbeat step on the server, with no per-object loops.
    - Budgets for stack pieces, effects and the range at which other players' stacks are drawn.
    - Position-based zone checks (no Touched events).
-   - StreamingEnabled is off, because the whole world is about 5,600 parts.
+   - StreamingEnabled is off, because the whole world is about 5,700 parts.
 7. **Testing:** see the checks above. No Studio playtest was done.
 8. **Visual QA:** 34 renders, including a top-down plan of every depth, covering every depth's arrival, chamber and stacks views, plus the exit, deposit, elevator, B7 entrance, catalog and stack modes. Fixed from them: rooms rescaled, B1–B5 given distinct floor plans, stacks lowered below the face, the catalog re-framed.
 9. **Known limitations:** listed below.

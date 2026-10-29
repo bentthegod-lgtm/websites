@@ -222,7 +222,15 @@ function StackController.init()
 	end
 	Players.PlayerAdded:Connect(track)
 	Players.PlayerRemoving:Connect(untrack)
-	ClientState.SettingsChanged:Connect(StackController.refreshAll)
+	-- Only the two settings stacks use (a volume slider drag fires this on every mouse move).
+	local lastShow, lastReduced
+	ClientState.SettingsChanged:Connect(function()
+		local show, reduced = ClientState.setting("ShowOthers"), ClientState.setting("ReducedEffects")
+		if show ~= lastShow or reduced ~= lastReduced then
+			lastShow, lastReduced = show, reduced
+			StackController.refreshAll()
+		end
+	end)
 	RunService.Heartbeat:Connect(function(dt)
 		rangeClock += dt
 		if rangeClock >= 0.5 then

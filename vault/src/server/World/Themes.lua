@@ -35,7 +35,7 @@ local STYLES = {
 	{ WallMaterial = M.Concrete, FloorMaterial = M.DiamondPlate, LightBrightness = 2.3, PipeColor = rgb(150, 110, 60) },
 	{ WallMaterial = M.Marble, FloorMaterial = M.Marble, FloorReflect = 0.12, LightBrightness = 2.3 },
 	{ WallMaterial = M.Slate, FloorMaterial = M.Slate, LightBrightness = 2.2 },
-	{ WallMaterial = M.Metal, FloorMaterial = M.DiamondPlate, LightBrightness = 2.5, PipeColor = rgb(170, 200, 230) },
+	{ WallMaterial = M.Metal, FloorMaterial = M.Concrete, LightBrightness = 2.5, PipeColor = rgb(170, 200, 230) }, -- concrete slab: a full metal floor blew out under the strip lights
 	{ WallMaterial = M.Sandstone, FloorMaterial = M.Sandstone, LightBrightness = 2.2, PipeColor = rgb(140, 110, 70) },
 	{ WallMaterial = M.Marble, FloorMaterial = M.Marble, FloorReflect = 0.15, LightBrightness = 2.3, PipeColor = rgb(200, 160, 60) },
 }
@@ -135,17 +135,32 @@ local function artifactChamber(ctx)
 	end
 	reserve(ctx, -W2, -W2 + 11, -40, BACK)
 	reserve(ctx, W2 - 11, W2, -40, BACK)
-	-- Stepped display platforms: loot points.
+	-- Stepped display platforms: a relic on top, coins on the corners of the lower step.
 	for _, x in ipairs({ -38, -24, 24, 38 }) do
 		for _, z in ipairs({ -8, 16, 42 }) do
 			local cf = CFrame.new(x, y0, z)
-			b.part({ Name = "Step1", Size = Vector3.new(4.4, 1, 4.4), CFrame = cf * CFrame.new(0, 0.5, 0), Color = stoneDark, Material = M.Sandstone })
+			b.part({ Name = "Step1", Size = Vector3.new(5.6, 1, 5.6), CFrame = cf * CFrame.new(0, 0.5, 0), Color = stoneDark, Material = M.Sandstone })
 			b.part({ Name = "Step2", Size = Vector3.new(3.2, 1.2, 3.2), CFrame = cf * CFrame.new(0, 1.6, 0), Color = stone, Material = M.Sandstone })
 			b.deco({ Name = "StepTrim", Size = Vector3.new(3.3, 0.12, 3.3), CFrame = cf * CFrame.new(0, 2.22, 0), Color = accent, Material = M.Metal })
 			point(ctx, cf * CFrame.new(0, 2.28, 0), "M", "Plinth")
-			reserve(ctx, x - 2.8, x + 2.8, z - 2.8, z + 2.8)
+			for _, c in ipairs({ { -2.15, -2.15 }, { 2.15, -2.15 }, { -2.15, 2.15 }, { 2.15, 2.15 } }) do
+				point(ctx, cf * CFrame.new(c[1], 1.02, c[2]), "S", "Plinth")
+			end
+			reserve(ctx, x - 3.4, x + 3.4, z - 3.4, z + 3.4)
 		end
 	end
+	-- Relic tables between the platforms and the containment pods.
+	for _, x in ipairs({ -52, 52 }) do
+		for _, z in ipairs({ -24, -12, 0, 12, 24, 36, 48 }) do
+			local top = Props.table(b, CFrame.new(x, y0, z), 3, 6, 3, stoneDark, rgb(60, 50, 40))
+			b.deco({ Name = "TableCloth", Size = Vector3.new(2.6, 0.06, 5.6), CFrame = top * CFrame.new(0, 0.03, 0), Color = rgb(110, 40, 36), Material = M.Fabric })
+			point(ctx, top * CFrame.new(0, 0.06, -1.5), "M", "Table")
+			point(ctx, top * CFrame.new(0, 0.06, 1.5), "S", "Table")
+			reserve(ctx, x - 2, x + 2, z - 3.5, z + 3.5)
+		end
+	end
+	-- Loose loot only in the two lanes between the platform rows.
+	ctx.zones = { { -31, -31, -30, BACK - 8 }, { 31, 31, -30, BACK - 8 } }
 	-- Landmark: a sarcophagus in a containment field under a stone arch, with braziers.
 	local base = CFrame.new(0, y0, 18)
 	b.part({ Name = "Dais", Size = Vector3.new(12, 1.4, 14), CFrame = base * CFrame.new(0, 0.7, 0), Color = stoneDark, Material = M.Sandstone })
@@ -217,16 +232,33 @@ local function legendaryReserve(ctx)
 	end
 	reserve(ctx, -W2, -W2 + 15, -40, BACK)
 	reserve(ctx, W2 - 15, W2, -40, BACK)
-	-- Gold plinths: loot points.
+	-- Gold plinths on a stepped base: a crown or scepter on top, chalices on the step.
 	for _, x in ipairs({ -40, 40 }) do
-		for _, z in ipairs({ -4, 26, 48 }) do
+		for _, z in ipairs({ -19, -4, 11, 26, 37, 48 }) do
 			local cf = CFrame.new(x, y0, z)
+			b.part({ Name = "PlinthStep", Size = Vector3.new(6, 0.8, 6), CFrame = cf * CFrame.new(0, 0.4, 0), Color = rgb(40, 34, 46), Material = M.Marble })
 			b.part({ Name = "GoldPlinth", Size = Vector3.new(3.6, 3, 3.6), CFrame = cf * CFrame.new(0, 1.5, 0), Color = black, Material = M.Marble })
 			b.deco({ Name = "GoldPlinthTop", Size = Vector3.new(3.8, 0.2, 3.8), CFrame = cf * CFrame.new(0, 3.05, 0), Color = gold, Material = M.Metal })
 			point(ctx, cf * CFrame.new(0, 3.15, 0), "M", "Plinth")
-			reserve(ctx, x - 2.4, x + 2.4, z - 2.4, z + 2.4)
+			for _, c in ipairs({ { -2.3, -2.3 }, { 2.3, -2.3 }, { -2.3, 2.3 }, { 2.3, 2.3 } }) do
+				point(ctx, cf * CFrame.new(c[1], 0.82, c[2]), "S", "Plinth")
+			end
+			reserve(ctx, x - 3.4, x + 3.4, z - 3.4, z + 3.4)
 		end
 	end
+	-- Treasure tables either side of the carpet, clear of the columns and the dais.
+	for _, x in ipairs({ -18, 18 }) do
+		for _, z in ipairs({ -13, 0, 24, 52 }) do
+			local top = Props.table(b, CFrame.new(x, y0, z), 3, 7, 3, black, gold)
+			b.deco({ Name = "TableVelvet", Size = Vector3.new(2.6, 0.06, 6.6), CFrame = top * CFrame.new(0, 0.03, 0), Color = rgb(150, 24, 40), Material = M.Fabric })
+			point(ctx, top * CFrame.new(0, 0.06, -2.3), "S", "Table")
+			point(ctx, top * CFrame.new(0, 0.06, 0), "M", "Table")
+			point(ctx, top * CFrame.new(0, 0.06, 2.3), "S", "Table")
+			reserve(ctx, x - 2, x + 2, z - 4, z + 4)
+		end
+	end
+	-- Loose loot only in the lanes between the gold columns and the plinths.
+	ctx.zones = { { -33, -33, -30, BACK - 8 }, { 33, 33, -30, BACK - 8 } }
 	-- Landmark: a tiered treasure dais with a golden chest and shafts of light.
 	local base = CFrame.new(0, y0, 22)
 	for i, d in ipairs({ 20, 15, 10 }) do

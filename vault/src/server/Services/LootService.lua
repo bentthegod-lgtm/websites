@@ -260,7 +260,8 @@ function LootService.collect(player, id, opts)
 	local def = entry.def
 	local slots = Economy.slotsFor(def, stats)
 	if data.Carried.Slots + slots > stats.Capacity then
-		if not lastFullNotice[player] or now - lastFullNotice[player] > 2.5 then
+		-- Auto-Collect retries every interval: only a manual press says "full".
+		if not opts.auto and (not lastFullNotice[player] or now - lastFullNotice[player] > 2.5) then
 			lastFullNotice[player] = now
 			services.Remotes.Popup:FireClient(player, "StackFull", { capacity = stats.Capacity })
 		end
@@ -355,11 +356,12 @@ local function stepMagnet(dt)
 					end
 				end
 			end
-			if list and stats.AutoRadius > 0 and (not lastAuto[player] or now - lastAuto[player] >= stats.AutoInterval) then
+			if list and stats.AutoRadius > 0 and data.Carried.Slots < stats.Capacity and (not lastAuto[player] or now - lastAuto[player] >= stats.AutoInterval) then
 				local best, bestDist = nil, math.huge
 				for _, entry in pairs(list) do
 					local d = (entry.position - rootPos).Magnitude
-					if d <= stats.AutoRadius and d < bestDist then
+					local free = not entry.pulledBy or entry.pulledBy == player or now - (entry.pulledAt or 0) >= 3
+					if free and d <= stats.AutoRadius and d < bestDist then
 						best, bestDist = entry, d
 					end
 				end

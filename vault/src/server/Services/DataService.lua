@@ -30,6 +30,7 @@ local UpgradeConfig = require(Shared.Config.UpgradeConfig)
 local DepthConfig = require(Shared.Config.DepthConfig)
 local LootConfig = require(Shared.Config.LootConfig)
 local CosmeticConfig = require(Shared.Config.CosmeticConfig)
+local ShopConfig = require(Shared.Config.ShopConfig)
 local Economy = require(Shared.Economy)
 
 local STORE_SUFFIX = if RunService:IsStudio() then "_Studio" else ""
@@ -142,6 +143,7 @@ local function reconcile(data)
 	for _, field in ipairs({ "Cash", "Tokens", "TotalEarned", "EarnedSinceRebirth", "BestDeposit", "Rebirths", "BoostUntil" }) do
 		data[field] = math.floor(num(data[field], 0, 0))
 	end
+	data.BoostUntil = math.min(data.BoostUntil, os.time() + ShopConfig.BoostMax) -- a boost never runs past its cap
 	for k, level in pairs(data.Upgrades) do
 		local def = UpgradeConfig.ByKey[k]
 		data.Upgrades[k] = if def then math.floor(num(level, 0, 0, def.Max)) else nil
@@ -257,7 +259,7 @@ function DataService.stats(player)
 	if not data then
 		return Economy.stats(nil)
 	end
-	local state = { Upgrades = data.Upgrades, Perks = data.Perks, Rebirths = data.Rebirths, BoostUntil = data.BoostUntil, Vip = services.ShopService and services.ShopService.ownsPass(player, "VIP") or false }
+	local state = { Upgrades = data.Upgrades, Perks = data.Perks, Rebirths = data.Rebirths, BoostUntil = data.BoostUntil, Vip = services.ShopService and services.ShopService.cachedPass(player, "VIP") or false }
 	return Economy.stats(state, os.time())
 end
 
@@ -482,8 +484,12 @@ function DataService.load(player)
 		end
 		return
 	end
-	profiles[player] = { data = reconcile(data), persistent = persistent, dirty = false, session = session }
+	local entry = { data = reconcile(data), persistent = persistent, dirty = false, session = session }
+	profiles[player] = entry
 	for _, name in ipairs(HOOKS) do
+		if profiles[player] ~= entry then
+			return -- left while a hook yielded (pass lookup): the leave save already ran
+		end
 		local service = services[name]
 		if service and service.onProfileLoaded then
 			local ok, err = pcall(service.onProfileLoaded, player)
@@ -491,6 +497,9 @@ function DataService.load(player)
 				warn("[Vault] " .. name .. ".onProfileLoaded failed: " .. tostring(err))
 			end
 		end
+	end
+	if profiles[player] ~= entry then
+		return
 	end
 	DataService.sendProfileNow(player)
 	if not persistent then
