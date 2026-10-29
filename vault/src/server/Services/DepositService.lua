@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Vault")
 local GameConfig = require(Shared.Config.GameConfig)
+local LootConfig = require(Shared.Config.LootConfig)
 local Economy = require(Shared.Economy)
 local Format = require(Shared.Format)
 
@@ -98,7 +99,8 @@ function DepositService.deposit(player, machineId, viaZone)
 	services.Analytics.funnel(player, "FirstDeposit")
 	services.Analytics.custom(player, "Deposit", payout)
 	services.Remotes.Deposited:FireAllClients(player.UserId, summary)
-	if record and payout >= 1000000 then
+	-- The announce bar follows the loot rescale (a full stack is worth FullPoolValue as much).
+	if record and payout >= 1000000 * LootConfig.FullPoolValue then
 		services.Remotes.Announce:FireAllClients(string.format("%s deposited a record $%s!", player.DisplayName, Format.short(payout)), { 120, 255, 170 })
 	end
 	services.LootService.sendInventory(player)

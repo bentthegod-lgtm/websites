@@ -67,21 +67,35 @@ end
 CollectController.partOf = partOf
 
 -- Client spatial hash of the pickups, per depth (thousands fill a pool; no full scans).
+-- Each entry follows its part: the magnet slides items toward a player (and a pooled part
+-- can be re-placed without a ChildRemoved/ChildAdded pair reaching the client).
 local hashes = {}
+local moved = {} -- [obj] = CFrame-changed connection
 local function hashFor(depth)
 	hashes[depth] = hashes[depth] or SpatialHash.new(8)
 	return hashes[depth]
+end
+local function onRemoved(obj)
+	for _, h in pairs(hashes) do
+		h:remove(obj)
+	end
+	if moved[obj] then
+		moved[obj]:Disconnect()
+		moved[obj] = nil
+	end
 end
 local function onAdded(obj)
 	local depth = obj:GetAttribute("Depth")
 	local part = partOf(obj)
 	if depth and part then
-		hashFor(depth):insert(obj, part.CFrame.Position)
-	end
-end
-local function onRemoved(obj)
-	for _, h in pairs(hashes) do
-		h:remove(obj)
+		onRemoved(obj)
+		local hash = hashFor(depth)
+		hash:insert(obj, part.CFrame.Position)
+		moved[obj] = part:GetPropertyChangedSignal("CFrame"):Connect(function()
+			if hash.where[obj] ~= nil then
+				hash:move(obj, part.CFrame.Position)
+			end
+		end)
 	end
 end
 CollectController.indexed = function(depth)
@@ -96,8 +110,8 @@ local function scan()
 	local stats = ClientState.stats()
 	local pos = root.CFrame.Position
 	local best, bestDist = nil, stats.Radius
-	-- A little extra search radius: magnet-pulled items drift from where they were indexed.
-	for _, obj in ipairs(hashFor(myDepth()):query(pos, stats.Radius + 8)) do
+	-- The hash follows moved items, so the reach radius is enough (horizontal <= 3D distance).
+	for _, obj in ipairs(hashFor(myDepth()):query(pos, stats.Radius)) do
 		local hit = obj.Parent and partOf(obj)
 		if hit then
 			local d = (hit.CFrame.Position - pos).Magnitude

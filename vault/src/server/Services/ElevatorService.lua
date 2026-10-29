@@ -117,7 +117,8 @@ function ElevatorService.travel(player, depth)
 	tokenCounter += 1
 	local ride = { to = depth, from = from, token = tokenCounter }
 	riding[player] = ride
-	services.LootService.activate(depth) -- start filling the destination's pool now
+	-- Start filling the destination's pool now, round the doors the rider will step out of.
+	services.LootService.activate(depth, false, world.depths[depth].elevator.arrival.Position)
 	local duration = ElevatorService.rideTime(from, depth)
 	services.Remotes.Elevator:FireClient(player, "Depart", { from = from, to = depth, duration = duration, code = def.Code, name = def.Name })
 	task.delay(duration, arrive, player, ride)

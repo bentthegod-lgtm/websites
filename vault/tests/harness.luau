@@ -815,6 +815,10 @@ check("player joins: default profile, placed in the B1 elevator, leaderstats, to
 	assert((aliceRoot.CFrame.Position - arrival).Magnitude < 3, "not placed in the B1 elevator")
 	assert(p.Tutorial.Step == 1 and not p.Tutorial.Done, "tutorial state")
 	assert(alice:GetAttribute("V_Count") == 0 and alice:GetAttribute("V_Capacity") == 10, "stack attributes")
+	-- B1 fills round her spawn over a couple of seconds (queued, not one 2,000-part frame).
+	assert(LS.isActive(1) and LS.count(1) <= LS.FillPerTick, "B1's fill was not queued on join")
+	tick(2)
+	assert(LS.count(1) == #world.depths[1].points and LS.queued(1) == 0, "B1 not full 2 s after joining")
 end)
 
 check("collect: server checks distance, depth and cooldown; value fixed at pickup; model pooled", function()
@@ -1097,11 +1101,25 @@ check("pool fill: fills on arrival (and for elevator riders), unloads when empty
 	LS.unload(d)
 	assert(not LS.isActive(d) and LS.count(d) == 0, "B5 should start empty")
 	local record = world.depths[d]
-	-- Arrive on B5's rim: the occupancy check fills it within a second (300 per tick).
-	moveTo(ellaRoot, V3.new(30, record.y0 + 3, -60))
+	-- Arrive on B5's rim: the occupancy check starts the fill, nearest slots first, at most
+	-- FillPerTick per tick; the whole pool is in within ~2 s.
+	local arrive = V3.new(30, record.y0 + 3, -60)
+	moveTo(ellaRoot, arrive)
 	tick(0.6)
 	assert(LS.isActive(d), "B5 did not fill when a player arrived")
-	tick(1)
+	assert(LS.count(d) <= 2 * LS.FillPerTick, "B5 filled " .. LS.count(d) .. " pickups in its first ticks")
+	local near, far
+	for _, point in ipairs(record.points) do
+		local dd = (point.cframe.Position - arrive).Magnitude
+		if not near or dd < near[2] then
+			near = { point, dd }
+		end
+		if not far or dd > far[2] then
+			far = { point, dd }
+		end
+	end
+	assert(LS.slot(d, near[1].index) and not LS.slot(d, far[1].index), "the fill did not start next to the player")
+	tick(2)
 	assert(LS.count(d) == #record.points and LS.queued(d) == 0, string.format("B5 filled %d of %d slots", LS.count(d), #record.points))
 	-- Nearest pickup on the dense grid matches a brute-force search.
 	for _, q in ipairs({ V3.new(0, record.y0 - 20, 0), V3.new(-30, record.y0 - 9, -28), V3.new(20, record.y0 - 42, 44) }) do
@@ -1122,6 +1140,7 @@ check("pool fill: fills on arrival (and for elevator riders), unloads when empty
 	advance(1)
 	assert(LS.collect(ella, entry.id), "could not collect from the full pool")
 	assert(LS.slot(d, point.index) == nil and entry.model == nil, "collected slot still filled")
+	LS.activate(d, true) -- someone else joining on B5 must not refill it early
 	tick(record.def.RefillDelay - 0.5)
 	assert(LS.slot(d, point.index) == nil, "refilled too early")
 	tick(1)

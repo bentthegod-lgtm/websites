@@ -66,7 +66,7 @@ local magnetClock = 0
 local rare = { nextAt = 0, depthAt = {}, entry = nil }
 
 LootService.Debug = { spawned = 0, reused = 0, activations = 0, unloads = 0 }
-LootService.FillPerTick = 300 -- pickups materialised per 0.1 s tick (spreads a pool's fill over ~0.6 s)
+LootService.FillPerTick = 120 -- pickups materialised per 0.1 s tick, shared by every depth (a pool fills in ~1.6 s, nearest slots first)
 LootService.UnloadAfter = 30 -- seconds a depth stays filled after its last player leaves
 
 function LootService.init(registry)
@@ -196,8 +196,9 @@ local function showStandin(depth, shown)
 	end
 end
 
--- Materialise a depth's fill (queued; `immediate` fills every slot right now).
-function LootService.activate(depth, immediate)
+-- Materialise a depth's fill (queued, the slots nearest `near` first so the area round an
+-- arriving player fills before the far corners; `immediate` fills every due slot right now).
+function LootService.activate(depth, immediate, near)
 	local st = state[depth]
 	if not st then
 		return
@@ -208,14 +209,26 @@ function LootService.activate(depth, immediate)
 		LootService.Debug.activations += 1
 		st.queue:clear()
 		local now = os.clock()
-		for _, point in ipairs(world.depths[depth].points) do
+		local points = world.depths[depth].points
+		if near then
+			points = table.clone(points)
+			local dist = {}
+			for _, point in ipairs(points) do
+				dist[point] = (point.cframe.Position - near).Magnitude
+			end
+			table.sort(points, function(a, b)
+				return dist[a] < dist[b]
+			end)
+		end
+		for _, point in ipairs(points) do
 			st.queue:push(point, now)
 		end
 		showStandin(depth, false)
 	end
 	if immediate then
+		-- Only what is due: collected slots still wait out their RefillDelay.
 		local luck = bestLuck(depth)
-		for _, point in ipairs(st.queue:popDue(math.huge)) do
+		for _, point in ipairs(st.queue:popDue(os.clock())) do
 			LootService.fillSlot(depth, point, luck)
 		end
 	end
@@ -244,23 +257,24 @@ function LootService.isActive(depth)
 	return state[depth] ~= nil and state[depth].active
 end
 
--- Which depths someone is on or heading to (a vault tunnel, an elevator ride).
+-- Which depths someone is on or heading to (a vault tunnel, an elevator ride), each with
+-- where they are or will arrive (the fill starts there).
 local function occupied()
 	local set = {}
 	for _, player in ipairs(services.DataService.loadedPlayers()) do
 		local root = services.PlayerService.root(player)
 		if root then
 			local d = services.PlayerService.depthOf(player)
-			set[d] = true
 			local pos = root.CFrame.Position
+			set[d] = set[d] or pos
 			local record = world.depths[d]
 			if record and pos.Z > GameConfig.RoomBack - 12 and pos.Y < record.y0 - 30 then
-				set[d + 1] = true -- behind the vault door, on the way down
+				set[d + 1] = set[d + 1] or record.tunnelEnd or pos -- behind the vault door, on the way down
 			end
 		end
 		local target = services.ElevatorService.rideTarget(player)
-		if target then
-			set[target] = true
+		if target and world.depths[target] then
+			set[target] = set[target] or world.depths[target].elevator.arrival.Position
 		end
 	end
 	return set
@@ -273,7 +287,7 @@ local function stepFill(now)
 		local set = occupied()
 		for depth, st in pairs(state) do
 			if set[depth] then
-				LootService.activate(depth)
+				LootService.activate(depth, false, set[depth])
 			elseif st.active then
 				st.emptySince = st.emptySince or now
 				if now - st.emptySince >= LootService.UnloadAfter then
@@ -282,9 +296,12 @@ local function stepFill(now)
 			end
 		end
 	end
+	-- One spawn budget per tick for the whole server (several depths can fill at once).
+	local budget = LootService.FillPerTick
 	for depth, st in pairs(state) do
-		if st.active and st.queue:size() > 0 then
-			local due = st.queue:popDue(now, LootService.FillPerTick)
+		if budget > 0 and st.active and st.queue:size() > 0 then
+			local due = st.queue:popDue(now, budget)
+			budget -= #due
 			if #due > 0 then
 				local luck = bestLuck(depth)
 				for _, point in ipairs(due) do
@@ -435,21 +452,28 @@ local function stepMagnet(dt)
 			local rootPos = root.CFrame.Position
 			local now = os.clock()
 			if list and stats.MagnetRadius > 0 and data.Carried.Slots < stats.Capacity then
-				-- The nearest MagnetMaxPull free items in range slide in (spatial hash lookup).
+				-- The nearest MagnetMaxPull free items in range slide in (spatial hash lookup; a
+				-- full pool puts ~1,000 items inside a big magnet, so keep only the nearest few
+				-- instead of sorting them all).
+				local max = GameConfig.MagnetMaxPull
 				local candidates = {}
 				for _, id in ipairs(hashes[depth]:query(rootPos, stats.MagnetRadius)) do
 					local entry = loot[id]
-					local offset = rootPos - entry.position
-					local dist = Vector3.new(offset.X, 0, offset.Z).Magnitude
-					local free = not entry.pulledBy or entry.pulledBy == player or now - (entry.pulledAt or 0) > 3
-					if free and dist > 2.2 then
-						table.insert(candidates, { entry = entry, dist = dist })
+					local dx, dz = rootPos.X - entry.position.X, rootPos.Z - entry.position.Z
+					local dist = math.sqrt(dx * dx + dz * dz)
+					if dist > 2.2 and (#candidates < max or dist < candidates[#candidates].dist) then
+						local free = not entry.pulledBy or entry.pulledBy == player or now - (entry.pulledAt or 0) > 3
+						if free then
+							local at = #candidates + 1
+							while at > 1 and candidates[at - 1].dist > dist do
+								at -= 1
+							end
+							table.insert(candidates, at, { entry = entry, dist = dist })
+							candidates[max + 1] = nil
+						end
 					end
 				end
-				table.sort(candidates, function(a, b)
-					return a.dist < b.dist
-				end)
-				for i = 1, math.min(#candidates, GameConfig.MagnetMaxPull) do
+				for i = 1, math.min(#candidates, max) do
 					local entry = candidates[i].entry
 					local offset = rootPos - entry.position
 					local flat = Vector3.new(offset.X, 0, offset.Z)
@@ -573,8 +597,10 @@ function LootService.rareEntry()
 end
 
 function LootService.onProfileLoaded(player)
+	-- Start filling the player's pool round their spawn (queued, not one 2,000-part frame).
 	local data = services.DataService.getProfile(player)
-	LootService.activate(data and data.CurrentDepth or 1, true) -- the pool is full on arrival
+	local record = world.depths[data and data.CurrentDepth or 1]
+	LootService.activate(data and data.CurrentDepth or 1, false, record and record.elevator.arrival.Position)
 	LootService.sendInventory(player)
 end
 
