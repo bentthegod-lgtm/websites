@@ -13,7 +13,7 @@ local Shared = ReplicatedStorage:WaitForChild("Vault")
 local Net = require(Shared.Net)
 local LightingPresets = require(Shared.LightingPresets)
 
--- The deepest floor sits ~900 studs down: keep characters there alive.
+-- The deepest pool bottom sits ~585 studs down: keep characters there alive.
 workspace.FallenPartsDestroyHeight = -3000
 LightingPresets.apply(Lighting, LightingPresets.CashVault)
 Net.setup()
@@ -63,6 +63,7 @@ registry.DataService.start() -- last: loading profiles calls into every other se
 RunService.Heartbeat:Connect(function(dt)
 	registry.LootService.step(dt)
 	registry.DepositService.step(dt)
+	registry.PlayerService.step(dt)
 end)
 
 print(string.format("[Vault] Server ready: %d depths, %d world parts.", #world.depths, world.partCount))

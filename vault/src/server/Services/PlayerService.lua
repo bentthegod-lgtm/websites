@@ -9,6 +9,12 @@
 	  is only ever a reset / fall; losing a stack to it would feel arbitrary). It is stored
 	  in the profile, so it also survives a disconnect.
 	* Walk speed follows the Movement Speed upgrade and is re-applied on every spawn.
+	* Walking down: the depths are joined by tunnels, so a player who walks onto the next
+	  (unlocked) depth's rim has it recorded as their current depth, like an elevator ride.
+	* Safety: twice a second every character must be inside one of the world's safe volumes
+	  (rims, pools, tunnels - VaultBuilder's safe zones). Anyone outside them (fell through
+	  the map, glitched into rock, or got past a locked door onto a depth they haven't
+	  unlocked) is put back in the elevator on their current depth's rim.
 ]]
 
 local Players = game:GetService("Players")
@@ -24,6 +30,8 @@ local PlayerService = {}
 local services
 local world
 local connections = {}
+local safetyClock = 0
+PlayerService.Rescues = 0
 
 function PlayerService.init(registry)
 	services = registry
@@ -137,6 +145,63 @@ function PlayerService.onPlayerRemoving(player)
 	if connections[player] then
 		connections[player]:Disconnect()
 		connections[player] = nil
+	end
+end
+
+
+local function inSafeZone(position)
+	for _, record in ipairs(world.depths) do
+		for _, zone in ipairs(record.safeZones or {}) do
+			local lo, hi = zone[1], zone[2]
+			if position.X >= lo.X - 2 and position.X <= hi.X + 2 and position.Y >= lo.Y - 2 and position.Y <= hi.Y + 8 and position.Z >= lo.Z - 2 and position.Z <= hi.Z + 2 then
+				return true
+			end
+		end
+	end
+	return false
+end
+PlayerService.inSafeZone = inSafeZone
+
+-- Puts a player back on their current depth's rim (out of bounds / locked depth).
+function PlayerService.rescue(player, reason)
+	local data = services.DataService.getProfile(player)
+	if not data then
+		return
+	end
+	PlayerService.Rescues += 1
+	services.ElevatorService.cancel(player)
+	PlayerService.place(player, data.CurrentDepth)
+	services.Remotes.Notify:FireClient(player, reason or "You were returned to the rim.", "info")
+end
+
+-- Twice a second: out-of-bounds rescue and depth tracking for players who walk down.
+function PlayerService.step(dt)
+	safetyClock += dt
+	if safetyClock < 0.5 or not world then
+		return
+	end
+	safetyClock = 0
+	for _, player in ipairs(services.DataService.loadedPlayers()) do
+		local root = PlayerService.root(player)
+		local data = services.DataService.getProfile(player)
+		if root and data and not services.ElevatorService.isRiding(player) then
+			local pos = root.CFrame.Position
+			local depth = DepthConfig.depthAtY(pos.Y, GameConfig.DepthSpacing)
+			if not inSafeZone(pos) then
+				PlayerService.rescue(player, "Out of bounds - you were returned to the rim.")
+			elseif depth > data.HighestDepth then
+				PlayerService.rescue(player, DepthConfig.get(depth).Name .. " is locked. Unlock it at the elevator panel first.")
+			elseif depth ~= data.CurrentDepth then
+				data.CurrentDepth = depth
+				services.DataService.markDirty(player)
+				PlayerService.updateAttributes(player)
+				if depth > 1 then
+					services.DataService.bump(player, "Visit:" .. depth, 1)
+					services.QuestService.tutorialEvent(player, "TravelDeep")
+				end
+				services.DataService.sendProfile(player)
+			end
+		end
 	end
 end
 

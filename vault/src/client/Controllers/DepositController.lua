@@ -18,6 +18,8 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Vault")
 local LootConfig = require(Shared.Config.LootConfig)
+local DepthConfig = require(Shared.Config.DepthConfig)
+local GameConfig = require(Shared.Config.GameConfig)
 local Format = require(Shared.Format)
 local LootModels = require(Shared.LootModels)
 
@@ -61,10 +63,13 @@ end
 -- Nearest machine on the character's floor (HUD arrow when the stack is full).
 function DepositController.nearest(position)
 	local best, bestDist
+	local code = DepthConfig.get(DepthConfig.depthAtY(position.Y, GameConfig.DepthSpacing)).Code
 	for _, m in pairs(machines) do
-		if m.chute then
-			local d = (m.chute.Position - position).Magnitude
-			if math.abs(m.chute.Position.Y - position.Y) < 40 and (not bestDist or d < bestDist) then
+		if m.chute and m.code == code then
+			-- Climbing costs more than walking: height counts double.
+			local offset = m.chute.Position - position
+			local d = Vector3.new(offset.X, offset.Y * 2, offset.Z).Magnitude
+			if not bestDist or d < bestDist then
 				best, bestDist = m, d
 			end
 		end
@@ -233,7 +238,7 @@ local function pulse(dt)
 	local root = ClientState.root()
 	local t = os.clock()
 	for _, m in pairs(machines) do
-		if os.clock() >= m.busyUntil and root and m.chute and math.abs(m.chute.Position.Y - root.Position.Y) < 40 then
+		if os.clock() >= m.busyUntil and root and m.chute and math.abs(m.chute.Position.Y - root.Position.Y) < 50 then
 			local glow = if carrying then (math.sin(t * 4) + 1) / 2 else 0
 			for i, lamp in ipairs(m.lamps) do
 				local phase = if carrying then (math.sin(t * 4 - i * 0.6) + 1) / 2 else glow

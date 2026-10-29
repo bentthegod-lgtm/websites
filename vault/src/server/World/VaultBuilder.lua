@@ -1,24 +1,17 @@
 --[[
-	VaultBuilder - builds the whole underground vault: seven depths stacked in one
-	continuous structure around a shared elevator shaft.
+	VaultBuilder - builds the whole underground vault: seven depths, each a DEEP POOL OF
+	TREASURE, stacked 90 studs apart around a shared elevator shaft and joined physically
+	by tunnels behind each pool's vault door (see Pools.lua for one depth's layout).
 
-	Every depth follows the same floor plan, dressed differently by Themes:
-	  * Arrival hall (z -72..-38): elevator cabin in the back wall, deposit machine(s) on the
-	    left, upgrade terminal on the right, depth signage, the painted depth number,
-	    maintenance / security access doors, cameras.
-	  * A line of pillars with an overhead "MAIN CHAMBER" beam (z -38).
-	  * Main chamber (z -36..72): a clear central aisle from the elevator to the exit, the
-	    depth's landmark, storage along the side walls, collection zones left and right.
-	  * Exit route (z 74..97): a corridor to a massive circular vault door with restricted
-	    signage, a reinforced window into a preview chamber of the NEXT depth, and sealed
-	    maintenance stairs going down behind the door.
-	Ceiling infrastructure on every floor: beams, ventilation ducts, cable trays, pipes,
-	light fixtures.
+	Per depth: the shell (rim decks round the pool, outer walls, ceiling, the arrival
+	hall's plates, lights, access doors and cameras), the arrival area (elevator cabin,
+	deposit machine(s), upgrade terminal, signage), then Pools.build (basin, treasure
+	surface and decoration, rims, monument, chute deposit, vault door, tunnel, preview
+	room, spawn points, safe zones), then the preview room dressing (Themes.build).
 
-	Loot spawn points are generated per depth (floor grid in the collection zones plus
-	shelf / table / plinth points the theme adds) and filtered against keep-out boxes
-	(aisle, landmark, machines, doorways) so loot never blocks a route.
-	Returns a world record (see the bottom) used by every service.
+	Loot spawn points are kept only if Reach finds them reachable on foot from the arrival
+	deck and within pickup range. Returns a world record (see the bottom) used by every
+	service.
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -31,7 +24,7 @@ local LootTable = require(Shared.LootTable)
 local Props = require(script.Parent.Props)
 local Machines = require(script.Parent.Machines)
 local Themes = require(script.Parent.Themes)
-local Plans = require(script.Parent.Plans)
+local Pools = require(script.Parent.Pools)
 local Reach = require(script.Parent.Reach)
 
 local VaultBuilder = {}
@@ -40,10 +33,10 @@ local M = Enum.Material
 local C = Props.Colors
 local Z = Vector3.zAxis
 
-local W2 = GameConfig.RoomWidth / 2 -- 84
+local W2 = GameConfig.RoomWidth / 2 -- 70
 local FRONT = GameConfig.RoomFront -- -72
-local BACK = GameConfig.RoomBack -- 74
-local HALL_END = -38
+local BACK = GameConfig.RoomBack -- 60
+local POOL = Pools.Pool
 
 local function facing(pos, dir)
 	return CFrame.lookAt(pos, pos + dir)
@@ -56,35 +49,50 @@ local function inBox(box, x, z, pad)
 end
 VaultBuilder.inBox = inBox
 
--- The facility envelope every depth shares: floor slab, outer walls (elevator opening at
--- the front, exit opening at the plan's exit x at the back), ceiling, the arrival hall's
--- plates, signage, access doors, cameras and lights.
+-- The envelope every depth shares: rim decks round the pool, outer walls (elevator opening
+-- at the front; on B2+ the arrival tunnel's opening at the back), ceiling, the arrival
+-- hall's plates, lights, access doors and cameras.
 local function shell(ctx)
 	local b, y0, pal = ctx.b, ctx.y0, ctx.palette
 	local wall, floor, trim, accent, light = Props.rgb(pal.Wall), Props.rgb(pal.Floor), Props.rgb(pal.Trim), Props.rgb(pal.Accent), Props.rgb(pal.Light)
 	local style = ctx.style
-	local H, ex = ctx.H, ctx.exitX
-	b.part({ Name = "Floor", Size = Vector3.new(GameConfig.RoomWidth + 4, 2, BACK - FRONT + 4), CFrame = CFrame.new(0, y0 - 1, (FRONT + BACK) / 2), Color = floor, Material = style.FloorMaterial, Reflectance = style.FloorReflect or 0 })
-	b.deco({ Name = "HallPlates", Size = Vector3.new(GameConfig.RoomWidth, 0.06, HALL_END - FRONT), CFrame = CFrame.new(0, y0 + 0.03, (FRONT + HALL_END) / 2), Color = trim, Material = M.DiamondPlate })
+	local H = ctx.H
+	local function deck(name, x0, x1, z0, z1)
+		return b.part({ Name = name, Size = Vector3.new(x1 - x0, 2, z1 - z0), CFrame = CFrame.new((x0 + x1) / 2, y0 - 1, (z0 + z1) / 2), Color = floor, Material = style.FloorMaterial, Reflectance = style.FloorReflect or 0 })
+	end
+	deck("FrontDeck", -W2, W2, FRONT, POOL.z0)
+	deck("SideRim", -W2, POOL.x0, POOL.z0, BACK + 2)
+	deck("SideRim", POOL.x1, W2, POOL.z0, BACK + 2)
+	deck("BackRim", POOL.x0, POOL.x1, POOL.z1, BACK + 2)
+	b.deco({ Name = "HallPlates", Size = Vector3.new(GameConfig.RoomWidth, 0.06, POOL.z0 - FRONT), CFrame = CFrame.new(0, y0 + 0.03, (FRONT + POOL.z0) / 2), Color = trim, Material = M.DiamondPlate })
+	b.deco({ Name = "PoolEdge", Size = Vector3.new(POOL.x1 - POOL.x0, 0.1, 1), CFrame = CFrame.new(0, y0 + 0.05, POOL.z0 - 0.5), Color = C.Hazard, Material = M.SmoothPlastic, CastShadow = false })
 	local function wallPart(name, size, pos)
 		return b.part({ Name = name, Size = size, CFrame = CFrame.new(pos), Color = wall, Material = style.WallMaterial })
 	end
-	wallPart("WallLeft", Vector3.new(2, H, BACK - FRONT + 4), Vector3.new(-W2 - 1, y0 + H / 2, (FRONT + BACK) / 2))
-	wallPart("WallRight", Vector3.new(2, H, BACK - FRONT + 4), Vector3.new(W2 + 1, y0 + H / 2, (FRONT + BACK) / 2))
+	local zMid, zLen = (FRONT + BACK + 4) / 2, BACK + 4 - FRONT
+	wallPart("WallLeft", Vector3.new(2, H + 2, zLen), Vector3.new(-W2 - 1, y0 - 2 + (H + 2) / 2, zMid))
+	wallPart("WallRight", Vector3.new(2, H + 2, zLen), Vector3.new(W2 + 1, y0 - 2 + (H + 2) / 2, zMid))
 	-- Front wall: elevator opening x -7..7, height 11.
 	wallPart("WallFrontL", Vector3.new(W2 - 7, H, 2), Vector3.new(-(W2 + 7) / 2, y0 + H / 2, FRONT - 1))
 	wallPart("WallFrontR", Vector3.new(W2 - 7, H, 2), Vector3.new((W2 + 7) / 2, y0 + H / 2, FRONT - 1))
 	wallPart("WallFrontTop", Vector3.new(14, H - 11, 2), Vector3.new(0, y0 + 11 + (H - 11) / 2, FRONT - 1))
-	-- Back wall: exit opening ex-12 .. ex+12, height 20.
-	local l0, r0 = ex - 12, ex + 12
-	wallPart("WallBackL", Vector3.new(l0 + W2, H, 2), Vector3.new((-W2 + l0) / 2, y0 + H / 2, BACK + 1))
-	wallPart("WallBackR", Vector3.new(W2 - r0, H, 2), Vector3.new((r0 + W2) / 2, y0 + H / 2, BACK + 1))
-	wallPart("WallBackTop", Vector3.new(24, H - 20, 2), Vector3.new(ex, y0 + 20 + (H - 20) / 2, BACK + 1))
-	b.part({ Name = "Ceiling", Size = Vector3.new(GameConfig.RoomWidth + 4, 2, BACK - FRONT + 4), CFrame = CFrame.new(0, y0 + H + 1, (FRONT + BACK) / 2), Color = trim, Material = M.Concrete })
+	-- Back wall (z 62..64); B2+ have the opening where the tunnel from above arrives.
+	local bz = BACK + 3
+	local ax = Pools.Tunnel.arrivalX
+	if ctx.def.Depth >= 2 then
+		wallPart("WallBack", Vector3.new(ax - 5 + W2, H, 2), Vector3.new((-W2 + ax - 5) / 2, y0 + H / 2, bz))
+		wallPart("WallBack", Vector3.new(W2 - (ax + 5), H, 2), Vector3.new((ax + 5 + W2) / 2, y0 + H / 2, bz))
+		wallPart("WallBackTop", Vector3.new(10, H - 14, 2), Vector3.new(ax, y0 + 14 + (H - 14) / 2, bz))
+		local prev = DepthConfig.get(ctx.def.Depth - 1)
+		Props.sign(b, facing(Vector3.new(ax, y0 + 15.5, bz - 1.1), -Z), 10, 1.2, "FROM " .. prev.Code .. "  " .. string.upper(prev.Name), { Color = accent, PPS = 30 })
+	else
+		wallPart("WallBack", Vector3.new(GameConfig.RoomWidth, H, 2), Vector3.new(0, y0 + H / 2, bz))
+	end
+	b.part({ Name = "Ceiling", Size = Vector3.new(GameConfig.RoomWidth + 4, 2, zLen + 2), CFrame = CFrame.new(0, y0 + H + 1, zMid), Color = trim, Material = M.Concrete })
 	-- Wainscot band and accent stripe on the long walls (the facility's common trim).
 	for _, x in ipairs({ -W2 + 0.15, W2 - 0.15 }) do
-		b.deco({ Name = "Wainscot", Size = Vector3.new(0.3, 3, BACK - FRONT), CFrame = CFrame.new(x, y0 + 1.5, (FRONT + BACK) / 2), Color = trim, Material = M.Metal })
-		b.deco({ Name = "WallStripe", Size = Vector3.new(0.32, 0.5, BACK - FRONT), CFrame = CFrame.new(x, y0 + 3.2, (FRONT + BACK) / 2), Color = accent, Material = M.Metal })
+		b.deco({ Name = "Wainscot", Size = Vector3.new(0.3, 3, zLen), CFrame = CFrame.new(x, y0 + 1.5, zMid), Color = trim, Material = M.Metal })
+		b.deco({ Name = "WallStripe", Size = Vector3.new(0.32, 0.5, zLen), CFrame = CFrame.new(x, y0 + 3.2, zMid), Color = accent, Material = M.Metal })
 	end
 	-- Hall lights, side access doors and cameras.
 	for _, x in ipairs({ -30, 30 }) do
@@ -95,55 +103,6 @@ local function shell(ctx)
 	Props.accessDoor(b, facing(Vector3.new(W2, y0, -54), -Vector3.xAxis), "SECURITY")
 	Props.camera(b, facing(Vector3.new(-W2 + 0.4, y0 + 20, FRONT + 4), Vector3.new(1, 0, 1).Unit))
 	Props.camera(b, facing(Vector3.new(W2 - 0.4, y0 + 20, FRONT + 4), Vector3.new(-1, 0, 1).Unit))
-	table.insert(ctx.keepOut, { -W2, W2, FRONT, HALL_END + 2 }) -- the arrival hall itself
-	table.insert(ctx.keepOut, { ex - 8, ex + 8, BACK - 4, BACK + 30 }) -- the exit corridor
-end
-
--- The classic columned chamber (B6, B7): pillar line, pilasters, ceiling beams, ducts,
--- cable trays, pipes, a 3 x 3 light grid and a central aisle from the elevator to the exit.
-local function classicInterior(ctx)
-	local b, y0, pal, def = ctx.b, ctx.y0, ctx.palette, ctx.def
-	local trim, accent, light = Props.rgb(pal.Trim), Props.rgb(pal.Accent), Props.rgb(pal.Light)
-	local style, H = ctx.style, ctx.H
-	for z = FRONT + 10, BACK - 8, 16 do
-		for _, x in ipairs({ -W2 + 0.7, W2 - 0.7 }) do
-			b.part({ Name = "Pilaster", Size = Vector3.new(1.4, H, 2.4), CFrame = CFrame.new(x, y0 + H / 2, z), Color = trim, Material = style.WallMaterial })
-		end
-	end
-	for z = FRONT + 12, BACK - 6, 18 do
-		b.deco({ Name = "CeilingBeam", Size = Vector3.new(GameConfig.RoomWidth, 1.6, 1.2), CFrame = CFrame.new(0, y0 + H - 0.8, z), Color = C.SteelDark, Material = M.Metal })
-	end
-	for _, x in ipairs({ -44, 44 }) do
-		Props.duct(b, Vector3.new(x, y0 + H - 3.2, FRONT + 4), Vector3.new(x, y0 + H - 3.2, BACK - 4), 3.4, C.SteelLight)
-	end
-	for _, x in ipairs({ -18, 18 }) do
-		Props.cableTray(b, Vector3.new(x, y0 + H - 2.2, FRONT + 4), Vector3.new(x, y0 + H - 2.2, BACK - 4))
-	end
-	for _, x in ipairs({ -W2 + 1.2, W2 - 1.2 }) do
-		Props.pipe(b, Vector3.new(x, y0 + H - 6, FRONT + 4), Vector3.new(x, y0 + H - 6, BACK - 4), 1.2, style.PipeColor or C.SteelLight)
-		Props.pipe(b, Vector3.new(x, y0 + H - 7.6, FRONT + 4), Vector3.new(x, y0 + H - 7.6, BACK - 4), 0.7, accent)
-	end
-	ctx.lights = {}
-	for _, x in ipairs({ -30, 0, 30 }) do
-		for _, z in ipairs({ -18, 12, 42 }) do
-			local _, l = Props.lightFixture(b, CFrame.new(x, y0 + H - 1.8, z), light, style.LightBrightness or 2.2, 46, 8)
-			l.Shadows = x == 0
-			table.insert(ctx.lights, l)
-		end
-	end
-	Props.camera(b, facing(Vector3.new(-W2 + 0.4, y0 + H - 4, BACK - 4), Vector3.new(1, 0, -1).Unit))
-	Props.camera(b, facing(Vector3.new(W2 - 0.4, y0 + H - 4, BACK - 4), Vector3.new(-1, 0, -1).Unit))
-	for _, x in ipairs({ -58, -38, -18, 18, 38, 58 }) do
-		Props.pillar(b, CFrame.new(x, y0, HALL_END), H, 3, trim, ctx.style.WallMaterial)
-		table.insert(ctx.keepOut, { x - 3, x + 3, HALL_END - 3, HALL_END + 3 })
-	end
-	b.deco({ Name = "ChamberBeam", Size = Vector3.new(GameConfig.RoomWidth, 2.4, 2), CFrame = CFrame.new(0, y0 + H - 5, HALL_END), Color = C.SteelDark, Material = M.Metal })
-	Props.sign(b, facing(Vector3.new(0, y0 + H - 5, HALL_END - 1.1), -Z), 22, 2, "MAIN CHAMBER  -  " .. def.Code, { Color = accent, PPS = 30 })
-	for _, x in ipairs({ -6.5, 6.5 }) do
-		b.deco({ Name = "AisleLine", Size = Vector3.new(0.4, 0.05, BACK - HALL_END - 4), CFrame = CFrame.new(x, y0 + 0.03, (HALL_END + BACK) / 2), Color = C.Hazard, CastShadow = false })
-	end
-	table.insert(ctx.keepOut, { -7.5, 7.5, FRONT, BACK + 30 })
-	ctx.zones = { { -48, -13, -30, GameConfig.RoomBack - 8 }, { 13, 48, -30, GameConfig.RoomBack - 8 } }
 end
 
 local function arrival(ctx)
@@ -189,166 +148,6 @@ local function arrival(ctx)
 	end
 end
 
-local function exitRouteLocal(ctx)
-	local b, y0, pal, def = ctx.b, ctx.y0, ctx.palette, ctx.def
-	local accent, wall = Props.rgb(pal.Accent), Props.rgb(pal.Wall)
-	local zEnd = BACK + 23
-	local wz = BACK + 12 -- centre of the preview window
-	local nextDef = DepthConfig.get(def.Depth + 1)
-	b.part({ Name = "CorridorFloor", Size = Vector3.new(26, 2, zEnd - BACK + 2), CFrame = CFrame.new(0, y0 - 1, (BACK + zEnd) / 2 + 1), Color = C.SteelDark, Material = M.DiamondPlate })
-	b.part({ Name = "CorridorCeiling", Size = Vector3.new(26, 2, zEnd - BACK + 2), CFrame = CFrame.new(0, y0 + 21, (BACK + zEnd) / 2 + 1), Color = C.SteelDark, Material = M.Concrete })
-	b.part({ Name = "CorridorWallL", Size = Vector3.new(2, 20, zEnd - BACK), CFrame = CFrame.new(-13, y0 + 10, (BACK + zEnd) / 2 + 1), Color = wall, Material = ctx.style.WallMaterial })
-	-- Right wall with the preview window (12 wide, y 3..12).
-	b.part({ Name = "CorridorWallR1", Size = Vector3.new(2, 20, wz - 6 - BACK - 2), CFrame = CFrame.new(13, y0 + 10, (BACK + 2 + wz - 6) / 2), Color = wall, Material = ctx.style.WallMaterial })
-	b.part({ Name = "CorridorWallR2", Size = Vector3.new(2, 20, zEnd - wz - 6), CFrame = CFrame.new(13, y0 + 10, (wz + 6 + zEnd) / 2), Color = wall, Material = ctx.style.WallMaterial })
-	b.part({ Name = "CorridorWallR3", Size = Vector3.new(2, 3, 12), CFrame = CFrame.new(13, y0 + 1.5, wz), Color = wall, Material = ctx.style.WallMaterial })
-	b.part({ Name = "CorridorWallR4", Size = Vector3.new(2, 8, 12), CFrame = CFrame.new(13, y0 + 16, wz), Color = wall, Material = ctx.style.WallMaterial })
-	b.part({ Name = "PreviewGlass", Size = Vector3.new(0.6, 9, 12), CFrame = CFrame.new(13, y0 + 7.5, wz), Color = C.Glass, Material = M.Glass, Transparency = 0.55, CastShadow = false })
-	for _, z in ipairs({ wz - 5.7, wz - 2, wz + 2, wz + 5.7 }) do
-		b.deco({ Name = "GlassBar", Size = Vector3.new(0.8, 9, 0.35), CFrame = CFrame.new(12.6, y0 + 7.5, z), Color = C.SteelDark, Material = M.Metal })
-	end
-	-- Restricted signage and warning lights by the door.
-	local restricted = if nextDef then string.format("RESTRICTED  -  %s %s  -  CLEARANCE REQUIRED", nextDef.Code, string.upper(nextDef.Name)) else "NO FURTHER ACCESS  -  ANCIENT VAULT COMPLEX: SEALED"
-	Props.sign(b, facing(Vector3.new(0, y0 + 18.4, zEnd - 0.6), -Z), 22, 1.6, restricted, { Color = Color3.fromRGB(255, 90, 80), PPS = 30 })
-	for _, x in ipairs({ -10.5, 10.5 }) do
-		Props.warningLight(b, CFrame.new(x, y0 + 17, zEnd - 1.2), Color3.fromRGB(255, 150, 40))
-	end
-	Props.hazardStripes(b, CFrame.new(0, y0, zEnd - 3), 22, 1.4)
-	Props.camera(b, facing(Vector3.new(-11.6, y0 + 17, BACK + 4), Vector3.new(1, 0, 1).Unit))
-	-- End wall with a square opening behind the round door.
-	b.part({ Name = "DoorWallL", Size = Vector3.new(6, 20, 2), CFrame = CFrame.new(-10, y0 + 10, zEnd + 1.5), Color = wall, Material = ctx.style.WallMaterial })
-	b.part({ Name = "DoorWallR", Size = Vector3.new(6, 20, 2), CFrame = CFrame.new(10, y0 + 10, zEnd + 1.5), Color = wall, Material = ctx.style.WallMaterial })
-	b.part({ Name = "DoorWallTop", Size = Vector3.new(14, 6, 2), CFrame = CFrame.new(0, y0 + 17, zEnd + 1.5), Color = wall, Material = ctx.style.WallMaterial })
-	ctx.exitDoor = Props.vaultDoor(b, facing(Vector3.new(0, y0 + 8.5, zEnd), -Z), 15, accent, ctx.folder)
-	ctx.exitDoor.next = def.Depth + 1
-	ctx.exitDoor.model:SetAttribute("ExitDoor", true)
-	ctx.exitDoor.model:SetAttribute("NextDepth", def.Depth + 1) -- the client swings it open once that depth is unlocked
-	-- Behind the door: sealed maintenance stairs going down.
-	local stairs = { z0 = zEnd + 3, steps = 10 }
-	for i = 1, stairs.steps do
-		b.part({ Name = "Step", Size = Vector3.new(12, 1, 2), CFrame = CFrame.new(0, y0 - i * 1.0 - 0.5, stairs.z0 + i * 2), Color = C.SteelDark, Material = M.DiamondPlate })
-	end
-	for _, x in ipairs({ -7, 7 }) do
-		b.part({ Name = "StairWall", Size = Vector3.new(2, 30, stairs.steps * 2 + 6), CFrame = CFrame.new(x, y0 - 2, stairs.z0 + stairs.steps + 2), Color = wall, Material = ctx.style.WallMaterial })
-	end
-	b.part({ Name = "StairCeiling", Size = Vector3.new(16, 2, stairs.steps * 2 + 6), CFrame = CFrame.new(0, y0 + 13, stairs.z0 + stairs.steps + 2), Color = C.SteelDark, Material = M.Concrete })
-	local grate = b.part({ Name = "SealedGrate", Size = Vector3.new(12, 16, 0.6), CFrame = CFrame.new(0, y0 - stairs.steps + 6, stairs.z0 + stairs.steps * 2 + 3), Color = C.SteelDark, Material = M.DiamondPlate })
-	Props.text(grate, Enum.NormalId.Front, "SEALED - USE ELEVATOR", { Color = C.Hazard, PPS = 20 })
-	b.part({ Name = "StairBottom", Size = Vector3.new(12, 1, 6), CFrame = CFrame.new(0, y0 - stairs.steps - 1.5, stairs.z0 + stairs.steps * 2 + 0.5), Color = C.SteelDark, Material = M.DiamondPlate })
-	local stairLight = b.deco({ Name = "StairLight", Size = Vector3.new(4, 0.2, 0.6), CFrame = CFrame.new(0, y0 + 11.8, stairs.z0 + stairs.steps), Color = Color3.fromRGB(255, 120, 60), Material = M.Neon })
-	local sl = Instance.new("PointLight")
-	sl.Color = Color3.fromRGB(255, 140, 80)
-	sl.Range = 18
-	sl.Brightness = 0.9
-	sl.Shadows = false
-	sl.Parent = stairLight
-	-- Corridor light.
-	local _, cl = Props.lightFixture(b, CFrame.new(0, y0 + 19.4, (BACK + zEnd) / 2), Props.rgb(pal.Light), 1.8, 30, 8)
-	cl.Shadows = false
-	-- Preview chamber: what waits on the next depth, behind reinforced glass.
-	local pv = { x0 = 14, x1 = 32, z0 = wz - 8.5, z1 = wz + 8.5 }
-	local nextPal = if nextDef then nextDef.Palette else { Wall = { 90, 84, 70 }, Floor = { 60, 54, 44 }, Accent = { 190, 160, 110 }, Light = { 255, 220, 170 } }
-	b.part({ Name = "PreviewFloor", Size = Vector3.new(pv.x1 - pv.x0, 1, pv.z1 - pv.z0), CFrame = CFrame.new((pv.x0 + pv.x1) / 2, y0 - 0.5, (pv.z0 + pv.z1) / 2), Color = Props.rgb(nextPal.Floor), Material = M.Marble })
-	b.part({ Name = "PreviewCeiling", Size = Vector3.new(pv.x1 - pv.x0, 1, pv.z1 - pv.z0), CFrame = CFrame.new((pv.x0 + pv.x1) / 2, y0 + 14.5, (pv.z0 + pv.z1) / 2), Color = Props.rgb(nextPal.Wall), Material = M.Concrete })
-	b.part({ Name = "PreviewBack", Size = Vector3.new(1, 15, pv.z1 - pv.z0), CFrame = CFrame.new(pv.x1 + 0.5, y0 + 7, (pv.z0 + pv.z1) / 2), Color = Props.rgb(nextPal.Wall), Material = M.Concrete })
-	for _, z in ipairs({ pv.z0 - 0.5, pv.z1 + 0.5 }) do
-		b.part({ Name = "PreviewSide", Size = Vector3.new(pv.x1 - pv.x0 + 2, 15, 1), CFrame = CFrame.new((pv.x0 + pv.x1) / 2, y0 + 7, z), Color = Props.rgb(nextPal.Wall), Material = M.Concrete })
-	end
-	local spot = b.deco({ Name = "PreviewLight", Size = Vector3.new(6, 0.2, 6), CFrame = CFrame.new(23, y0 + 13.9, wz), Color = Props.rgb(nextPal.Light), Material = M.Neon })
-	local pl = Instance.new("SpotLight")
-	pl.Face = Enum.NormalId.Bottom
-	pl.Angle = 90
-	pl.Range = 22
-	pl.Brightness = 2.4
-	pl.Color = Props.rgb(nextPal.Light)
-	pl.Shadows = false
-	pl.Parent = spot
-	local label = if nextDef then string.format("%s  %s", nextDef.Code, string.upper(nextDef.Name)) else "ANCIENT VAULT  -  COMING SOON"
-	Props.sign(b, facing(Vector3.new(pv.x1, y0 + 11.5, wz), -Vector3.xAxis), 12, 1.6, label, { Color = Props.rgb(nextPal.Accent), PPS = 30 })
-	ctx.preview = { cframes = {}, nextDepth = if nextDef then nextDef.Depth else nil }
-	for i, z in ipairs({ wz - 4.5, wz, wz + 4.5 }) do
-		local top = Props.displayCase(b, CFrame.new(23, y0, z), 3.4, 3, 2.4 + (i % 2) * 0.6, Props.rgb(nextPal.Wall), 2.6)
-		table.insert(ctx.preview.cframes, top)
-	end
-end
-
--- The exit route is laid out at x = 0 and then moved to the plan's exit x.
-local function exitRoute(ctx)
-	local model = Instance.new("Model")
-	model.Name = "ExitRoute"
-	model.Parent = ctx.folder
-	local b, folder = ctx.b, ctx.folder
-	local eb = Props.builder(model)
-	ctx.b, ctx.folder = eb, model
-	exitRouteLocal(ctx)
-	ctx.b, ctx.folder = b, folder
-	b.count += eb.count
-	local shift = CFrame.new(ctx.exitX, 0, 0)
-	if ctx.exitX ~= 0 then
-		for _, d in ipairs(model:GetDescendants()) do
-			if d:IsA("BasePart") then
-				d.CFrame = shift * d.CFrame
-			end
-		end
-		for i, cf in ipairs(ctx.preview.cframes) do
-			ctx.preview.cframes[i] = shift * cf
-		end
-	end
-	ctx.exitDoorPosition = Vector3.new(ctx.exitX, ctx.y0, BACK + 19)
-end
-
--- Floor spawn grid in the collection zones, plus the theme's extra points, filtered.
-local function spawnPoints(ctx)
-	local rng = Random.new(ctx.def.Depth * 1013)
-	local points = {}
-	local function ok(x, z)
-		if x < -W2 + 4 or x > W2 - 4 or z < HALL_END + 3 or z > BACK - 3 then
-			return false
-		end
-		for _, box in ipairs(ctx.keepOut) do
-			if inBox(box, x, z, 1.5) then
-				return false
-			end
-		end
-		for _, p in ipairs(points) do
-			local d = p.local2 - Vector2.new(x, z)
-			if d.Magnitude < 3.2 then
-				return false
-			end
-		end
-		return true
-	end
-	for _, zone in ipairs(ctx.zones or {}) do
-		for x = zone[1], zone[2], 6.5 do
-			for z = zone[3], zone[4], 6.5 do
-				local jx, jz = x + rng:NextNumber(-1.4, 1.4), z + rng:NextNumber(-1.4, 1.4)
-				if ok(jx, jz) then
-					table.insert(points, { cframe = CFrame.new(jx, ctx.y0, jz) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0), size = "L", kind = "Floor", local2 = Vector2.new(jx, jz) })
-				end
-			end
-		end
-	end
-	for _, extra in ipairs(ctx.extraPoints) do
-		local pos = extra.cframe.Position
-		local clear = true
-		if extra.kind == "Floor" then
-			for _, box in ipairs(ctx.keepOut) do
-				if inBox(box, pos.X, pos.Z, 1.2) then
-					clear = false
-				end
-			end
-		end
-		if clear then
-			table.insert(points, { cframe = extra.cframe * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), size = extra.size, kind = extra.kind, local2 = Vector2.new(pos.X, pos.Z) })
-		end
-	end
-	for i, p in ipairs(points) do
-		p.index = i
-		p.local2 = nil
-	end
-	return points
-end
-
 function VaultBuilder.build()
 	local existing = Workspace:FindFirstChild("Vault")
 	if existing then
@@ -369,7 +168,7 @@ function VaultBuilder.build()
 		depthFolder.Name = def.Code
 		depthFolder.Parent = folder
 		local b = Props.builder(depthFolder)
-		local layout = Plans.Layout[def.Depth]
+		local layout = { H = Pools.ceiling(def.Depth), depositSide = if def.Depth % 2 == 0 then 1 else -1 }
 		local ctx = {
 			b = b,
 			folder = depthFolder,
@@ -378,33 +177,26 @@ function VaultBuilder.build()
 			palette = def.Palette,
 			style = Themes.style(def.Depth),
 			H = layout.H,
-			exitX = layout.exitX,
 			depositSide = layout.depositSide,
 			keepOut = {},
 			extraPoints = {},
+			safeZones = {},
 		}
 		shell(ctx)
 		arrival(ctx)
-		if Plans.has(def.Depth) then
-			Plans.build(ctx) -- B1-B5: their own floor plans, staging and landmarks
-		else
-			classicInterior(ctx)
-		end
-		exitRoute(ctx)
-		Themes.build(ctx) -- B6 / B7 dressing, and every depth's preview room
-		-- Keep only spawn points a player can actually reach and pick up (Reach).
+		Pools.build(ctx) -- the pool, its treasure, rims, monument, door, tunnel, spawn points
+		Themes.build(ctx) -- the preview room's display of the next depth's loot
+		-- Keep only spawn points a player can actually walk to and pick up (Reach).
 		local reach = Reach.index(depthFolder)
-		local walk = Reach.walk(reach, y0, VaultBuilder.walkBounds(), Vector3.new(0, y0, FRONT + 6))
+		local walk = Reach.walk(reach, VaultBuilder.walkBounds(y0), VaultBuilder.walkStart(y0))
 		local kept, dropped = {}, 0
-		for _, p in ipairs(spawnPoints(ctx)) do
-			if Reach.pointOk(reach, walk, p.cframe.Position) then
-				table.insert(kept, p)
+		local rng = Random.new(def.Depth * 1013)
+		for _, extra in ipairs(ctx.extraPoints) do
+			if Reach.pointOk(reach, walk, extra.cframe.Position) then
+				table.insert(kept, { cframe = extra.cframe * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), size = extra.size, kind = extra.kind, bonus = extra.bonus, index = #kept + 1 })
 			else
 				dropped += 1
 			end
-		end
-		for i, p in ipairs(kept) do
-			p.index = i
 		end
 		ctx.points = kept
 		local record = {
@@ -425,6 +217,8 @@ function VaultBuilder.build()
 			parts = b.count,
 			droppedPoints = dropped,
 			exitDoorPosition = ctx.exitDoorPosition,
+			tunnelEnd = ctx.tunnelEnd,
+			safeZones = ctx.safeZones,
 			layout = layout,
 		}
 		-- Loot staged in the preview chamber: the next floor's items, decorative only.
@@ -442,7 +236,7 @@ function VaultBuilder.build()
 	shaftFolder.Name = "Shaft"
 	shaftFolder.Parent = folder
 	local sb = Props.builder(shaftFolder)
-	Machines.shaft(sb, GameConfig.CeilingHeight + 2, -(DepthConfig.Count - 1) * GameConfig.DepthSpacing - 4, FRONT - 13.5, shaftDepths)
+	Machines.shaft(sb, GameConfig.CeilingHeight + 2, -(DepthConfig.Count - 1) * GameConfig.DepthSpacing - 2, FRONT - 13.5, shaftDepths)
 	world.partCount += sb.count
 	-- Starting area extras: four leaderboards on the hall walls and the how-to board.
 	local d1 = world.depths[1]
@@ -469,9 +263,15 @@ function VaultBuilder.build()
 	return world
 end
 
--- Interior bounds for the walk grid: the whole floor plus the exit corridor.
-function VaultBuilder.walkBounds()
-	return { -W2, W2, FRONT, BACK + 24 }
+-- Bounds for the walk graph of a depth: the rims, the pool, the tunnel down to the next
+-- depth's rim (90 lower) and the landing / preview room behind.
+function VaultBuilder.walkBounds(y0)
+	return { -W2, W2, FRONT, 164, y0 - GameConfig.DepthSpacing - 4, y0 + 6 }
+end
+
+-- Where the walk graph starts: on the arrival deck in front of the elevator.
+function VaultBuilder.walkStart(y0)
+	return Vector3.new(0, y0, FRONT + 8)
 end
 
 -- Which depth a world position is on (by height band).
@@ -479,27 +279,38 @@ function VaultBuilder.depthAt(position)
 	return DepthConfig.depthAtY(position.Y, GameConfig.DepthSpacing)
 end
 
--- Sanity check used by the harness: every spawn point is inside its room, on its floor,
--- and outside every keep-out box.
+-- Sanity check used by the harness: every spawn point is in its pool, on its depth's
+-- treasure surface (between the rim and the deep end).
 function VaultBuilder.validatePoint(record, point)
 	local pos = point.cframe.Position
-	if pos.X < -W2 + 0.5 or pos.X > W2 - 0.5 or pos.Z < HALL_END or pos.Z > BACK - 0.5 then
-		return false, "outside the room"
+	if pos.X < POOL.x0 or pos.X > POOL.x1 or pos.Z < POOL.z0 or pos.Z > POOL.z1 then
+		return false, "outside the pool"
 	end
-	if pos.Y < record.y0 - 0.01 or pos.Y > record.y0 + 12 then
-		return false, "not on this floor"
+	if pos.Y < record.y0 - POOL.depth - 0.01 or pos.Y > record.y0 + 0.5 then
+		return false, "not on this depth's treasure"
 	end
-	if point.kind == "Floor" then
-		for _, box in ipairs(record.keepOut) do
-			if inBox(box, pos.X, pos.Z, 1) then
-				return false, "inside a keep-out box"
-			end
-		end
+	local h = Pools.surface(pos.Z)
+	if math.abs(pos.Y - (record.y0 + h)) > 0.6 then
+		return false, "not on the treasure surface"
 	end
 	if not LootTable.SizeRank[point.size] then
 		return false, "bad size"
 	end
 	return true
+end
+
+-- Is a world position inside any depth's safe volume (rims, pool, tunnels)?
+function VaultBuilder.isSafe(world, position, margin)
+	margin = margin or 0
+	for _, record in ipairs(world.depths) do
+		for _, zone in ipairs(record.safeZones) do
+			local lo, hi = zone[1], zone[2]
+			if position.X >= lo.X - margin and position.X <= hi.X + margin and position.Y >= lo.Y - margin and position.Y <= hi.Y + margin + 6 and position.Z >= lo.Z - margin and position.Z <= hi.Z + margin then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 return VaultBuilder

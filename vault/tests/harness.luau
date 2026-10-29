@@ -506,39 +506,112 @@ check("world builds: 7 stacked depths, deposits, elevators, exit doors, previews
 	print("        world parts: " .. world.partCount .. " (" .. table.concat(counts, ", ") .. ")")
 end)
 
-check("reachability: every spawn point, machine and exit is reachable on foot; loot is staged", function()
-	local Reach = requireModule(ServerRoot.World.Reach)
+local Pools = requireModule(ServerRoot.World.Pools)
+local Reach = requireModule(ServerRoot.World.Reach)
+local DoorMath = requireModule(Shared.DoorMath)
+
+check("pools: deep basin, walkable profile within Humanoid step / slope limits", function()
+	local prof = Pools.Profile
+	assert(prof[1].h0 == 0, "the descent starts at the rim")
+	local shallow, deep = math.huge, -math.huge
+	for i, seg in ipairs(prof) do
+		if i > 1 then
+			assert(math.abs(seg.z0 - prof[i - 1].z1) < 1e-6 and math.abs(seg.h0 - prof[i - 1].h1) < 1e-6, "profile segment " .. i .. " does not meet the previous one")
+		end
+		if seg.kind == "stairs" then
+			local rise = (seg.h0 - seg.h1) / seg.steps
+			local run = (seg.z1 - seg.z0) / seg.steps
+			assert(rise <= 1.0 + 1e-6 and run >= 1.5, string.format("steps rise %.2f over %.2f", rise, run))
+		elseif seg.kind == "ramp" then
+			local angle = math.deg(math.atan2(seg.h0 - seg.h1, seg.z1 - seg.z0))
+			assert(angle > 0 and angle <= 40, string.format("ramp %d is %.1f degrees", i, angle))
+		end
+		shallow = math.min(shallow, -seg.h0)
+		deep = math.max(deep, -seg.h1)
+	end
+	assert(Pools.Pool.depth >= 30 and deep == Pools.Pool.depth, "the pool must be 30+ studs deep (" .. deep .. ")")
+	assert(-Pools.surface(-20) < -Pools.surface(45), "the deep end must be deeper than the shallow end")
+	-- Tunnel slopes too.
+	local T = Pools.Tunnel
+	local aAngle = math.deg(math.atan2(T.aDrop, T.aEnd - T.aRampStart))
+	local cAngle = math.deg(math.atan2(T.landing.y - T.cY, T.cTop - T.cBottom))
+	assert(aAngle <= 40 and cAngle <= 40, string.format("tunnel ramps %.1f / %.1f degrees", aAngle, cAngle))
+	assert(T.cY == -GameConfig.DepthSpacing, "the tunnel must end exactly on the next depth's rim")
+end)
+
+local function walkFor(d, roots)
+	local record = world.depths[d]
 	local VaultBuilder = requireModule(ServerRoot.World.VaultBuilder)
+	local idx = Reach.index(roots or record.folder)
+	return idx, Reach.walk(idx, VaultBuilder.walkBounds(record.y0), VaultBuilder.walkStart(record.y0))
+end
+
+check("reachability: every spawn point, machine and the vault door is reachable on foot from the rim", function()
 	local lines = {}
 	for d, record in ipairs(world.depths) do
 		local y0 = record.y0
-		local idx = Reach.index(record.folder)
-		local walk = Reach.walk(idx, y0, VaultBuilder.walkBounds(), V3.new(0, y0, GameConfig.RoomFront + 6))
-		assert(#walk.list > 400, "depth " .. d .. ": walk grid too small (" .. #walk.list .. " cells)")
-		local staged = 0
+		local idx, walk = walkFor(d)
+		assert(#walk.list > 2000, "depth " .. d .. ": walk graph too small (" .. #walk.list .. " nodes)")
+		local lowest = math.huge
+		for _, n in ipairs(walk.list) do
+			lowest = math.min(lowest, n.Y - y0)
+		end
+		assert(lowest <= -Pools.Pool.depth + 0.1, string.format("B%d: walking only reaches %.1f below the rim", d, -lowest))
+		local shallow, deeper, bonusShallow, bonusDeep = 0, 0, 0, 0
 		for _, point in ipairs(record.points) do
 			local ok, why = Reach.pointOk(idx, walk, point.cframe.Position)
-			assert(ok, string.format("B%d %s point at %s: %s", d, point.kind, tostring(point.cframe.Position), tostring(why)))
-			if point.kind ~= "Floor" then
-				staged += 1
+			assert(ok, string.format("B%d point at %s: %s", d, tostring(point.cframe.Position), tostring(why)))
+			if point.cframe.Position.Y - y0 > -21 then
+				shallow += 1
+				bonusShallow += point.bonus
+			else
+				deeper += 1
+				bonusDeep += point.bonus
 			end
 		end
+		assert(deeper > shallow and bonusDeep / deeper > bonusShallow / shallow, string.format("B%d: loot should be denser and luckier deeper (%d shallow, %d deep)", d, shallow, deeper))
 		assert(Reach.pointOk(idx, walk, record.rarePoint.Position), "B" .. d .. " rare-event point unreachable")
 		for _, machine in ipairs(record.deposits) do
-			assert(Reach.reachable(walk, machine.zone.cframe.Position, 2.5), machine.id .. " deposit zone unreachable")
+			assert(Reach.reachable(walk, machine.zone.cframe.Position - V3.new(0, 3, 0), 2.5), machine.id .. " deposit zone unreachable")
 		end
 		assert(Reach.reachable(walk, record.terminal.cframe.Position, 4), "B" .. d .. " upgrade terminal unreachable")
-		assert(Reach.reachable(walk, record.exitDoorPosition, 3), "B" .. d .. " exit door unreachable (route blocked)")
-		-- The check itself can fail: a point buried in a wall and one in sealed space.
+		assert(Reach.reachable(walk, record.exitDoorPosition, 3), "B" .. d .. " vault door unreachable from the rim")
 		assert(not Reach.pointOk(idx, walk, V3.new(-GameConfig.RoomWidth / 2 - 1, y0 + 2, 0)), "a point inside the wall passed")
-		assert(staged / #record.points >= 0.6, string.format("B%d: only %d of %d points are staged", d, staged, #record.points))
-		table.insert(lines, string.format("B%d %d pts (%d%% staged)", d, #record.points, math.floor(staged / #record.points * 100 + 0.5)))
+		assert(not Reach.pointOk(idx, walk, V3.new(0, y0 - 60, 0)), "a point under the pool passed")
+		table.insert(lines, string.format("B%d %d pts (%d deep)", d, #record.points, deeper))
 	end
-	local b4 = world.depths[4]
-	local idx4 = Reach.index(b4.folder)
-	local walk4 = Reach.walk(idx4, b4.y0, VaultBuilder.walkBounds(), V3.new(0, b4.y0, GameConfig.RoomFront + 6))
-	assert(not Reach.pointOk(idx4, walk4, V3.new(55, b4.y0, 0)), "sealed rock behind the B4 alcoves counted as reachable")
 	print("        " .. table.concat(lines, ", "))
+end)
+
+local function setDoor(record, alpha)
+	local leaf = record.exitDoor.leaf
+	local hinge = record.exitDoor.closedHinge or leaf:GetPivot()
+	record.exitDoor.closedHinge = hinge
+	leaf:PivotTo(DoorMath.pivot(hinge, alpha))
+end
+
+check("vault doors: locked doors block the tunnel; opened, the tunnel walks down to the next rim", function()
+	for d = 1, 7 do
+		local record = world.depths[d]
+		local nextRecord = world.depths[d + 1]
+		local roots = if nextRecord then { record.folder, nextRecord.folder } else { record.folder }
+		local landing = V3.new(-20, record.y0 + Pools.Tunnel.landing.y, (Pools.Tunnel.landing.z0 + Pools.Tunnel.landing.z1) / 2)
+		local _, closed = walkFor(d, roots)
+		assert(not Reach.reachable(closed, landing, 3), "B" .. d .. ": the tunnel is reachable with the door closed")
+		setDoor(record, 1)
+		local _, open = walkFor(d, roots)
+		setDoor(record, 0)
+		assert(Reach.reachable(open, landing, 3), "B" .. d .. ": the open door does not lead to the tunnel landing")
+		if nextRecord then
+			local nextRim = V3.new(Pools.Tunnel.arrivalX, nextRecord.y0, GameConfig.RoomBack - 4)
+			assert(Reach.reachable(open, nextRim, 3), "B" .. d .. ": the tunnel does not reach B" .. (d + 1) .. "'s rim")
+			assert(Reach.reachable(open, nextRecord.elevator.arrival.Position - V3.new(0, 3, 0) + V3.new(0, 0, 8), 4), "B" .. d .. ": walking down does not lead on to B" .. (d + 1) .. "'s arrival deck")
+			assert(record.tunnelEnd and math.abs(record.tunnelEnd.Y - nextRecord.y0) < 1e-6, "tunnel end is not on the next rim")
+		else
+			assert(record.tunnelEnd == nil, "B7's tunnel must end at the sealed Ancient Vault")
+		end
+		assert(nextRecord == nil or nextRecord.y0 < record.y0 - Pools.Pool.depth, "the next depth must sit below this pool's bottom")
+	end
 end)
 
 -- Remote stubs that record traffic.
@@ -722,7 +795,7 @@ check("collect: server checks distance, depth and cooldown; value fixed at picku
 	local ok, reason = LS.collect(alice, entry.id)
 	assert(not ok and reason == "too far", "collected from across the room: " .. tostring(reason))
 	-- Another depth's item.
-	local deep = nearestItem(2, V3.new(0, -150, 0))
+	local deep = nearestItem(2, V3.new(0, world.depths[2].y0, 0))
 	moveTo(aliceRoot, entry.position + V3.new(0, 2.5, 0))
 	ok, reason = LS.collect(alice, deep.id)
 	assert(not ok, "collected an item on another depth")
@@ -942,7 +1015,7 @@ check("magnet pulls loot toward its owner; auto-collect picks up nearby loot", f
 	local stats = DS.stats(alice)
 	assert(stats.MagnetRadius > 0 and stats.AutoRadius > 0, "stats")
 	-- Stand in the middle of B2's chamber and let the magnet work.
-	local spot = nearestItem(2, V3.new(0, -150, 10)).position + V3.new(3, 2.5, 0)
+	local spot = nearestItem(2, V3.new(0, world.depths[2].y0 - 20, 10)).position + V3.new(0, 2.5, 0)
 	moveTo(aliceRoot, spot)
 	local entry = nearestItem(2, spot, function(e)
 		local flat = V3.new(e.position.X - spot.X, 0, e.position.Z - spot.Z).Magnitude
@@ -1229,6 +1302,53 @@ check("death and leaving: rides cancel, carried loot is kept, pulls released, no
 	assert(not LS.collect(carl, item.id) and not DepS.deposit(carl, "D1_1"), "acted for a departed player")
 end)
 
+check("safety: out-of-bounds and locked-depth players return to the rim; walking down records the depth", function()
+	local PS = registry.PlayerService
+	local dana, danaRoot = makePlayer("Dana")
+	local p = DS.getProfile(dana)
+	local rim1 = world.depths[1].elevator.arrival.Position
+	-- In the pool and on the rim: left alone.
+	moveTo(danaRoot, V3.new(0, Pools.surface(20) + 3, 20))
+	advance(1)
+	PS.step(1)
+	assert((danaRoot.CFrame.Position - V3.new(0, Pools.surface(20) + 3, 20)).Magnitude < 0.01, "a player in the pool was moved")
+	-- Fell under the pool / out of the map: back on the rim.
+	local rescues = PS.Rescues
+	for _, pos in ipairs({ V3.new(0, -60, 0), V3.new(200, 3, 0), V3.new(0, 3, 400), V3.new(-60, -30, 20) }) do
+		moveTo(danaRoot, pos)
+		advance(1)
+		PS.step(1)
+		assert((danaRoot.CFrame.Position - rim1).Magnitude < 3, "not rescued from " .. tostring(pos))
+	end
+	assert(PS.Rescues == rescues + 4, "rescue count")
+	-- Past a locked door onto B2: rescued; once B2 is unlocked, walking down counts as arriving.
+	local rim2 = world.depths[2].y0
+	moveTo(danaRoot, V3.new(Pools.Tunnel.arrivalX, rim2 + 3, GameConfig.RoomBack - 4))
+	advance(1)
+	PS.step(1)
+	assert((danaRoot.CFrame.Position - rim1).Magnitude < 3 and p.CurrentDepth == 1, "a player walked onto a locked depth")
+	p.HighestDepth = 2
+	moveTo(danaRoot, V3.new(Pools.Tunnel.arrivalX, rim2 + 3, GameConfig.RoomBack - 4))
+	advance(1)
+	PS.step(1)
+	assert(p.CurrentDepth == 2 and (p.Stats["Visit:2"] or 0) >= 1, "walking down to B2 was not recorded")
+	assert(registry.PlayerService.depthOf(dana) == 2 and (danaRoot.CFrame.Position - V3.new(Pools.Tunnel.arrivalX, rim2 + 3, GameConfig.RoomBack - 4)).Magnitude < 0.01, "a legitimate walker was moved")
+	-- The deep-end chute pays 85%.
+	local chute = world.machines.D2_B
+	assert(chute and chute.bottom and math.abs(chute.payoutFactor - Pools.ChutePayout) < 1e-9, "B2 chute machine")
+	local entry = nearestItem(2, V3.new(0, rim2 - 42, 40))
+	advance(1)
+	grab(dana, danaRoot, entry)
+	local value = p.Carried.Value
+	assert(value > 0, "dana carries nothing")
+	moveTo(danaRoot, chute.zone.cframe.Position)
+	advance(1)
+	local cash = p.Cash
+	local ok, summary = DepS.deposit(dana, "D2_B")
+	assert(ok and summary.chute and p.Cash - cash == math.floor(Economy.depositPayout(value, DS.stats(dana)) * Pools.ChutePayout + 0.5), "chute payout")
+	leave(dana)
+end)
+
 check("session lock: load locks, a taken-over profile stops saving, leaving unlocks", function()
 	local stored = {}
 	local function copy(v)
@@ -1454,6 +1574,15 @@ check("client controllers initialise (Main.client order) and handle real server 
 	end
 	assert(unknown > 0 and unknown < 35, "book silhouettes: " .. unknown)
 	Ui.closeAll()
+	-- Exit doors open on the client only once the depth behind them is unlocked.
+	CS.ProfileChanged:Fire(snapshot)
+	assert(c.EffectsController.doorOpen(snapshot.highestDepth + 1) == false, "a locked door is open")
+	local unlocked = table.clone(snapshot)
+	unlocked.highestDepth = snapshot.highestDepth + 1
+	CS.profile = unlocked
+	CS.ProfileChanged:Fire(unlocked)
+	assert(c.EffectsController.doorOpen(snapshot.highestDepth + 1) == true, "the door did not open after unlocking")
+	CS.profile = snapshot
 	-- Lighting follows the character's depth.
 	moveTo(bobRoot, world.depths[3].elevator.arrival.Position)
 	c.EffectsController.init() -- re-run the depth check now

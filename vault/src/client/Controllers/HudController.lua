@@ -196,7 +196,9 @@ local function showSummary(data)
 	end
 	line("DEPOSITED", C.Dim, 14, 1)
 	line(string.format("%d items  -  $%s", data.count or 0, Format.short(data.value or 0)), C.Text, 16, 2)
-	if (data.multiplier or 1) > 1.0001 then
+	if data.chute then
+		line(string.format("Deep-end chute  x%s", Format.stat(data.multiplier)), C.Accent, 15, 3)
+	elseif (data.multiplier or 1) > 1.0001 then
 		line(string.format("Deposit bonus  x%s", Format.stat(data.multiplier)), C.Blue, 15, 3)
 	end
 	line("+$" .. Format.short(data.payout or 0), C.Green, 30, 4)

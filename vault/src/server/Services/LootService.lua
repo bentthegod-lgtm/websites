@@ -146,7 +146,8 @@ function LootService.spawnOne(depth, luck)
 		return nil
 	end
 	local point = free[rng:NextInteger(1, #free)]
-	local item = LootTable.roll(depth, active[depth], luck or 1, rng, point.size)
+	-- Deeper in the pool the luck is better (point.bonus; LootTable caps luck at 2x).
+	local item = LootTable.roll(depth, active[depth], (luck or 1) * (point.bonus or 1), rng, point.size)
 	if not item then
 		return nil
 	end
@@ -341,7 +342,8 @@ local function stepMagnet(dt)
 						entry.pulledBy = player
 						entry.pulledAt = now
 						local step = math.min(flat.Magnitude - 2, stats.MagnetSpeed * dt)
-						local floorY = world.depths[depth].y0
+						-- Items glide toward the player's feet (the pool floor is sloped).
+						local floorY = rootPos.Y - 2.6
 						local y = entry.position.Y + (floorY - entry.position.Y) * math.min(1, dt * 4)
 						local newPos = Vector3.new(entry.position.X, y, entry.position.Z) + flat.Unit * step
 						entry.position = newPos

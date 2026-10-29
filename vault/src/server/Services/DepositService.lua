@@ -7,7 +7,8 @@
 	A deposit validates the profile, the machine's depth, the player's distance, and that
 	something is carried; then the carried stack is TAKEN FIRST (cleared) and only then is
 	cash added - a duplicate request finds an empty stack and does nothing.
-	Payout = carried value x deposit multiplier (Deposit Bonus upgrade, VIP pass).
+	Payout = carried value x deposit multiplier (Deposit Bonus upgrade, VIP pass) x the
+	machine's payout factor (1 at the rim; the deep-end chute machines on B2+ keep 15%).
 ]]
 
 local Players = game:GetService("Players")
@@ -72,7 +73,9 @@ function DepositService.deposit(player, machineId, viaZone)
 	end
 	local stats = services.DataService.stats(player)
 	local carried = services.LootService.takeCarried(player) -- cleared before any reward
-	local payout = Economy.depositPayout(carried.Value, stats)
+	-- The deep-end chute machines pay a handling fee (machine.payoutFactor, 85%).
+	local factor = machine.payoutFactor or 1
+	local payout = math.floor(Economy.depositPayout(carried.Value, stats) * factor + 0.5)
 	services.DataService.addCash(player, payout, true)
 	services.DataService.bump(player, "Deposits", 1)
 	services.DataService.bump(player, "DepositValue", payout)
@@ -86,7 +89,8 @@ function DepositService.deposit(player, machineId, viaZone)
 		count = carried.Count,
 		value = carried.Value,
 		payout = payout,
-		multiplier = stats.DepositMult,
+		multiplier = stats.DepositMult * factor,
+		chute = factor < 1,
 		record = record,
 		items = carried.Items,
 	}

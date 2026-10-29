@@ -88,7 +88,7 @@ for depth, record in pairs(world.depths) do
 	local active = {}
 	for _, point in ipairs(record.points) do
 		if rng:NextNumber() < 0.55 then
-			local def = LootTable.roll(depth, active, 1, rng, point.size)
+			local def = LootTable.roll(depth, active, point.bonus or 1, rng, point.size)
 			if def then
 				active[def.Id] = (active[def.Id] or 0) + 1
 				LootModels.build(def.Id, point.cframe, GameConfig.LootScale).Parent = loot
@@ -144,8 +144,8 @@ local carry = {
 	{ Artifact = 60, Legendary = 60 },
 }
 for depth, record in pairs(world.depths) do
-	mannequin(action, CF.new(-6, record.y0 + 3, -41) * CF.Angles(0, math.rad(200), 0), carry[depth], "Classic")
-	mannequin(action, CF.new(6, record.y0 + 3, -41) * CF.Angles(0, math.rad(160), 0), { Cash = 140 }, if depth % 2 == 0 then "Gilded" else "NeonVault")
+	mannequin(action, CF.new(-18, record.y0 + 3, -54) * CF.Angles(0, math.rad(200), 0), carry[depth], "Classic")
+	mannequin(action, CF.new(18, record.y0 + 3, -54) * CF.Angles(0, math.rad(160), 0), { Cash = 140 }, if depth % 2 == 0 then "Gilded" else "NeonVault")
 end
 
 -- Catalog sheet far away: every loot model in rows by depth, then stack styles.
@@ -163,7 +163,26 @@ end
 local function r(n)
 	return math.floor(n * 100 + 0.5) / 100
 end
-local function dump(container, list)
+-- Each exported part carries `d`: the depth it belongs to (1-7), or 0 for the shared
+-- elevator shaft / spawn and the catalog sheet. World parts take it from their depth
+-- folder (a depth's tunnel down to the next rim belongs to the depth it starts in);
+-- loot and mannequins from the height band they stand in.
+local function folderDepth(d)
+	local node = d
+	while node and node ~= world.folder do
+		local n = string.match(node.Name, "^B(%d)$")
+		if n and node.Parent == world.folder then
+			return tonumber(n)
+		end
+		node = node.Parent
+	end
+	return 0
+end
+local DepthConfig = requireModule(Shared.Config.DepthConfig)
+local function bandDepth(d)
+	return DepthConfig.depthAtY(d.CFrame.Position.Y, GameConfig.DepthSpacing)
+end
+local function dump(container, list, depthOf)
 	for _, d in ipairs(container:GetDescendants()) do
 		if d:IsA("BasePart") and d.Transparency < 0.99 then
 			local cf = d.CFrame
@@ -177,16 +196,29 @@ local function dump(container, list)
 				t = r(d.Transparency),
 				m = d.Material.Name,
 				sh = if d:IsA("WedgePart") then "Wedge" elseif d:IsA("Part") then d.Shape.Name else "Block",
+				d = if depthOf then depthOf(d) else 0,
 			})
 		end
 	end
 end
 
-local out = { world = {}, loot = {}, action = {}, sheet = {} }
-dump(world.folder, out.world)
-dump(loot, out.loot)
-dump(action, out.action)
+local out = { world = {}, loot = {}, action = {}, sheet = {}, meta = { depthSpacing = GameConfig.DepthSpacing, depths = {} } }
+dump(world.folder, out.world, folderDepth)
+dump(loot, out.loot, bandDepth)
+dump(action, out.action, bandDepth)
 dump(sheet, out.sheet)
+for d, rec in ipairs(world.depths) do
+	out.meta.depths[d] = {
+		code = rec.def.Code,
+		name = rec.def.Name,
+		rimY = rec.y0,
+		poolBottomY = rec.y0 - 42,
+		rimCentre = { 0, rec.y0, -59 },
+		poolCentre = { 0, rec.y0 - 21, 2 },
+		yMin = rec.y0 - 92,
+		yMax = rec.y0 + rec.layout.H + 2,
+	}
+end
 fs.writeFile(outPath, serde.encode("json", out))
 local counts = {}
 for d, rec in pairs(world.depths) do

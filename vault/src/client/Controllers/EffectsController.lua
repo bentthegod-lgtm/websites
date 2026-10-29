@@ -23,6 +23,7 @@ local DepthConfig = require(Shared.Config.DepthConfig)
 local LootConfig = require(Shared.Config.LootConfig)
 local CosmeticConfig = require(Shared.Config.CosmeticConfig)
 local LightingPresets = require(Shared.LightingPresets)
+local DoorMath = require(Shared.DoorMath)
 
 local ClientState = require(script.Parent.ClientState)
 local AudioController = require(script.Parent.AudioController)
@@ -73,10 +74,9 @@ local function swing(door, open, instant)
 		return
 	end
 	door.open = open
-	-- Rotate the leaf about its hinge axis (vertical), 100 degrees outward.
+	-- Rotate the leaf about its hinge axis (vertical), 100 degrees into the pool.
 	local function at(alpha)
-		local rot = door.hinge * CFrame.Angles(0, math.rad(-100) * alpha, 0)
-		door.leaf:PivotTo(rot * door.hinge:ToObjectSpace(door.closed))
+		door.leaf:PivotTo(DoorMath.pivot(door.hinge, alpha) * door.hinge:ToObjectSpace(door.closed))
 	end
 	if instant then
 		at(if open then 1 else 0)
@@ -102,6 +102,16 @@ local function refreshDoors(instant)
 		local unlocked = door.next and DepthConfig.get(door.next) ~= nil and p.highestDepth >= door.next
 		swing(door, unlocked == true, instant)
 	end
+end
+
+-- Is the exit door that leads to `nextDepth` open on this client?
+function EffectsController.doorOpen(nextDepth)
+	for _, door in ipairs(doors) do
+		if door.next == nextDepth then
+			return door.open
+		end
+	end
+	return nil
 end
 
 -- Rare event beacon ------------------------------------------------------------------------

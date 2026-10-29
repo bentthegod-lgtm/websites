@@ -17,9 +17,9 @@ return {
 	LeaderboardWriteInterval = 120,
 	AutosaveInterval = 60,
 
-	-- World scale: depth d's floor sits at y = -(d - 1) * DepthSpacing, all depths share one
+	-- World scale: depth d's rim sits at y = -(d - 1) * DepthSpacing, all depths share one
 	-- vertical elevator shaft behind their arrival halls.
-	DepthSpacing = 150,
+	DepthSpacing = 90, -- rim to rim; each pool is 42 deep and its tunnel descends to the next rim
 	RoomWidth = 140, -- x from -70 to 70
 	RoomFront = -72, -- z of the arrival hall's back wall (elevator wall)
 	RoomBack = 60, -- z of the chamber's far wall (the exit door to the next depth)

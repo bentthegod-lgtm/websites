@@ -94,6 +94,7 @@ test("depths: unlock prices rise, every depth has lighting, palette and ambience
 		local y = -(d - 1) * GameConfig.DepthSpacing
 		assert(DepthConfig.depthAtY(y + 3, GameConfig.DepthSpacing) == d, "depthAtY " .. d)
 		assert(DepthConfig.depthAtY(y + 28, GameConfig.DepthSpacing) == d, "depthAtY ceiling " .. d)
+		assert(DepthConfig.depthAtY(y - 42 + 0.5, GameConfig.DepthSpacing) == d, "depthAtY pool bottom " .. d)
 	end
 end)
 
