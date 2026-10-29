@@ -35,7 +35,13 @@ LootConfig.Categories = {
 }
 LootConfig.CategoryOrder = { "Cash", "Gold", "Diamond", "Emerald", "Platinum", "Artifact", "Legendary" }
 
+-- The pools are packed full of loot, so a trip fills far faster than when floors were
+-- sparsely stocked; every listed value is scaled by FullPoolValue to keep the time to
+-- reach each depth about the same (see tests/economy.spec).
+LootConfig.FullPoolValue = 0.55
+
 local function item(id, name, category, depth, rarity, value, weight, maxActive, slots, size, pickup)
+	value = math.max(1, math.floor(value * LootConfig.FullPoolValue + 0.5))
 	return {
 		Id = id,
 		Name = name,

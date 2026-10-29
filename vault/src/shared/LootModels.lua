@@ -508,6 +508,77 @@ function LootModels.build(itemId, base, scale)
 	return model
 end
 
+-- Pool fill: common to rare loot is ONE part each (thousands fill a pool); Epic and better
+-- use the detailed model from build(). { shape, size, colour, material, transparency }.
+local CYL, BALL = Enum.PartType.Cylinder, Enum.PartType.Ball
+local SIMPLE = {
+	Bill = { nil, Vector3.new(2.24, 0.35, 1.38), rgb(150, 194, 128), M.Fabric },
+	CashStack = { nil, Vector3.new(2.35, 0.8, 1.5), rgb(122, 170, 106), M.Fabric },
+	CashBundle = { nil, Vector3.new(2.35, 1.0, 1.75), rgb(104, 152, 92), M.Fabric },
+	GoldBar = { nil, Vector3.new(2.13, 0.55, 1.19), rgb(236, 184, 58), M.Metal },
+	GoldStack = { nil, Vector3.new(2.35, 1.0, 1.5), rgb(244, 196, 66), M.Metal },
+	GoldBrick = { nil, Vector3.new(2.35, 0.9, 1.62), rgb(222, 168, 44), M.Metal },
+	Diamond = { "gem", Vector3.new(1.15, 1.15, 1.15), rgb(214, 238, 255), M.Glass, 0.12 },
+	DiamondCluster = { "gem", Vector3.new(1.49, 1.49, 1.49), rgb(200, 230, 255), M.Glass, 0.12 },
+	LargeGem = { "gem", Vector3.new(1.84, 1.84, 1.84), rgb(170, 210, 255), M.Glass, 0.1 },
+	Emerald = { nil, Vector3.new(1.34, 0.8, 1.12), rgb(40, 214, 112), M.Glass, 0.1 },
+	EmeraldCluster = { nil, Vector3.new(1.68, 1.0, 1.38), rgb(30, 192, 100), M.Glass, 0.1 },
+	PremiumEmerald = { nil, Vector3.new(2.02, 1.2, 1.62), rgb(20, 170, 88), M.Glass, 0.08 },
+	PlatinumBar = { nil, Vector3.new(2.24, 0.55, 1.25), rgb(216, 222, 230), M.Metal },
+	MetalStack = { nil, Vector3.new(2.35, 1.0, 1.5), rgb(196, 204, 214), M.Metal },
+	AlloyCanister = { CYL, Vector3.new(2.13, 1.46, 1.46), rgb(178, 188, 204), M.Metal },
+	AncientCoin = { "coin", Vector3.new(0.35, 1.95, 1.95), rgb(214, 164, 72), M.Metal },
+	Relic = { BALL, Vector3.new(1.61, 1.61, 1.61), rgb(150, 100, 60), M.Slate },
+	Statuette = { nil, Vector3.new(1.01, 1.7, 1.12), rgb(200, 158, 70), M.Metal },
+	Chalice = { "upright", Vector3.new(0.8, 1.49, 1.49), rgb(244, 196, 66), M.Metal },
+	Crown = { "gem", Vector3.new(1.49, 1.49, 1.49), rgb(214, 40, 70), M.Glass, 0.05 },
+}
+LootModels.Simple = SIMPLE
+
+-- True if this item fills a pool as a single part (false: a detailed model).
+function LootModels.isSimple(itemId)
+	return SIMPLE[itemId] ~= nil
+end
+
+-- A single-part pickup sitting on `base` (a CFrame on the treasure surface).
+function LootModels.simple(itemId, base)
+	local look = SIMPLE[itemId]
+	assert(look, "no single-part look for " .. tostring(itemId))
+	local shape, size, color, material, transparency = look[1], look[2], look[3], look[4], look[5]
+	local p = Instance.new("Part")
+	p.Name = itemId
+	p.Size = size
+	p.Color = color
+	p.Material = material
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if transparency then
+		p.Transparency = transparency
+	end
+	if material == M.Metal then
+		p.Reflectance = 0.15
+	end
+	if shape == "gem" then
+		p.CFrame = base * CFrame.new(0, size.Y * 0.62, 0) * CFrame.Angles(math.rad(45), 0, math.rad(35.264))
+	elseif shape == "coin" or shape == "upright" then
+		-- A cylinder standing on its end (a coin lying flat / a chalice upright).
+		p.Shape = CYL
+		p.CFrame = base * CFrame.new(0, size.X / 2, 0) * CFrame.Angles(0, 0, math.pi / 2)
+	else
+		if shape then
+			p.Shape = shape
+		end
+		p.CFrame = base * CFrame.new(0, size.Y / 2, 0)
+	end
+	p:SetAttribute("Item", itemId)
+	return p
+end
+
 function LootModels.hasModel(itemId)
 	return builders[itemId] ~= nil
 end

@@ -123,26 +123,30 @@ end)
 -- A greedy player: fill the stack, deposit, buy the cheapest useful upgrade (or unlock
 -- the next depth as soon as it is affordable), repeat. Tokens trickle in from
 -- achievements / dailies at a conservative rate. Returns trips needed to reach each depth.
-local function simulate(maxTrips)
+local function simulate(maxTrips, searchSeconds, poolLuck, valueScale)
 	local state = { Upgrades = {}, Perks = {}, Rebirths = 0 }
 	local cash, tokens, depth = 0, 0, 1
 	local reached = { [1] = 0 }
+	local reachedAt = { [1] = 0 }
 	local totalSeconds = 0
 	for trip = 1, maxTrips do
 		local s = Economy.stats(state)
-		local perSlot = LootTable.averageValue(depth, s.Luck) * s.ValueMult / LootTable.averageSlots(depth)
+		local perSlot = LootTable.averageValue(depth, math.min(2, s.Luck * (poolLuck or 1))) * s.ValueMult * (valueScale or 1) / LootTable.averageSlots(depth)
 		local carried = math.floor(s.Capacity * perSlot)
 		cash += Economy.depositPayout(carried, s)
-		tokens += 0.35
 		-- Trip time: pickups (or magnet/auto) plus walking to and from the machine.
 		local perPickup = if s.AutoRadius > 0 then math.min(s.PickupInterval, s.AutoInterval) else s.PickupInterval
-		totalSeconds += s.Capacity / LootTable.averageSlots(depth) * (perPickup + 1.6 / (1 + s.MagnetRadius / 20)) + 70 * 16 / s.WalkSpeed / 4
+		local tripSeconds = s.Capacity / LootTable.averageSlots(depth) * (perPickup + (searchSeconds or 1.6) / (1 + s.MagnetRadius / 20)) + 70 * 16 / s.WalkSpeed / 4
+		totalSeconds += tripSeconds
+		-- Tokens (achievements, dailies) come with play time, not with trip count.
+		tokens += 0.35 * tripSeconds / 150
 		local nextDef = DepthConfig.get(depth + 1)
 		if nextDef and cash >= nextDef.UnlockCash and tokens >= nextDef.UnlockTokens then
 			cash -= nextDef.UnlockCash
 			tokens -= nextDef.UnlockTokens
 			depth += 1
 			reached[depth] = trip
+			reachedAt[depth] = totalSeconds
 		else
 			-- Spend most of the money on upgrades, saving toward the next depth only when close.
 			local saving = nextDef and cash >= nextDef.UnlockCash * 0.6
@@ -169,21 +173,44 @@ local function simulate(maxTrips)
 			break
 		end
 	end
-	return reached, depth, totalSeconds
+	return reached, depth, totalSeconds, reachedAt
 end
 
-test("greedy player: B2 after a handful of trips, B7 reachable without Robux", function()
-	local reached, depth, seconds = simulate(20000)
+-- The pools used to hold ~60 scattered items (about 1.6 s of searching per pickup); now
+-- they are packed full (the next item is ~2.4 studs away, ~0.25 s) and deeper slots are
+-- luckier (average fill bonus ~1.4). Times to reach B2 / B7 must stay roughly the same.
+local SPARSE_SEARCH, DENSE_SEARCH, DENSE_LUCK = 1.6, 0.25, 1.4
+
+local function describe(label, reached, reachedAt)
 	local line = {}
 	for d = 2, DepthConfig.Count do
 		table.insert(line, string.format("B%d@%s", d, tostring(reached[d])))
 	end
-	print("        progression (trips): " .. table.concat(line, "  ") .. string.format("  (~%.1f h of play)", seconds / 3600))
-	assert(reached[2] and reached[2] >= 5 and reached[2] <= 25, "B2 should take 5-25 trips, took " .. tostring(reached[2]))
+	print(string.format("        %s: %s  (B2 ~%.0f min, B7 ~%.1f h)", label, table.concat(line, " "), (reachedAt[2] or 0) / 60, (reachedAt[DepthConfig.Count] or 0) / 3600))
+end
+
+test("greedy player: B2 after a handful of trips, B7 reachable without Robux", function()
+	local reached, depth, _, at = simulate(20000, DENSE_SEARCH, DENSE_LUCK)
+	describe("full pools (trips)", reached, at)
+	-- Full pools make trips short, so B2 takes more (quicker) trips than it used to.
+	assert(reached[2] and reached[2] >= 10 and reached[2] <= 45, "B2 should take 10-45 trips, took " .. tostring(reached[2]))
+	assert(at[2] >= 10 * 60 and at[2] <= 30 * 60, string.format("B2 should take 10-30 minutes, took %.0f", at[2] / 60))
 	assert(depth == DepthConfig.Count, "B7 not reached in the simulation")
 	for d = 3, DepthConfig.Count do
 		assert(reached[d] - reached[d - 1] >= 5, "depth " .. d .. " came too fast after the previous one")
 	end
+end)
+
+test("full pools keep the time to reach B2 and B7 close to the sparse-loot balance", function()
+	local LootConfig = L.shared("Config/LootConfig")
+	local reachedS, _, _, atS = simulate(20000, SPARSE_SEARCH, 1, 1 / LootConfig.FullPoolValue)
+	describe("before: sparse floors, original values", reachedS, atS)
+	-- Reference: the balance as it was before the pools were filled.
+	local refB2Min, refB7Hours = atS[2] / 60, atS[DepthConfig.Count] / 3600
+	local _, _, _, at = simulate(20000, DENSE_SEARCH, DENSE_LUCK)
+	local b2, b7 = at[2] / 60, at[DepthConfig.Count] / 3600
+	assert(math.abs(b2 - refB2Min) / refB2Min < 0.35, string.format("B2 now %.0f min vs %.0f before", b2, refB2Min))
+	assert(math.abs(b7 - refB7Hours) / refB7Hours < 0.25, string.format("B7 now %.1f h vs %.1f before", b7, refB7Hours))
 end)
 
 return cases

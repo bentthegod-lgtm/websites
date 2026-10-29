@@ -27,6 +27,7 @@ local PerformanceConfig = require(Shared.Config.PerformanceConfig)
 local Economy = require(Shared.Economy)
 local Format = require(Shared.Format)
 local LootModels = require(Shared.LootModels)
+local SpatialHash = require(Shared.SpatialHash)
 
 local ClientState = require(script.Parent.ClientState)
 local AudioController = require(script.Parent.AudioController)
@@ -58,23 +59,50 @@ local function rarityColor(def)
 	return if r then Ui.rgb(r.Color) else Ui.Colors.Text
 end
 
+-- The part that stands for a pickup: single-part pickups are the part itself, detailed
+-- models use their Hitbox.
+local function partOf(obj)
+	return if obj:IsA("BasePart") then obj else obj.PrimaryPart
+end
+CollectController.partOf = partOf
+
+-- Client spatial hash of the pickups, per depth (thousands fill a pool; no full scans).
+local hashes = {}
+local function hashFor(depth)
+	hashes[depth] = hashes[depth] or SpatialHash.new(8)
+	return hashes[depth]
+end
+local function onAdded(obj)
+	local depth = obj:GetAttribute("Depth")
+	local part = partOf(obj)
+	if depth and part then
+		hashFor(depth):insert(obj, part.CFrame.Position)
+	end
+end
+local function onRemoved(obj)
+	for _, h in pairs(hashes) do
+		h:remove(obj)
+	end
+end
+CollectController.indexed = function(depth)
+	return hashes[depth] and hashes[depth].size or 0
+end
+
 local function scan()
 	local root = ClientState.root()
 	if not root or not lootFolder then
 		return nil
 	end
 	local stats = ClientState.stats()
-	local depth = myDepth()
 	local pos = root.CFrame.Position
 	local best, bestDist = nil, stats.Radius
-	for _, model in ipairs(lootFolder:GetChildren()) do
-		if model:GetAttribute("Depth") == depth then
-			local hit = model.PrimaryPart
-			if hit then
-				local d = (hit.CFrame.Position - pos).Magnitude
-				if d < bestDist then
-					best, bestDist = model, d
-				end
+	-- A little extra search radius: magnet-pulled items drift from where they were indexed.
+	for _, obj in ipairs(hashFor(myDepth()):query(pos, stats.Radius + 8)) do
+		local hit = obj.Parent and partOf(obj)
+		if hit then
+			local d = (hit.CFrame.Position - pos).Magnitude
+			if d < bestDist then
+				best, bestDist = obj, d
 			end
 		end
 	end
@@ -98,7 +126,7 @@ local function showTarget(t)
 	highlight.Adornee = t.model
 	highlight.Enabled = not full
 	highlight.OutlineColor = rarityColor(t.def)
-	billboard.Adornee = t.model.PrimaryPart
+	billboard.Adornee = partOf(t.model)
 	billboard.Enabled = true
 	if full then
 		billboardText.Text = "STACK FULL - DEPOSIT"
@@ -246,6 +274,11 @@ end
 
 function CollectController.init()
 	lootFolder = Workspace:WaitForChild("Vault"):WaitForChild("Loot")
+	for _, obj in ipairs(lootFolder:GetChildren()) do
+		onAdded(obj)
+	end
+	lootFolder.ChildAdded:Connect(onAdded)
+	lootFolder.ChildRemoved:Connect(onRemoved)
 	Ui.touch = game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").KeyboardEnabled
 	highlight = Instance.new("Highlight")
 	highlight.Name = "LootTarget"

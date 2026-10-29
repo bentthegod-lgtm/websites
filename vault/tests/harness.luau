@@ -225,6 +225,14 @@ roblox.implementMethod("Model", "PivotTo", function(self, cf)
 		end
 	end
 end)
+for _, cls in ipairs({ "Part", "TrussPart", "WedgePart" }) do
+	roblox.implementMethod(cls, "GetPivot", function(self)
+		return self.CFrame
+	end)
+	roblox.implementMethod(cls, "PivotTo", function(self, cf)
+		self.CFrame = cf
+	end)
+end
 -- Lune keeps Position and CFrame separate; in Roblox Position is derived from CFrame.
 -- syncPositions() copies CFrame.Position into Position for everything under a root.
 local function syncPositions(root)
@@ -292,6 +300,8 @@ fakeEvent("TextButton", "Activated")
 fakeEvent("CFrameValue", "Changed")
 fakeEvent("NumberValue", "Changed")
 fakeEvent("Folder", "Destroying")
+fakeEvent("Folder", "ChildAdded")
+fakeEvent("Folder", "ChildRemoved")
 fakeEvent("Model", "Destroying")
 fakeEvent("TextBox", "FocusLost")
 roblox.implementMethod("Instance", "GetAttributeChangedSignal", function()
@@ -677,14 +687,34 @@ check("services initialise and start (same order as Main.server); every depth is
 	registry.DataService.start()
 	assert(type(stubServices.MarketplaceService.ProcessReceipt) == "function", "ProcessReceipt not bound")
 	local LS = registry.LootService
+	-- Nobody is in the vault yet: no depth is filled; every pool shows its stand-in.
 	for d = 1, 7 do
-		local n = LS.count(d)
-		assert(n >= math.floor(DepthConfig.get(d).ActiveLoot * 0.85), "depth " .. d .. " stocked with " .. n)
-		for _, entry in pairs(LS.items(d)) do
-			assert(entry.def.Depth == d and not entry.def.Special, "wrong loot on depth " .. d)
-			assert(entry.model and entry.model.Parent == world.lootFolder and entry.model:GetAttribute("LootId") == entry.id and entry.model:GetAttribute("Depth") == d, "loot model not registered")
+		assert(LS.count(d) == 0 and not LS.isActive(d), "depth " .. d .. " filled with nobody there")
+		for _, p in ipairs(world.depths[d].standin:GetChildren()) do
+			assert(p.Transparency == 0, "stand-in hidden on an empty depth")
 		end
 	end
+	-- Filling a depth puts one pickup on every slot; most are single parts.
+	LS.activate(7, true)
+	local entries, simple, models = 0, 0, 0
+	for _, entry in pairs(LS.items(7)) do
+		entries += 1
+		assert(entry.def.Depth == 7 and not entry.def.Special, "wrong loot on depth 7")
+		assert(entry.model and entry.model.Parent == world.lootFolder and entry.model:GetAttribute("LootId") == entry.id and entry.model:GetAttribute("Depth") == 7, "loot model not registered")
+		if entry.model:IsA("BasePart") then
+			simple += 1
+		else
+			models += 1
+		end
+	end
+	assert(entries == #world.depths[7].points, string.format("depth 7 filled %d of %d slots", entries, #world.depths[7].points))
+	assert(models <= 12 and simple >= entries - 12, "too many detailed models in the fill: " .. models)
+	for _, p in ipairs(world.depths[7].standin:GetChildren()) do
+		assert(p.Transparency == 1, "stand-in still shown on a filled depth")
+	end
+	LS.unload(7)
+	assert(LS.count(7) == 0, "unload left pickups behind")
+	print(string.format("        B7 filled: %d slots, %d single parts + %d detailed models", entries, simple, models))
 end)
 
 local nextUserId = 3000
@@ -794,7 +824,8 @@ check("collect: server checks distance, depth and cooldown; value fixed at picku
 	moveTo(aliceRoot, world.depths[1].elevator.arrival.Position)
 	local ok, reason = LS.collect(alice, entry.id)
 	assert(not ok and reason == "too far", "collected from across the room: " .. tostring(reason))
-	-- Another depth's item.
+	-- Another depth's item (B2 is filled on demand: nobody is there).
+	LS.activate(2, true)
 	local deep = nearestItem(2, V3.new(0, world.depths[2].y0, 0))
 	moveTo(aliceRoot, entry.position + V3.new(0, 2.5, 0))
 	ok, reason = LS.collect(alice, deep.id)
@@ -909,6 +940,7 @@ check("deposit: prompt pays exactly once; a duplicate request and the auto zone 
 	grab(alice, aliceRoot, nearestItem(1, aliceRoot.CFrame.Position))
 	moveTo(aliceRoot, world.machines.D2_1.cframe.Position + V3.new(0, 3, 4))
 	assert(not DepS.deposit(alice, "D2_1"), "deposited on a depth that isn't unlocked (teleported there)")
+	LS.activate(2, true)
 	local deepItem = nearestItem(2, aliceRoot.CFrame.Position)
 	moveTo(aliceRoot, deepItem.position + V3.new(0, 2.5, 0))
 	advance(1)
@@ -994,6 +1026,9 @@ check("deeper loot is worth more (same player, same upgrades)", function()
 		end
 		return sum / n
 	end
+	for d = 1, 7 do
+		LS.activate(d, true)
+	end
 	for d = 2, 7 do
 		assert(avg(d) > avg(d - 1) * 3, "depth " .. d .. " loot is not worth clearly more")
 	end
@@ -1052,6 +1087,90 @@ check("magnet pulls loot toward its owner; auto-collect picks up nearby loot", f
 	p.Carried.Slots = slots0
 	p.Upgrades.CashMagnet, p.Upgrades.AutoCollect, p.Upgrades.CarryCapacity = nil, nil, 1
 	p.HighestDepth = 3
+end)
+
+check("pool fill: fills on arrival (and for elevator riders), unloads when empty, refills collected slots", function()
+	local ella, ellaRoot = makePlayer("Ella")
+	local p = DS.getProfile(ella)
+	p.HighestDepth = 6
+	local d = 5
+	LS.unload(d)
+	assert(not LS.isActive(d) and LS.count(d) == 0, "B5 should start empty")
+	local record = world.depths[d]
+	-- Arrive on B5's rim: the occupancy check fills it within a second (300 per tick).
+	moveTo(ellaRoot, V3.new(30, record.y0 + 3, -60))
+	tick(0.6)
+	assert(LS.isActive(d), "B5 did not fill when a player arrived")
+	tick(1)
+	assert(LS.count(d) == #record.points and LS.queued(d) == 0, string.format("B5 filled %d of %d slots", LS.count(d), #record.points))
+	-- Nearest pickup on the dense grid matches a brute-force search.
+	for _, q in ipairs({ V3.new(0, record.y0 - 20, 0), V3.new(-30, record.y0 - 9, -28), V3.new(20, record.y0 - 42, 44) }) do
+		local brute, bestD = nil, math.huge
+		for _, entry in pairs(LS.items(d)) do
+			local dd = (entry.position - q).Magnitude
+			if dd <= 7 and dd < bestD then
+				brute, bestD = entry, dd
+			end
+		end
+		assert(LS.nearest(d, q, 7) == brute, "spatial lookup disagrees with brute force")
+	end
+	-- Collect a slot: it empties, then refills after the depth's RefillDelay.
+	local point = record.points[600]
+	local entry = LS.slot(d, point.index)
+	assert(entry, "slot empty after the fill")
+	moveTo(ellaRoot, entry.position + V3.new(0, 2.5, 0))
+	advance(1)
+	assert(LS.collect(ella, entry.id), "could not collect from the full pool")
+	assert(LS.slot(d, point.index) == nil and entry.model == nil, "collected slot still filled")
+	tick(record.def.RefillDelay - 0.5)
+	assert(LS.slot(d, point.index) == nil, "refilled too early")
+	tick(1)
+	local refilled = LS.slot(d, point.index)
+	assert(refilled and refilled ~= entry and (refilled.position - point.cframe.Position).Magnitude < 1e-6, "slot did not refill")
+	-- An elevator rider's destination fills before they arrive.
+	LS.unload(6)
+	moveTo(ellaRoot, record.elevator.arrival.Position)
+	advance(2)
+	assert(ES.travel(ella, 6), "ride to B6 refused")
+	assert(LS.isActive(6), "B6 did not start filling for the rider")
+	tick(4)
+	-- Empty for 30 s: unloaded; the stand-in shows again.
+	assert(registry.PlayerService.depthOf(ella) == 6, "ella not on B6")
+	local unloads = LS.Debug.unloads
+	tick(LS.UnloadAfter + 2)
+	assert(not LS.isActive(d) and LS.count(d) == 0 and LS.Debug.unloads > unloads, "B5 not unloaded after 30 s empty")
+	assert(record.standin:GetChildren()[1].Transparency == 0, "stand-in not shown on the unloaded depth")
+	assert(LS.isActive(6), "B6 unloaded with a player on it")
+	leave(ella)
+end)
+
+check("magnet and auto-collect stay capped in a full pool", function()
+	local fay, fayRoot = makePlayer("Fay")
+	local p = DS.getProfile(fay)
+	p.HighestDepth = 5
+	p.Upgrades.CashMagnet = 10
+	p.Upgrades.AutoCollect = 10
+	p.Upgrades.CarryCapacity = 40
+	p.Upgrades.StackSize = 10
+	local record = world.depths[1]
+	moveTo(fayRoot, V3.new(-20, record.y0 + Pools.surface(0) + 3, 0))
+	LS.activate(1, true)
+	local stats = DS.stats(fay)
+	assert(stats.MagnetRadius > 30 and stats.AutoRadius > 8, "stats")
+	local carried0 = p.Carried.Count
+	for _ = 1, 10 do
+		tick(0.1)
+		local pulledNow = 0
+		for _, entry in pairs(LS.items(1)) do
+			if entry.pulledBy == fay and entry.pulledAt == clock then
+				pulledNow += 1
+			end
+		end
+		assert(pulledNow <= GameConfig.MagnetMaxPull, "magnet moved " .. pulledNow .. " items in one tick")
+	end
+	local collected = p.Carried.Count - carried0
+	assert(collected >= 1 and collected <= math.ceil(1 / stats.AutoInterval) + 1, "auto-collect took " .. collected .. " items in a second")
+	leave(fay)
 end)
 
 check("rare events: one at a time, announced, per-depth cooldown, expire cleanly", function()

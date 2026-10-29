@@ -69,6 +69,15 @@ test("every loot item and stack piece has a model", function()
 		end
 		assert(parts >= 2 and parts <= 60, def.Id .. " part count " .. parts)
 	end
+	-- Pool fill: every common-to-rare normal item is ONE part; Epic+ use the detailed model.
+	for _, def in ipairs(LootConfig.List) do
+		if not def.Special and LootConfig.rank(def) < 4 then
+			assert(LootModels.isSimple(def.Id), def.Id .. " needs a single-part fill look")
+			local p = LootModels.simple(def.Id, L.roblox.CFrame.new())
+			assert(p:IsA("BasePart") and #p:GetChildren() == 0 and not p.CanCollide and p.Anchored and not p.CastShadow, def.Id .. " fill part")
+			assert(math.max(p.Size.X, p.Size.Z) <= 2.4, def.Id .. " is wider than a fill slot")
+		end
+	end
 	for _, category in ipairs(LootConfig.CategoryOrder) do
 		local piece = LootModels.piece(category, "Classic", L.roblox.CFrame.new(), true)
 		assert(#piece:GetChildren() >= 1, category .. " piece is empty")

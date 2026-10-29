@@ -18,11 +18,13 @@
 	                       down again (27 degrees) and comes out on the NEXT depth's back
 	                       rim, 90 studs lower. B7's landing ends at the sealed Ancient Vault.
 
-	The walkable treasure surface is simple collidable geometry (step boxes, flat terrace
-	boxes and tilted ramp slabs, all walkable); the pile of money on it is non-colliding
-	decoration (bundles, bars, coins, gems, relics) in clusters of a few parts.
-	Loot spawn points are spread over the whole pool surface, denser and luckier deeper down
-	(point.bonus scales Rare Loot Luck), and VaultBuilder keeps only reachable ones (Reach).
+	The walkable basin surface is simple collidable geometry (step boxes, flat terrace boxes
+	and tilted ramp slabs, all walkable) in a darker shade of the loot. On top of it the pool
+	is FILLED: ~1,950 pickup slots tile every step, terrace and ramp wall to wall (FillGrid,
+	~2.4-stud jittered brick grid); LootService puts a real, collectible pickup on every
+	slot while the depth is occupied (non-colliding, anchored, sitting flush). Deeper slots
+	are luckier (bonus scales Rare Loot Luck). Idle depths show a stand-in: one loot-coloured
+	slab per step / terrace / ramp.
 	ctx.safeZones lists the volumes a player may be in (PlayerService returns anyone outside
 	them to the rim).
 ]]
@@ -34,6 +36,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Vault")
 local GameConfig = require(Shared.Config.GameConfig)
 local DepthConfig = require(Shared.Config.DepthConfig)
+local FillGrid = require(Shared.FillGrid)
 
 local Pools = {}
 
@@ -48,40 +51,12 @@ local BACK = GameConfig.RoomBack -- 60
 local H = Themes.helpers
 local emitter, light, decoLoot = H.emitter, H.light, H.decoLoot
 
-Pools.Pool = { x0 = -52, x1 = 52, z0 = -46, z1 = 50, depth = 42 }
+local PoolProfile = require(Shared.PoolProfile)
+Pools.Pool = PoolProfile.Pool
 local P = Pools.Pool
-Pools.DeckEnd = -46
-
--- The walkable profile along z (heights relative to the rim). Steps rise 1.0 over 1.78;
--- ramps are about 31 degrees; the deep end is flat in front of the vault door.
-Pools.Profile = {
-	{ kind = "stairs", z0 = -46, z1 = -30, h0 = 0, h1 = -9, steps = 9 },
-	{ kind = "flat", z0 = -30, z1 = -26, h0 = -9, h1 = -9 },
-	{ kind = "ramp", z0 = -26, z1 = -8, h0 = -9, h1 = -20 },
-	{ kind = "flat", z0 = -8, z1 = -4, h0 = -20, h1 = -20 },
-	{ kind = "ramp", z0 = -4, z1 = 14, h0 = -20, h1 = -31 },
-	{ kind = "flat", z0 = 14, z1 = 18, h0 = -31, h1 = -31 },
-	{ kind = "ramp", z0 = 18, z1 = 36, h0 = -31, h1 = -42 },
-	{ kind = "flat", z0 = 36, z1 = 50, h0 = -42, h1 = -42 },
-}
-
--- Height of the treasure surface at z (relative to the rim) and its slope angle.
-function Pools.surface(z)
-	for _, seg in ipairs(Pools.Profile) do
-		if z >= seg.z0 and z <= seg.z1 then
-			if seg.kind == "stairs" then
-				local run = (seg.z1 - seg.z0) / seg.steps
-				local i = math.clamp(math.floor((z - seg.z0) / run) + 1, 1, seg.steps)
-				return seg.h0 - i * (seg.h0 - seg.h1) / seg.steps, 0
-			elseif seg.kind == "ramp" then
-				local t = (z - seg.z0) / (seg.z1 - seg.z0)
-				return seg.h0 + (seg.h1 - seg.h0) * t, math.atan2(seg.h0 - seg.h1, seg.z1 - seg.z0)
-			end
-			return seg.h0, 0
-		end
-	end
-	return if z < P.z0 then 0 else -P.depth, 0
-end
+Pools.DeckEnd = P.z0
+Pools.Profile = PoolProfile.Profile
+Pools.surface = PoolProfile.surface
 
 -- Tunnel geometry (relative to the depth's rim), shared with the harness and PlayerService.
 Pools.Tunnel = {
@@ -126,6 +101,12 @@ end
 local function box(b, name, lo, hi, color, material, deco)
 	local props = { Name = name, Size = hi - lo, CFrame = CFrame.new((lo + hi) / 2), Color = color, Material = material }
 	return if deco then b.deco(props) else b.part(props)
+end
+
+-- Under the fill, the basin surface is a darker shade of the loot: a collected slot shows
+-- as a dent until it refills.
+local function dentColor(st)
+	return st.sea:Lerp(Color3.new(0, 0, 0), 0.45)
 end
 
 -- Pool basin, walls and the walkable treasure surface -----------------------------------------
@@ -174,9 +155,9 @@ local function basin(ctx, st)
 				b.deco({ Name = "StepNosing", Size = Vector3.new(width, 0.12, 0.4), CFrame = CFrame.new(0, top + 0.04, za + 0.2), Color = st.nose, Material = if st.nose == st.band then st.bandM else M.Metal, CastShadow = false })
 			end
 		elseif seg.kind == "flat" then
-			box(b, "Terrace", Vector3.new(P.x0, floorY, seg.z0), Vector3.new(P.x1, y0 + seg.h0, seg.z1), st.sea, st.seaM)
+			box(b, "Terrace", Vector3.new(P.x0, floorY, seg.z0), Vector3.new(P.x1, y0 + seg.h0, seg.z1), dentColor(st), st.seaM)
 		else
-			slab(b, "TreasureSlope", Vector3.new(0, y0 + seg.h0, seg.z0), Vector3.new(0, y0 + seg.h1, seg.z1), width, st.sea, st.seaM)
+			slab(b, "TreasureSlope", Vector3.new(0, y0 + seg.h0, seg.z0), Vector3.new(0, y0 + seg.h1, seg.z1), width, dentColor(st), st.seaM)
 		end
 	end
 	-- Grand stair balustrades (the steps' style frames the descent).
@@ -200,95 +181,6 @@ local function basin(ctx, st)
 		truss.Material = M.Metal
 		truss.Parent = b.parent
 		b.count += 1
-	end
-end
-
--- Decorative treasure: a few parts per cluster, never colliding.
-local function decoPart(b, name, size, cf, color, material, shape)
-	return b.part({ Name = name, Size = size, CFrame = cf, Color = color, Material = material or M.SmoothPlastic, Shape = shape, CanCollide = false, CastShadow = false })
-end
-
-local CLUSTERS = {}
-function CLUSTERS.cash(b, cf, rng)
-	for i = 1, rng:NextInteger(2, 4) do
-		local o = cf * CFrame.new(rng:NextNumber(-1.6, 1.6), 0.45 + (i - 1) % 2 * 0.9, rng:NextNumber(-1.4, 1.4)) * CFrame.Angles(0, rng:NextNumber(0, 3.1), 0)
-		decoPart(b, "CashBundle", Vector3.new(2.2, 0.9, 1.3), o, rgb(118, 164, 104), M.Fabric)
-		if i == 1 then
-			decoPart(b, "CashBand", Vector3.new(0.4, 0.94, 1.34), o, rgb(236, 236, 230))
-		end
-	end
-end
-function CLUSTERS.gold(b, cf, rng)
-	for i = 1, rng:NextInteger(2, 4) do
-		local o = cf * CFrame.new(rng:NextNumber(-1.6, 1.6), 0.3 + (i - 1) % 3 * 0.6, rng:NextNumber(-1.2, 1.2)) * CFrame.Angles(0, rng:NextNumber(0, 3.1), 0)
-		decoPart(b, "GoldBar", Vector3.new(2, 0.6, 1), o, rgb(236, 184, 58), M.Metal)
-	end
-	decoPart(b, "CoinPile", Vector3.new(0.6, 2.6, 2.6), cf * CFrame.new(rng:NextNumber(-1, 1), 0.2, rng:NextNumber(-1, 1)) * UP, rgb(250, 200, 70), M.Metal, Enum.PartType.Cylinder)
-end
-local function gemCluster(b, cf, rng, color)
-	for _ = 1, rng:NextInteger(2, 3) do
-		local s = rng:NextNumber(0.9, 1.8)
-		local o = cf * CFrame.new(rng:NextNumber(-1.8, 1.8), s * 0.5, rng:NextNumber(-1.6, 1.6)) * CFrame.Angles(math.rad(45), rng:NextNumber(0, 3), math.rad(35))
-		b.part({ Name = "Gem", Size = Vector3.new(s, s, s), CFrame = o, Color = color, Material = M.Glass, Transparency = 0.2, Reflectance = 0.3, CanCollide = false, CastShadow = false })
-	end
-	decoPart(b, "GemGlow", Vector3.new(0.7, 0.7, 0.7), cf * CFrame.new(0, 0.6, 0) * CFrame.Angles(math.rad(45), 0, math.rad(35)), color, M.Neon)
-end
-function CLUSTERS.diamond(b, cf, rng)
-	gemCluster(b, cf, rng, rgb(210, 236, 255))
-end
-function CLUSTERS.emerald(b, cf, rng)
-	gemCluster(b, cf, rng, rgb(40, 210, 110))
-end
-function CLUSTERS.platinum(b, cf, rng)
-	for i = 1, rng:NextInteger(2, 4) do
-		local o = cf * CFrame.new(rng:NextNumber(-1.6, 1.6), 0.35 + (i - 1) % 2 * 0.7, rng:NextNumber(-1.3, 1.3)) * CFrame.Angles(0, rng:NextNumber(0, 3.1), 0)
-		decoPart(b, "Ingot", Vector3.new(2.2, 0.7, 1.1), o, rgb(214, 220, 228), M.Metal)
-	end
-end
-function CLUSTERS.relic(b, cf, rng)
-	for _ = 1, 2 do
-		decoPart(b, "CoinPile", Vector3.new(0.5, 2.4, 2.4), cf * CFrame.new(rng:NextNumber(-1.5, 1.5), 0.2, rng:NextNumber(-1.5, 1.5)) * UP, rgb(200, 150, 70), M.Metal, Enum.PartType.Cylinder)
-	end
-	if rng:NextNumber() < 0.6 then
-		decoPart(b, "Urn", Vector3.new(1.4, 1.8, 1.4), cf * CFrame.new(rng:NextNumber(-1, 1), 0.9, rng:NextNumber(-1, 1)), rgb(150, 100, 60), M.Slate, Enum.PartType.Ball)
-	else
-		decoPart(b, "RelicBox", Vector3.new(1.6, 1, 1.2), cf * CFrame.new(0, 0.5, 0) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), rgb(120, 84, 50), M.WoodPlanks)
-	end
-end
-function CLUSTERS.legend(b, cf, rng)
-	local r = rng:NextNumber()
-	CLUSTERS.gold(b, cf, rng)
-	if r < 0.3 then
-		decoPart(b, "Crown", Vector3.new(0.8, 1.6, 1.6), cf * CFrame.new(0.8, 1.1, 0.4) * UP, rgb(250, 200, 70), M.Metal, Enum.PartType.Cylinder)
-		decoPart(b, "CrownJewel", Vector3.new(0.6, 0.6, 0.6), cf * CFrame.new(0.8, 1.7, 0.4), rgb(220, 40, 70), M.Glass, Enum.PartType.Ball)
-	elseif r < 0.55 then
-		decoPart(b, "Chest", Vector3.new(2.2, 1.4, 1.5), cf * CFrame.new(-0.6, 0.7, 0) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), rgb(130, 30, 50), M.Fabric)
-	elseif r < 0.75 then
-		decoPart(b, "Ruby", Vector3.new(1, 1, 1), cf * CFrame.new(0, 1, 0) * CFrame.Angles(math.rad(45), 0, math.rad(35)), rgb(220, 40, 70), M.Glass)
-	end
-end
-
--- Mounds and clusters over the whole surface (and heaped higher along the pool walls).
-local function treasureSea(ctx, st)
-	local b, y0 = ctx.b, ctx.y0
-	local rng = Random.new(ctx.def.Depth * 7717)
-	local cluster = CLUSTERS[st.cluster]
-	for z = P.z0 + 18, P.z1 - 2, 8.5 do
-		local h, slope = Pools.surface(z)
-		for x = -36, 36, 10 do
-			local jx, jz = x + rng:NextNumber(-2.5, 2.5), z + rng:NextNumber(-2, 2)
-			if not (math.abs(jx) < 10 and jz > 32) then -- keep the door's swing clear
-				local hh = Pools.surface(jz)
-				cluster(b, CFrame.new(jx, y0 + hh, jz) * CFrame.Angles(slope, rng:NextNumber(-0.3, 0.3), 0), rng)
-			end
-		end
-		-- Treasure banked high against both pool walls: a rounded bank (a buried cylinder)
-		-- rising ~6 studs, so the pool reads full to the brim with a valley down the middle.
-		for _, side in ipairs({ -1, 1 }) do
-			local bank = decoPart(b, "Bank", Vector3.new(9.2, 24, 24), CFrame.new(side * P.x1, y0 + h - 6, z) * CFrame.Angles(slope, math.pi / 2, 0), st.sea, st.seaM, Enum.PartType.Cylinder)
-			bank.CastShadow = true
-			cluster(b, CFrame.new(side * (P.x1 - 6.5), y0 + h + 4, z) * CFrame.Angles(slope, 0, side * math.rad(20)), rng)
-		end
 	end
 end
 
@@ -553,40 +445,52 @@ local function exitRoute(ctx, st)
 	end
 end
 
--- Loot spawn points over the treasure surface: denser and luckier deeper down.
-local function spawnPoints(ctx)
-	local rng = Random.new(ctx.def.Depth * 3137)
+-- The pool's fill: a pickup slot every ~2.4 studs over the whole treasure surface
+-- (FillGrid), plus a cheap stand-in (one loot-coloured slab per stair / terrace / ramp)
+-- shown while the depth is empty and its fill isn't materialised.
+Pools.FillExclude = {
+	{ 5, 13, 29, 49.5 }, -- where the vault door's leaf swings open
+	{ -8, 8, 46.5, 50 }, -- the door's threshold
+	{ -14.5, -9.5, 38.5, 43.5 }, -- the rare-event spot
+}
+
+local function fill(ctx, st)
 	local y0 = ctx.y0
-	local z = P.z0 + 1.2
-	while z < P.z1 - 1 do
-		local h, slope = Pools.surface(z)
-		local deep = -h / P.depth -- 0 at the rim .. 1 at the bottom
-		local spacing = 16 - 8 * deep
-		local x = -38 + rng:NextNumber(0, spacing * 0.6)
-		while x < 38 do
-			local px = x + rng:NextNumber(-1.2, 1.2)
-			local doorLane = math.abs(px - 2) < 12 and z > 28
-			local chute = ctx.def.Depth >= 2 and px > -38 and px < -22 and z > 34
-			if not doorLane and not chute then
-				local ph = Pools.surface(z)
-				table.insert(ctx.extraPoints, {
-					cframe = CFrame.new(px, y0 + ph, z) * CFrame.Angles(slope, rng:NextNumber(0, math.pi * 2), 0),
-					size = "L",
-					kind = "Pool",
-					bonus = 1 + 0.8 * deep,
-				})
-			end
-			x += spacing
-		end
-		z += 5.2 - 1.8 * deep
+	for _, slot in ipairs(FillGrid.generate(ctx.def.Depth * 7919, Pools.FillExclude)) do
+		table.insert(ctx.extraPoints, {
+			cframe = CFrame.new(slot.x, y0 + slot.h + slot.lift, slot.z) * CFrame.Angles(slot.slope, slot.yaw, 0),
+			size = "L",
+			kind = "Fill",
+			bonus = slot.bonus,
+		})
 	end
+	local standin = Instance.new("Model")
+	standin.Name = "Standin"
+	standin.Parent = ctx.folder
+	local sb = Props.builder(standin)
+	local width = P.x1 - P.x0 - 1
+	for _, seg in ipairs(Pools.Profile) do
+		if seg.kind == "stairs" then
+			local run = (seg.z1 - seg.z0) / seg.steps
+			for i = 1, seg.steps do
+				local top = y0 - i * (seg.h0 - seg.h1) / seg.steps
+				sb.deco({ Name = "StandinStep", Size = Vector3.new(width, 0.6, run - 0.3), CFrame = CFrame.new(0, top + 0.3, seg.z0 + (i - 0.5) * run), Color = st.sea, Material = st.seaM, CastShadow = false })
+			end
+		elseif seg.kind == "flat" then
+			sb.deco({ Name = "StandinTerrace", Size = Vector3.new(width, 0.6, seg.z1 - seg.z0), CFrame = CFrame.new(0, y0 + seg.h0 + 0.3, (seg.z0 + seg.z1) / 2), Color = st.sea, Material = st.seaM, CastShadow = false })
+		else
+			local a, z = Vector3.new(0, y0 + seg.h0 + 0.6, seg.z0), Vector3.new(0, y0 + seg.h1 + 0.6, seg.z1)
+			sb.deco({ Name = "StandinSlope", Size = Vector3.new(width, 0.6, (z - a).Magnitude), CFrame = CFrame.lookAt((a + z) / 2, z) * CFrame.new(0, -0.3, 0), Color = st.sea, Material = st.seaM, CastShadow = false })
+		end
+	end
+	ctx.b.count += sb.count
+	ctx.standin = standin
 end
 
 function Pools.build(ctx)
 	local st = STYLES[ctx.def.Depth] or STYLES[1]
 	ctx.safeZones = ctx.safeZones or {}
 	basin(ctx, st)
-	treasureSea(ctx, st)
 	rimDressing(ctx, st)
 	MONUMENTS[st.cluster](ctx, st)
 	ctx.landmark = monumentBase(ctx)
@@ -601,7 +505,7 @@ function Pools.build(ctx)
 		table.insert(ctx.deposits, chute)
 	end
 	exitRoute(ctx, st)
-	spawnPoints(ctx)
+	fill(ctx, st)
 	-- Safe volumes: rims (incl. the elevator cabin), the pool, and (for B2+) the arrival
 	-- end of the tunnel from the depth above.
 	local y0, ht = ctx.y0, ctx.H

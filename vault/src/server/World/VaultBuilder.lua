@@ -190,10 +190,10 @@ function VaultBuilder.build()
 		local reach = Reach.index(depthFolder)
 		local walk = Reach.walk(reach, VaultBuilder.walkBounds(y0), VaultBuilder.walkStart(y0))
 		local kept, dropped = {}, 0
-		local rng = Random.new(def.Depth * 1013)
 		for _, extra in ipairs(ctx.extraPoints) do
-			if Reach.pointOk(reach, walk, extra.cframe.Position) then
-				table.insert(kept, { cframe = extra.cframe * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), size = extra.size, kind = extra.kind, bonus = extra.bonus, index = #kept + 1 })
+			local ok = if extra.kind == "Fill" then Reach.surfaceOk(reach, walk, extra.cframe.Position) else Reach.pointOk(reach, walk, extra.cframe.Position)
+			if ok then
+				table.insert(kept, { cframe = extra.cframe, size = extra.size, kind = extra.kind, bonus = extra.bonus, index = #kept + 1 })
 			else
 				dropped += 1
 			end
@@ -218,6 +218,7 @@ function VaultBuilder.build()
 			droppedPoints = dropped,
 			exitDoorPosition = ctx.exitDoorPosition,
 			tunnelEnd = ctx.tunnelEnd,
+			standin = ctx.standin,
 			safeZones = ctx.safeZones,
 			layout = layout,
 		}

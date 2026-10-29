@@ -81,18 +81,28 @@ local GameConfig = requireModule(Shared.Config.GameConfig)
 local StackLayout = requireModule(Shared.StackLayout)
 local world = requireModule(Server.World.VaultBuilder).build()
 
--- Loot on ~55% of every depth's spawn points, rolled like the server would.
+-- Every pool materialised FULL (as LootService fills an occupied depth): one pickup per
+-- fill slot, single parts for common-rare loot, detailed models for Epic+.
 local rng = Rng.new(7)
 local loot = roblox.Instance.new("Folder")
+local fillCounts = {}
 for depth, record in pairs(world.depths) do
 	local active = {}
+	local n, parts = 0, 0
 	for _, point in ipairs(record.points) do
-		if rng:NextNumber() < 0.55 then
-			local def = LootTable.roll(depth, active, point.bonus or 1, rng, point.size)
-			if def then
-				active[def.Id] = (active[def.Id] or 0) + 1
-				LootModels.build(def.Id, point.cframe, GameConfig.LootScale).Parent = loot
-			end
+		local def = LootTable.rollFill(depth, active, point.bonus or 1, rng)
+		if def then
+			active[def.Id] = (active[def.Id] or 0) + 1
+			local obj = if LootModels.isSimple(def.Id) then LootModels.simple(def.Id, point.cframe) else LootModels.build(def.Id, point.cframe, GameConfig.LootScale)
+			obj.Parent = loot
+			n += 1
+			parts += if obj:IsA("BasePart") then 1 else #obj:GetDescendants()
+		end
+	end
+	fillCounts[depth] = { slots = #record.points, items = n, parts = parts }
+	if record.standin then
+		for _, p in ipairs(record.standin:GetChildren()) do
+			p.Transparency = 1 -- the fill replaces the idle stand-in
 		end
 	end
 end
@@ -222,7 +232,8 @@ end
 fs.writeFile(outPath, serde.encode("json", out))
 local counts = {}
 for d, rec in pairs(world.depths) do
-	table.insert(counts, string.format("B%d %d parts / %d points (%d unreachable dropped)", d, rec.parts, #rec.points, rec.droppedPoints or 0))
+	local f = fillCounts[d]
+	table.insert(counts, string.format("B%d %d architecture parts / %d fill slots (%d dropped) / fill %d items in %d parts", d, rec.parts, #rec.points, rec.droppedPoints or 0, f.items, f.parts))
 end
 table.sort(counts)
 print(string.format("exported %d world, %d loot, %d action, %d sheet parts (world total %d)", #out.world, #out.loot, #out.action, #out.sheet, world.partCount))

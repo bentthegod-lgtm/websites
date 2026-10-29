@@ -43,6 +43,11 @@ function ElevatorService.isRiding(player)
 	return riding[player] ~= nil
 end
 
+-- The depth a rider is heading to (its pool fills while they ride), or nil.
+function ElevatorService.rideTarget(player)
+	return riding[player] and riding[player].to
+end
+
 function ElevatorService.cancel(player)
 	if riding[player] then
 		riding[player] = nil
@@ -112,6 +117,7 @@ function ElevatorService.travel(player, depth)
 	tokenCounter += 1
 	local ride = { to = depth, from = from, token = tokenCounter }
 	riding[player] = ride
+	services.LootService.activate(depth) -- start filling the destination's pool now
 	local duration = ElevatorService.rideTime(from, depth)
 	services.Remotes.Elevator:FireClient(player, "Depart", { from = from, to = depth, duration = duration, code = def.Code, name = def.Name })
 	task.delay(duration, arrive, player, ride)

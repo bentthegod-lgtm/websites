@@ -230,6 +230,18 @@ function Reach.pointOk(idx, walk, pos)
 	return false, "no reachable spot in pickup range"
 end
 
+-- A pool fill slot is OK if it isn't buried and a player can stand right on / next to it
+-- (cheap: no line-of-sight test, thousands of slots per depth).
+function Reach.surfaceOk(idx, walk, pos)
+	if Reach.blocked(idx, pos + Vector3.new(0, 0.35, 0), 0) then
+		return false, "inside a part"
+	end
+	if #Reach.near(walk, pos, 1.6, 1.4) == 0 then
+		return false, "nowhere to stand"
+	end
+	return true
+end
+
 -- Is there a reachable node within `range` (and 4 studs of height) of a position?
 function Reach.reachable(walk, pos, range)
 	return #Reach.near(walk, pos, range or 4, 4) > 0

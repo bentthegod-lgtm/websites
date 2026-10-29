@@ -6,8 +6,8 @@ A Roblox collect-and-deposit game set in an underground bank vault. Every depth 
 >
 > What *was* verified headlessly, in Lune:
 > - every file lints and compiles;
-> - 32 unit tests pass;
-> - 26 harness checks pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services and a fake clock.
+> - 38 unit tests pass;
+> - 28 harness checks pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services and a fake clock.
 >
 > Persistence, session locking, receipts and multiplayer (two players, races, leaving) have been exercised **only in that harness**. Lune has no physics and no renderer, so characters are moved by the harness. The world was checked visually with three.js renders of the exported parts (`build/preview-*.png`). Those renders are not Roblox's renderer.
 >
@@ -75,24 +75,24 @@ Every depth has the same pool layout (`src/server/World/Pools.lua`) and its own 
 - **The pool:** a basin 104 × 96 studs and **42 deep**. Its "water" is a walkable sea of loot. From the rim:
   - nine grand steps (1 stud rise each) lead to the first terrace at -9;
   - three ramps of about 31° with flat terraces between them drop to -20, -31 and finally the deep end at -42 (the shallow end is 9 deep, the deep end 42).
-  - The walkable surface is simple collidable boxes and slabs; the pile of money on it is non-colliding decoration (bundles, bars, coins, gems, relics) with rounded banks heaped against both walls, so a valley of treasure runs down the middle.
+  - The walkable surface is simple collidable boxes and slabs in a darker shade of the loot. **The pool is filled with real pickups:** about 1,950 slots per depth tile every step, terrace and ramp wall to wall, on a 2.4-stud jittered brick grid with random yaw and a little height. Every slot holds a collectible item of that depth (non-colliding, anchored, flush on the surface, so walking on the pile is stable). A collected slot shows the dark surface as a dent until it refills.
   - Climbable truss ladders run up the deep end to the back rim.
 - **Vault door:** a massive round door in the pool's back wall at the bottom, locked until the next depth is unlocked (the client swings it open; it swings into the pool so it never blocks the tunnel).
 - **Tunnel:** behind the door, tunnel A ramps down (14°) under the back rim to a landing with a window into a preview of the next depth's loot. Tunnel C ramps down again (27°) and comes out on the **next depth's back rim, 90 studs lower** (each pool is lower than the last). B7's landing ends at the sealed Ancient Vault.
 
-| Depth | Pool | Parts | Spawn points |
-|---|---|---|---|
-| B1 Cash Vault | White marble with gold bands and nosings; a sea of banknote bundles; caged cash pyramid on the back rim | 994 | 149 |
-| B2 Gold Reserve | Riveted steel and hazard stripes; heaped gold bars and coins; a gantry crane lowering a pallet of gold into the pool | 1025 | 145 |
-| B3 Diamond Chamber | Blue-grey marble with cool neon bands; glittering diamond clusters; the giant crystal monument | 913 | 146 |
-| B4 Emerald Reserve | Dark slate with green neon; emerald clusters; emerald obelisk | 927 | 143 |
-| B5 Platinum Reserve | Corrugated steel and diamond-plate steps; platinum ingots; refinery vessel with a chute pouring into the pool | 874 | 144 |
-| B6 Artifact Chamber | Sandstone with turquoise bands; coins, urns and relic boxes; sarcophagus under a stone arch | 891 | 139 |
-| B7 Legendary Reserve | Black marble, gold pilasters and red-carpet steps; crowns, gold, rubies and chests; tiered treasure dais | 1064 | 143 |
+| Depth | Pool | Architecture parts | Fill slots | Fill parts when occupied |
+|---|---|---|---|---|
+| B1 Cash Vault | White marble with gold bands and nosings; a sea of banknote bundles; caged cash pyramid on the back rim | 645 | 1951 | 2053 |
+| B2 Gold Reserve | Riveted steel and hazard stripes; heaped gold bars and coins; a gantry crane lowering a pallet of gold into the pool | 665 | 1944 | 1994 |
+| B3 Diamond Chamber | Blue-grey marble with cool neon bands; glittering diamond clusters; the giant crystal monument | 607 | 1946 | 1962 |
+| B4 Emerald Reserve | Dark slate with green neon; emerald clusters; emerald obelisk | 618 | 1946 | 1958 |
+| B5 Platinum Reserve | Corrugated steel and diamond-plate steps; platinum ingots; refinery vessel with a chute pouring into the pool | 604 | 1943 | 1977 |
+| B6 Artifact Chamber | Sandstone with turquoise bands; coins, urns and relic boxes; sarcophagus under a stone arch | 625 | 1942 | 1960 |
+| B7 Legendary Reserve | Black marble, gold pilasters and red-carpet steps; crowns, gold, rubies and chests; tiered treasure dais | 614 | 1944 | 2024 |
 
-The world totals **6,732 parts**; the harness budget is under 9,000. Live loot comes on top of that, at 48–64 pooled items per depth.
+The static world totals **4,422 parts** (the elevator shaft included). An **occupied** depth adds its fill: about 1,950 pickups in at most ~2,050 parts (common to rare loot is one part each; Epic+ use detailed models and stay capped at a handful), so an occupied depth is about 2,700 parts. An **idle** depth (nobody on it or heading to it for 30 s) has no fill at all and shows its 16 stand-in slabs instead.
 
-**Loot.** Spawn points cover the whole treasure surface of the valley (|x| ≤ 38). They are denser and luckier deeper down: each point's `bonus` (1.0 at the rim, up to 1.8 at the bottom) multiplies Rare Loot Luck (capped at 2× as before), so the best finds sit at the deep end. Spawn caps, respawn timing and model pooling are unchanged. After a depth is built, `Reach.lua` keeps only points a player can walk to and pick up.
+**Loot.** Every fill slot is luckier the deeper it sits: its `bonus` (1.0 at the rim, up to 1.8 at the bottom) multiplies Rare Loot Luck (capped at 2×), so the best finds sit at the deep end. Commons to rares are unlimited in the fill; Epic+ keep their MaxActive caps. Collected slots refill after the depth's `RefillDelay` (4 s on B1 up to 7 s on B7) from a FIFO queue, at most 300 per tick. A depth's fill **materialises only while it is occupied**: a player on it, behind the upper depth's vault door, or riding the elevator to it (filled before arrival). It is unloaded 30 s after the last player leaves. The server looks pickups up through a spatial hash per depth (8-stud buckets) for the magnet and Auto-Collect; the client indexes them the same way for targeting. Claims are still by id and atomic. After a depth is built, `Reach.lua` keeps only slots a player can stand on.
 - It indexes every colliding part.
 - It builds a multi-level walk graph (1.5-stud columns, every walkable surface up to ~53° a node, neighbours joined when within 1.25 studs of height), flood-filled from the arrival deck.
 - It keeps a point only if it isn't buried and a reachable node is within pickup range with a clear line to it.
@@ -122,16 +122,17 @@ The ranges overlap, because each depth's tunnel reaches down to the next rim, so
 | Check | Command | Result |
 |---|---|---|
 | Lint | `selene src` | `0 errors / 0 warnings / 0 parse errors` |
-| Compile | `lune run tests/compile` | `compiled 51 files, 0 failures` |
-| Unit tests | `lune run tests/run` | `32 passed, 0 failed` |
+| Compile | `lune run tests/compile` | `compiled 55 files, 0 failures` |
+| Unit tests | `lune run tests/run` | `38 passed, 0 failed` |
 | Build | `rojo build -o build/Vault.rbxlx` | `Built project to Vault.rbxlx` |
-| Harness | `lune run tests/harness build/Vault.rbxlx` | `harness: 26 passed, 0 failed` |
+| Harness | `lune run tests/harness build/Vault.rbxlx` | `harness: 28 passed, 0 failed` |
 
 To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build/preview.json && node tools/render_preview.mjs build/preview.json build/`. Setting `ONLY=<name>` renders just one view.
 
 **What the unit tests cover:**
 - **Economy:** the curve, every upgrade's direction, price growth, depth gating, modest multipliers, and value per slot rising at least 4× per depth.
-- **Greedy-player simulation:** B2 at about 16 trips, then B3 at 31, B4 at 39, B5 at 100, B6 at 272 and B7 at 701. That is roughly 30 hours of play, without Robux.
+- **Greedy-player simulation:** tokens now accrue with play time (achievements and dailies), and the search time per pickup reflects the full pools (~0.25 s, was ~1.6 s with sparse floors). Before the fill: B2 ~20 min (15 trips), B7 ~29 h. With full pools and loot values scaled ×0.55 (`LootConfig.FullPoolValue`): B2 ~18 min (30 shorter trips), B7 ~29 h. A test keeps both within 35% / 25% of the pre-fill balance.
+- **Fill:** the grid leaves no bare patch wider than 2.7 studs, stays at 1,500–2,000 slots on the surface and is deterministic; the spatial hash matches brute force; the refill queue honours delay, order and the per-tick cap; Epic+ stay capped in a full pool; every common-to-rare item has a single-part look that fits a slot.
 - **Stack layout:** thresholds, determinism, the piece budget, bottom-to-top order, interlocked layers that don't overlap, monotonic height, and that no arrangement covers the face or clips into the torso (stacks grow wider and deeper, not taller).
 - **Loot tables:** weights, caps, size limits and luck.
 - **Progress:** the UTC day, deterministic dailies, and book targets.
@@ -141,6 +142,7 @@ To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build
 1. The world build.
 1. The pool profile: it starts at the rim, segments meet, steps rise at most 1 stud, ramps (and both tunnel ramps) are at most 40°, the basin is 42 deep with the deep end deeper, and the tunnel ends exactly on the next rim.
 1. Reachability on foot from the rim (multi-level walk graph): every spawn point, the rare-event spot, every deposit zone (rim and chute), the terminal and the vault door; loot denser and luckier deeper; walls and space under the pool fail.
+1. Pool fill: a depth fills on arrival (and for an elevator rider before they arrive), has one pickup per slot, unloads 30 s after it empties and shows its stand-in again; nearest-pickup lookups match brute force on the dense grid; a collected slot stays empty until `RefillDelay` and then refills in place. Magnet and Auto-Collect stay capped in a full pool. The two-player race runs on the dense grid too.
 1. Vault doors: with the leaf closed the tunnel is unreachable; with it swung open (the client's DoorMath) the walk continues through tunnel A and C onto the next depth's rim and its arrival deck; B7 ends sealed.
 2. Services start, and every depth is stocked.
 3. Join and placement.
@@ -242,7 +244,7 @@ To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build
    - Pickup cooldowns with a tolerance, rate limits, and NaN- and junk-safe remotes.
    - The stack is taken before payment, and claims are atomic.
 6. **Performance:**
-   - 6,732 static parts.
+   - 4,422 static parts, plus ~2,000 fill parts on each occupied depth only.
    - Pooled loot.
    - One Heartbeat step on the server, with no per-object loops.
    - Budgets for stack pieces, effects and the range at which other players' stacks are drawn.

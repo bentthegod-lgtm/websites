@@ -101,11 +101,27 @@ test("rarities cover Common to Mythic and values rise with rarity inside a depth
 	end
 end)
 
-test("active loot caps fit the spawn budget", function()
+test("pool fill: commons are unlimited, Epic+ keep their caps; refill delays are short", function()
+	local rng = Rng.new(11)
 	for d = 1, DepthConfig.Count do
-		local def = DepthConfig.get(d)
-		assert(def.ActiveLoot >= 40 and def.ActiveLoot <= 80, "depth " .. d .. " active loot")
-		assert(def.RespawnInterval > 0 and def.RespawnInterval < 5, "respawn interval")
+		local active, epic = {}, 0
+		for _ = 1, 1800 do
+			local def = LootTable.rollFill(d, active, 1.8, rng)
+			assert(def, "depth " .. d .. ": the fill ran dry")
+			active[def.Id] = (active[def.Id] or 0) + 1
+			if LootConfig.rank(def) >= 4 then
+				epic += 1
+			end
+		end
+		for id, n in pairs(active) do
+			local def = LootConfig.ById[id]
+			if LootConfig.rank(def) >= 4 then
+				assert(n <= def.MaxActive, id .. " over its cap in a full pool")
+			end
+		end
+		assert(epic <= 12, "too many detailed models in a pool: " .. epic)
+		local delay = DepthConfig.get(d).RefillDelay
+		assert(delay and delay > 0 and delay <= 10, "depth " .. d .. " refill delay")
 	end
 end)
 

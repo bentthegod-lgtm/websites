@@ -11,6 +11,7 @@ local specs = {
 	require("./loot.spec"),
 	require("./progress.spec"),
 	require("./config.spec"),
+	require("./fill.spec"),
 }
 
 local passed, failed = 0, 0

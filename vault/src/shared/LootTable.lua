@@ -56,6 +56,38 @@ function LootTable.roll(depth, active, luck, rng, sizeLimit)
 	return candidates[#candidates].def
 end
 
+--[[
+	Roll for one slot of a pool's fill. Commons, uncommons and rares are unlimited (the
+	pool is full of them); Epic and better keep their MaxActive caps so detailed models
+	stay a small share. luck multiplies Rare+ weights (capped at 2x like roll()).
+]]
+function LootTable.rollFill(depth, active, luck, rng)
+	local pool = LootConfig.ByDepth[depth]
+	if not pool then
+		return nil
+	end
+	local total = 0
+	local candidates = {}
+	for _, def in ipairs(pool) do
+		if LootConfig.rank(def) < 4 or (active[def.Id] or 0) < def.MaxActive then
+			local w = LootTable.weight(def, luck)
+			total += w
+			table.insert(candidates, { def = def, w = w })
+		end
+	end
+	if total <= 0 then
+		return nil
+	end
+	local pick = rng:NextNumber() * total
+	for _, c in ipairs(candidates) do
+		pick -= c.w
+		if pick < 0 then
+			return c.def
+		end
+	end
+	return candidates[#candidates].def
+end
+
 -- Average value of one item on a floor (for balance tests and the depth panel preview).
 function LootTable.averageValue(depth, luck)
 	local pool = LootConfig.ByDepth[depth] or {}
