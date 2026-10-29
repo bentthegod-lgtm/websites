@@ -122,10 +122,12 @@ The ranges overlap, because each depth's tunnel reaches down to the next rim, so
 | Check | Command | Result |
 |---|---|---|
 | Lint | `selene src` | `0 errors / 0 warnings / 0 parse errors` |
-| Compile | `lune run tests/compile` | `compiled 55 files, 0 failures` |
+| Compile | `lune run tests/compile` | `compiled 56 files, 0 failures` |
 | Unit tests | `lune run tests/run` | `38 passed, 0 failed` |
 | Build | `rojo build -o build/Vault.rbxlx` | `Built project to Vault.rbxlx` |
-| Harness | `lune run tests/harness build/Vault.rbxlx` | `harness: 28 passed, 0 failed` |
+| Harness | `lune run tests/harness build/Vault.rbxlx` | `harness: 29 passed, 0 failed` |
+
+**Startup speed and `ReachBaked.lua`:** checking that every spawn point can be walked to takes seconds per depth (about 4.4 s for all seven in Lune). Done at startup, that could trip Roblox's script timeout and stop the game loading. So the live server skips the check and leaves out the points listed in `src/server/World/ReachBaked.lua` instead (its build takes about 0.2 s). The harness runs the full check and fails if that list no longer matches. After changing a pool's layout, re-bake it with `VAULT_BAKE_REACH=1 lune run tests/harness build/Vault.rbxlx`, then rebuild.
 
 To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build/preview.json && node tools/render_preview.mjs build/preview.json build/`. Setting `ONLY=<name>` renders just one view.
 

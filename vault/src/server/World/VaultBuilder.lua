@@ -26,6 +26,7 @@ local Machines = require(script.Parent.Machines)
 local Themes = require(script.Parent.Themes)
 local Pools = require(script.Parent.Pools)
 local Reach = require(script.Parent.Reach)
+local ReachBaked = require(script.Parent.ReachBaked)
 
 local VaultBuilder = {}
 
@@ -148,7 +149,19 @@ local function arrival(ctx)
 	end
 end
 
-function VaultBuilder.build()
+-- Key for a spawn point, stable across builds (the layout is deterministic).
+function VaultBuilder.pointKey(position)
+	return string.format("%.1f,%.1f,%.1f", position.X, position.Y, position.Z)
+end
+
+-- opts.validate runs the reachability check (Reach) on every spawn point. It takes seconds per
+-- depth with ~2,000 fill points, long enough to trip Roblox's script timeout on a live server.
+-- So the live build instead skips the points listed in ReachBaked (the result of the same check,
+-- baked by the harness: VAULT_BAKE_REACH=1 lune run tests/harness ...). The harness fails if the
+-- baked list no longer matches a validated build.
+function VaultBuilder.build(opts)
+	local validate = opts ~= nil and opts.validate == true
+	local baked = if validate then nil else ReachBaked
 	local existing = Workspace:FindFirstChild("Vault")
 	if existing then
 		existing:Destroy()
@@ -187,11 +200,23 @@ function VaultBuilder.build()
 		Pools.build(ctx) -- the pool, its treasure, rims, monument, door, tunnel, spawn points
 		Themes.build(ctx) -- the preview room's display of the next depth's loot
 		-- Keep only spawn points a player can actually walk to and pick up (Reach).
-		local reach = Reach.index(depthFolder)
-		local walk = Reach.walk(reach, VaultBuilder.walkBounds(y0), VaultBuilder.walkStart(y0))
-		local kept, dropped = {}, 0
+		local reach, walk
+		if validate then
+			reach = Reach.index(depthFolder)
+			walk = Reach.walk(reach, VaultBuilder.walkBounds(y0), VaultBuilder.walkStart(y0))
+		end
+		local kept, dropped, droppedKeys = {}, 0, {}
+		local bakedDrops = baked and baked[def.Depth] or {}
 		for _, extra in ipairs(ctx.extraPoints) do
-			local ok = if extra.kind == "Fill" then Reach.surfaceOk(reach, walk, extra.cframe.Position) else Reach.pointOk(reach, walk, extra.cframe.Position)
+			local ok
+			if validate then
+				ok = if extra.kind == "Fill" then Reach.surfaceOk(reach, walk, extra.cframe.Position) else Reach.pointOk(reach, walk, extra.cframe.Position)
+			else
+				ok = not bakedDrops[VaultBuilder.pointKey(extra.cframe.Position)]
+			end
+			if not ok then
+				table.insert(droppedKeys, VaultBuilder.pointKey(extra.cframe.Position))
+			end
 			if ok then
 				table.insert(kept, { cframe = extra.cframe, size = extra.size, kind = extra.kind, bonus = extra.bonus, index = #kept + 1 })
 			else
@@ -216,6 +241,7 @@ function VaultBuilder.build()
 			ambience = ctx.ambience,
 			parts = b.count,
 			droppedPoints = dropped,
+			droppedKeys = droppedKeys,
 			exitDoorPosition = ctx.exitDoorPosition,
 			tunnelEnd = ctx.tunnelEnd,
 			standin = ctx.standin,
