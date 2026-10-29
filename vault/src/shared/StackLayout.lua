@@ -5,9 +5,9 @@
 
 	The arrangement changes at item-count thresholds, so capacity upgrades are visible:
 	  Hand    1-3    a few bills / bars fanned in the right hand
-	  Bundle  4-12   a small bundle held at the chest (2 per layer)
-	  Stack   13-36  a tall stack carried in front (2 x 2 per layer, 1 piece = 2 items)
-	  Tower   37-90  a large organised stack (3 x 2 per layer, 1 piece = 4 items)
+	  Bundle  4-12   a small bundle held in front (2 x 2 per layer)
+	  Stack   13-36  a wide stack carried in both arms (3 x 2 per layer, 1 piece = 2 items)
+	  Tower   37-90  a large organised block (3 x 3 per layer, 1 piece = 4 items)
 	  Crate   91+    a strapped vault crate carried overhead with loot on top
 	Gold, platinum and legendary bars interlock: alternate layers turn 90 degrees.
 	Gems ride in compact trays (one piece each). The number of pieces is capped (budget);
@@ -43,18 +43,22 @@ end
 -- Ordered list of categories with counts (heavy metals at the bottom, gems on top).
 local ORDER = { "Platinum", "Gold", "Legendary", "Artifact", "Cash", "Emerald", "Diamond" }
 
+-- Grids keep every arrangement below the chin (piece tops at most ~0.5 above the root):
+-- bigger stacks grow wider and deeper instead of taller, so nothing covers the face.
 local function grids(modeName)
-	local P = StackLayout.PieceSize
 	if modeName == "Bundle" then
-		return { cols = { -0.58, 0.58 }, rows = { -1.35 }, baseY = -0.35 }
+		return { cols = { -0.58, 0.58 }, rows = { -1.25, -2.01 }, baseY = -0.75 }
 	elseif modeName == "Stack" then
-		return { cols = { -0.58, 0.58 }, rows = { -1.2, -1.2 - (P.Z + 0.06) }, baseY = -0.4 }
+		return { cols = { -1.16, 0, 1.16 }, rows = { -1.25, -2.01 }, baseY = -0.8 }
 	elseif modeName == "Tower" then
-		return { cols = { -1.16, 0, 1.16 }, rows = { -1.3, -1.3 - (P.Z + 0.06) }, baseY = -0.45 }
+		return { cols = { -1.16, 0, 1.16 }, rows = { -1.4, -2.2, -3.0 }, baseY = -0.85 }
 	else -- Crate top
-		return { cols = { -1.2, 0, 1.2 }, rows = { -0.5, 0.45 }, baseY = StackLayout.CrateY + StackLayout.CrateSize.Y / 2 + P.Y / 2 }
+		return { cols = { -1.2, 0, 1.2 }, rows = { -0.5, 0.45 }, baseY = StackLayout.CrateY + StackLayout.CrateSize.Y / 2 + StackLayout.PieceSize.Y / 2 }
 	end
 end
+
+-- The highest a piece centre may sit in front of the character (keeps the face clear).
+StackLayout.MaxFrontY = 0.5
 
 --[[
 	counts: { [category] = items carried }  budget: max visible pieces (PerformanceConfig).

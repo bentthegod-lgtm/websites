@@ -144,8 +144,8 @@ local carry = {
 	{ Artifact = 60, Legendary = 60 },
 }
 for depth, record in pairs(world.depths) do
-	mannequin(action, CF.new(-10, record.y0 + 3, -30) * CF.Angles(0, math.rad(200), 0), carry[depth], "Classic")
-	mannequin(action, CF.new(10, record.y0 + 3, -30) * CF.Angles(0, math.rad(160), 0), { Cash = 140 }, if depth % 2 == 0 then "Gilded" else "NeonVault")
+	mannequin(action, CF.new(-6, record.y0 + 3, -41) * CF.Angles(0, math.rad(200), 0), carry[depth], "Classic")
+	mannequin(action, CF.new(6, record.y0 + 3, -41) * CF.Angles(0, math.rad(160), 0), { Cash = 140 }, if depth % 2 == 0 then "Gilded" else "NeonVault")
 end
 
 -- Catalog sheet far away: every loot model in rows by depth, then stack styles.
@@ -190,7 +190,7 @@ dump(sheet, out.sheet)
 fs.writeFile(outPath, serde.encode("json", out))
 local counts = {}
 for d, rec in pairs(world.depths) do
-	table.insert(counts, string.format("B%d %d parts / %d points", d, rec.parts, #rec.points))
+	table.insert(counts, string.format("B%d %d parts / %d points (%d unreachable dropped)", d, rec.parts, #rec.points, rec.droppedPoints or 0))
 end
 table.sort(counts)
 print(string.format("exported %d world, %d loot, %d action, %d sheet parts (world total %d)", #out.world, #out.loot, #out.action, #out.sheet, world.partCount))

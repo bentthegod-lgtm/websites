@@ -31,6 +31,8 @@ local LootTable = require(Shared.LootTable)
 local Props = require(script.Parent.Props)
 local Machines = require(script.Parent.Machines)
 local Themes = require(script.Parent.Themes)
+local Plans = require(script.Parent.Plans)
+local Reach = require(script.Parent.Reach)
 
 local VaultBuilder = {}
 
@@ -41,7 +43,6 @@ local Z = Vector3.zAxis
 local W2 = GameConfig.RoomWidth / 2 -- 84
 local FRONT = GameConfig.RoomFront -- -72
 local BACK = GameConfig.RoomBack -- 74
-local H = GameConfig.CeilingHeight -- 34
 local HALL_END = -38
 
 local function facing(pos, dir)
@@ -55,14 +56,16 @@ local function inBox(box, x, z, pad)
 end
 VaultBuilder.inBox = inBox
 
+-- The facility envelope every depth shares: floor slab, outer walls (elevator opening at
+-- the front, exit opening at the plan's exit x at the back), ceiling, the arrival hall's
+-- plates, signage, access doors, cameras and lights.
 local function shell(ctx)
 	local b, y0, pal = ctx.b, ctx.y0, ctx.palette
 	local wall, floor, trim, accent, light = Props.rgb(pal.Wall), Props.rgb(pal.Floor), Props.rgb(pal.Trim), Props.rgb(pal.Accent), Props.rgb(pal.Light)
 	local style = ctx.style
-	-- Floor slab and the arrival hall's metal plates.
+	local H, ex = ctx.H, ctx.exitX
 	b.part({ Name = "Floor", Size = Vector3.new(GameConfig.RoomWidth + 4, 2, BACK - FRONT + 4), CFrame = CFrame.new(0, y0 - 1, (FRONT + BACK) / 2), Color = floor, Material = style.FloorMaterial, Reflectance = style.FloorReflect or 0 })
 	b.deco({ Name = "HallPlates", Size = Vector3.new(GameConfig.RoomWidth, 0.06, HALL_END - FRONT), CFrame = CFrame.new(0, y0 + 0.03, (FRONT + HALL_END) / 2), Color = trim, Material = M.DiamondPlate })
-	-- Walls (2 thick) with openings for the elevator (front) and exit corridor (back).
 	local function wallPart(name, size, pos)
 		return b.part({ Name = name, Size = size, CFrame = CFrame.new(pos), Color = wall, Material = style.WallMaterial })
 	end
@@ -72,23 +75,41 @@ local function shell(ctx)
 	wallPart("WallFrontL", Vector3.new(W2 - 7, H, 2), Vector3.new(-(W2 + 7) / 2, y0 + H / 2, FRONT - 1))
 	wallPart("WallFrontR", Vector3.new(W2 - 7, H, 2), Vector3.new((W2 + 7) / 2, y0 + H / 2, FRONT - 1))
 	wallPart("WallFrontTop", Vector3.new(14, H - 11, 2), Vector3.new(0, y0 + 11 + (H - 11) / 2, FRONT - 1))
-	-- Back wall: corridor opening x -12..12, height 20.
-	wallPart("WallBackL", Vector3.new(W2 - 12, H, 2), Vector3.new(-(W2 + 12) / 2, y0 + H / 2, BACK + 1))
-	wallPart("WallBackR", Vector3.new(W2 - 12, H, 2), Vector3.new((W2 + 12) / 2, y0 + H / 2, BACK + 1))
-	wallPart("WallBackTop", Vector3.new(24, H - 20, 2), Vector3.new(0, y0 + 20 + (H - 20) / 2, BACK + 1))
+	-- Back wall: exit opening ex-12 .. ex+12, height 20.
+	local l0, r0 = ex - 12, ex + 12
+	wallPart("WallBackL", Vector3.new(l0 + W2, H, 2), Vector3.new((-W2 + l0) / 2, y0 + H / 2, BACK + 1))
+	wallPart("WallBackR", Vector3.new(W2 - r0, H, 2), Vector3.new((r0 + W2) / 2, y0 + H / 2, BACK + 1))
+	wallPart("WallBackTop", Vector3.new(24, H - 20, 2), Vector3.new(ex, y0 + 20 + (H - 20) / 2, BACK + 1))
 	b.part({ Name = "Ceiling", Size = Vector3.new(GameConfig.RoomWidth + 4, 2, BACK - FRONT + 4), CFrame = CFrame.new(0, y0 + H + 1, (FRONT + BACK) / 2), Color = trim, Material = M.Concrete })
-	-- Wainscot band and top trim (accent stripe) on the long walls.
+	-- Wainscot band and accent stripe on the long walls (the facility's common trim).
 	for _, x in ipairs({ -W2 + 0.15, W2 - 0.15 }) do
 		b.deco({ Name = "Wainscot", Size = Vector3.new(0.3, 3, BACK - FRONT), CFrame = CFrame.new(x, y0 + 1.5, (FRONT + BACK) / 2), Color = trim, Material = M.Metal })
 		b.deco({ Name = "WallStripe", Size = Vector3.new(0.32, 0.5, BACK - FRONT), CFrame = CFrame.new(x, y0 + 3.2, (FRONT + BACK) / 2), Color = accent, Material = M.Metal })
 	end
-	-- Pilasters along the side walls every 16 studs.
+	-- Hall lights, side access doors and cameras.
+	for _, x in ipairs({ -30, 30 }) do
+		local _, l = Props.lightFixture(b, CFrame.new(x, y0 + math.min(H, 30) - 1.8, -56), light, (style.LightBrightness or 2.2) * 0.9, 40, 8)
+		l.Shadows = false
+	end
+	Props.accessDoor(b, facing(Vector3.new(-W2, y0, -54), Vector3.xAxis), "MAINTENANCE")
+	Props.accessDoor(b, facing(Vector3.new(W2, y0, -54), -Vector3.xAxis), "SECURITY")
+	Props.camera(b, facing(Vector3.new(-W2 + 0.4, y0 + 20, FRONT + 4), Vector3.new(1, 0, 1).Unit))
+	Props.camera(b, facing(Vector3.new(W2 - 0.4, y0 + 20, FRONT + 4), Vector3.new(-1, 0, 1).Unit))
+	table.insert(ctx.keepOut, { -W2, W2, FRONT, HALL_END + 2 }) -- the arrival hall itself
+	table.insert(ctx.keepOut, { ex - 8, ex + 8, BACK - 4, BACK + 30 }) -- the exit corridor
+end
+
+-- The classic columned chamber (B6, B7): pillar line, pilasters, ceiling beams, ducts,
+-- cable trays, pipes, a 3 x 3 light grid and a central aisle from the elevator to the exit.
+local function classicInterior(ctx)
+	local b, y0, pal, def = ctx.b, ctx.y0, ctx.palette, ctx.def
+	local trim, accent, light = Props.rgb(pal.Trim), Props.rgb(pal.Accent), Props.rgb(pal.Light)
+	local style, H = ctx.style, ctx.H
 	for z = FRONT + 10, BACK - 8, 16 do
 		for _, x in ipairs({ -W2 + 0.7, W2 - 0.7 }) do
 			b.part({ Name = "Pilaster", Size = Vector3.new(1.4, H, 2.4), CFrame = CFrame.new(x, y0 + H / 2, z), Color = trim, Material = style.WallMaterial })
 		end
 	end
-	-- Ceiling beams, ducts, cable trays, pipes.
 	for z = FRONT + 12, BACK - 6, 18 do
 		b.deco({ Name = "CeilingBeam", Size = Vector3.new(GameConfig.RoomWidth, 1.6, 1.2), CFrame = CFrame.new(0, y0 + H - 0.8, z), Color = C.SteelDark, Material = M.Metal })
 	end
@@ -102,7 +123,6 @@ local function shell(ctx)
 		Props.pipe(b, Vector3.new(x, y0 + H - 6, FRONT + 4), Vector3.new(x, y0 + H - 6, BACK - 4), 1.2, style.PipeColor or C.SteelLight)
 		Props.pipe(b, Vector3.new(x, y0 + H - 7.6, FRONT + 4), Vector3.new(x, y0 + H - 7.6, BACK - 4), 0.7, accent)
 	end
-	-- Light fixtures: 3 x 3 over the chamber, 2 in the hall (shadows on the centre row only).
 	ctx.lights = {}
 	for _, x in ipairs({ -30, 0, 30 }) do
 		for _, z in ipairs({ -18, 12, 42 }) do
@@ -111,16 +131,25 @@ local function shell(ctx)
 			table.insert(ctx.lights, l)
 		end
 	end
-	for _, x in ipairs({ -30, 30 }) do
-		local _, l = Props.lightFixture(b, CFrame.new(x, y0 + H - 1.8, -56), light, (style.LightBrightness or 2.2) * 0.9, 40, 8)
-		l.Shadows = false
-		table.insert(ctx.lights, l)
+	Props.camera(b, facing(Vector3.new(-W2 + 0.4, y0 + H - 4, BACK - 4), Vector3.new(1, 0, -1).Unit))
+	Props.camera(b, facing(Vector3.new(W2 - 0.4, y0 + H - 4, BACK - 4), Vector3.new(-1, 0, -1).Unit))
+	for _, x in ipairs({ -58, -38, -18, 18, 38, 58 }) do
+		Props.pillar(b, CFrame.new(x, y0, HALL_END), H, 3, trim, ctx.style.WallMaterial)
+		table.insert(ctx.keepOut, { x - 3, x + 3, HALL_END - 3, HALL_END + 3 })
 	end
+	b.deco({ Name = "ChamberBeam", Size = Vector3.new(GameConfig.RoomWidth, 2.4, 2), CFrame = CFrame.new(0, y0 + H - 5, HALL_END), Color = C.SteelDark, Material = M.Metal })
+	Props.sign(b, facing(Vector3.new(0, y0 + H - 5, HALL_END - 1.1), -Z), 22, 2, "MAIN CHAMBER  -  " .. def.Code, { Color = accent, PPS = 30 })
+	for _, x in ipairs({ -6.5, 6.5 }) do
+		b.deco({ Name = "AisleLine", Size = Vector3.new(0.4, 0.05, BACK - HALL_END - 4), CFrame = CFrame.new(x, y0 + 0.03, (HALL_END + BACK) / 2), Color = C.Hazard, CastShadow = false })
+	end
+	table.insert(ctx.keepOut, { -7.5, 7.5, FRONT, BACK + 30 })
+	ctx.zones = { { -48, -13, -30, GameConfig.RoomBack - 8 }, { 13, 48, -30, GameConfig.RoomBack - 8 } }
 end
 
 local function arrival(ctx)
 	local b, y0, pal, def = ctx.b, ctx.y0, ctx.palette, ctx.def
-	local accent, trim = Props.rgb(pal.Accent), Props.rgb(pal.Trim)
+	local accent = Props.rgb(pal.Accent)
+	local side = ctx.depositSide -- -1: deposits left / terminal right; 1: mirrored
 	-- Elevator cabin in the front wall.
 	local cabinCF = facing(Vector3.new(0, y0, FRONT - 6.5), Z)
 	ctx.elevator = Machines.elevator(b, cabinCF, def.Code, accent)
@@ -136,48 +165,31 @@ local function arrival(ctx)
 	Props.sign(b, facing(Vector3.new(0, y0 + 17, FRONT + 0.2), Z), 30, 3.4, def.Code .. "  |  " .. string.upper(def.Name), { Color = accent, PPS = 30 })
 	Props.sign(b, facing(Vector3.new(0, y0 + 14.9, FRONT + 0.2), Z), 10, 0.9, "ELEVATOR - ALL DEPTHS", { PPS = 40, Trim = false })
 	Props.floorText(b, CFrame.new(0, y0, -60) * CFrame.Angles(0, math.pi, 0), 9, 7, def.Code, accent)
-	-- Deposit machine(s) on the left (two in the starting area so a crowd doesn't queue).
+	-- Deposit machine(s) (two in the starting area so a crowd doesn't queue).
 	ctx.deposits = {}
-	local xs = if def.Depth == 1 then { -28, -50 } else { -30 }
+	local xs = if def.Depth == 1 then { -28, -50 } else { 30 * side }
 	for i, x in ipairs(xs) do
 		local id = string.format("D%d_%d", def.Depth, i)
 		table.insert(ctx.deposits, Machines.deposit(b, facing(Vector3.new(x, y0, -60), Z), id, accent))
 		table.insert(ctx.keepOut, { x - 6, x + 6, -64, -42 })
 	end
-	-- Upgrade terminal on the right.
-	ctx.terminal = Machines.terminal(b, facing(Vector3.new(30, y0, -58), Z), accent, def.Depth == 1)
-	table.insert(ctx.keepOut, { 24, 36, -62, -50 })
+	-- Upgrade terminal on the other side.
+	local tx = -30 * side
+	ctx.terminal = Machines.terminal(b, facing(Vector3.new(tx, y0, -58), Z), accent, def.Depth == 1)
+	table.insert(ctx.keepOut, { tx - 6, tx + 6, -62, -50 })
 	-- Hanging direction signs.
-	Props.sign(b, facing(Vector3.new(-28, y0 + 14, -46), -Z), 12, 1.6, "<<  DEPOSIT", { Color = Color3.fromRGB(120, 255, 170), PPS = 30 })
-	Props.sign(b, facing(Vector3.new(30, y0 + 14, -46), -Z), 12, 1.6, "UPGRADES  >>", { Color = accent, PPS = 30 })
-	for _, x in ipairs({ -28, 30 }) do
-		for _, dx in ipairs({ -5, 5 }) do
-			b.deco({ Name = "SignCable", Size = Vector3.new(0.08, H - 15, 0.08), CFrame = CFrame.new(x + dx, y0 + 14.8 + (H - 15) / 2, -46), Color = C.Black, CastShadow = false })
+	local dx = if def.Depth == 1 then -28 else 30 * side
+	Props.sign(b, facing(Vector3.new(dx, y0 + 14, -46), -Z), 12, 1.6, if side < 0 then "<<  DEPOSIT" else "DEPOSIT  >>", { Color = Color3.fromRGB(120, 255, 170), PPS = 30 })
+	Props.sign(b, facing(Vector3.new(tx, y0 + 14, -46), -Z), 12, 1.6, if side < 0 then "UPGRADES  >>" else "<<  UPGRADES", { Color = accent, PPS = 30 })
+	local hang = math.min(ctx.H, 30) - 15
+	for _, x in ipairs({ dx, tx }) do
+		for _, o in ipairs({ -5, 5 }) do
+			b.deco({ Name = "SignCable", Size = Vector3.new(0.08, hang, 0.08), CFrame = CFrame.new(x + o, y0 + 14.8 + hang / 2, -46), Color = C.Black, CastShadow = false })
 		end
 	end
-	-- Side access doors and cameras.
-	Props.accessDoor(b, facing(Vector3.new(-W2, y0, -54), Vector3.xAxis), "MAINTENANCE")
-	Props.accessDoor(b, facing(Vector3.new(W2, y0, -54), -Vector3.xAxis), "SECURITY")
-	Props.camera(b, facing(Vector3.new(-W2 + 0.4, y0 + H - 4, FRONT + 4), Vector3.new(1, 0, 1).Unit))
-	Props.camera(b, facing(Vector3.new(W2 - 0.4, y0 + H - 4, FRONT + 4), Vector3.new(-1, 0, 1).Unit))
-	Props.camera(b, facing(Vector3.new(-W2 + 0.4, y0 + H - 4, BACK - 4), Vector3.new(1, 0, -1).Unit))
-	Props.camera(b, facing(Vector3.new(W2 - 0.4, y0 + H - 4, BACK - 4), Vector3.new(-1, 0, -1).Unit))
-	-- The pillar line between the hall and the chamber, with the overhead beam.
-	for _, x in ipairs({ -58, -38, -18, 18, 38, 58 }) do
-		Props.pillar(b, CFrame.new(x, y0, HALL_END), H, 3, trim, ctx.style.WallMaterial)
-		table.insert(ctx.keepOut, { x - 3, x + 3, HALL_END - 3, HALL_END + 3 })
-	end
-	b.deco({ Name = "ChamberBeam", Size = Vector3.new(GameConfig.RoomWidth, 2.4, 2), CFrame = CFrame.new(0, y0 + H - 5, HALL_END), Color = C.SteelDark, Material = M.Metal })
-	Props.sign(b, facing(Vector3.new(0, y0 + H - 5, HALL_END - 1.1), -Z), 22, 2, "MAIN CHAMBER  -  " .. def.Code, { Color = accent, PPS = 30 })
-	-- Central aisle markings from the elevator to the exit corridor.
-	for _, x in ipairs({ -6.5, 6.5 }) do
-		b.deco({ Name = "AisleLine", Size = Vector3.new(0.4, 0.05, BACK - FRONT - 4), CFrame = CFrame.new(x, y0 + 0.03, (FRONT + BACK) / 2 + 1), Color = C.Hazard, CastShadow = false })
-	end
-	table.insert(ctx.keepOut, { -7.5, 7.5, FRONT, BACK + 30 })
-	table.insert(ctx.keepOut, { -W2, W2, FRONT, HALL_END + 2 }) -- the arrival hall itself
 end
 
-local function exitRoute(ctx)
+local function exitRouteLocal(ctx)
 	local b, y0, pal, def = ctx.b, ctx.y0, ctx.palette, ctx.def
 	local accent, wall = Props.rgb(pal.Accent), Props.rgb(pal.Wall)
 	local zEnd = BACK + 23
@@ -260,6 +272,31 @@ local function exitRoute(ctx)
 	end
 end
 
+-- The exit route is laid out at x = 0 and then moved to the plan's exit x.
+local function exitRoute(ctx)
+	local model = Instance.new("Model")
+	model.Name = "ExitRoute"
+	model.Parent = ctx.folder
+	local b, folder = ctx.b, ctx.folder
+	local eb = Props.builder(model)
+	ctx.b, ctx.folder = eb, model
+	exitRouteLocal(ctx)
+	ctx.b, ctx.folder = b, folder
+	b.count += eb.count
+	local shift = CFrame.new(ctx.exitX, 0, 0)
+	if ctx.exitX ~= 0 then
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.CFrame = shift * d.CFrame
+			end
+		end
+		for i, cf in ipairs(ctx.preview.cframes) do
+			ctx.preview.cframes[i] = shift * cf
+		end
+	end
+	ctx.exitDoorPosition = Vector3.new(ctx.exitX, ctx.y0, BACK + 19)
+end
+
 -- Floor spawn grid in the collection zones, plus the theme's extra points, filtered.
 local function spawnPoints(ctx)
 	local rng = Random.new(ctx.def.Depth * 1013)
@@ -281,7 +318,7 @@ local function spawnPoints(ctx)
 		end
 		return true
 	end
-	for _, zone in ipairs(ctx.zones) do
+	for _, zone in ipairs(ctx.zones or {}) do
 		for x = zone[1], zone[2], 6.5 do
 			for z = zone[3], zone[4], 6.5 do
 				local jx, jz = x + rng:NextNumber(-1.4, 1.4), z + rng:NextNumber(-1.4, 1.4)
@@ -293,7 +330,17 @@ local function spawnPoints(ctx)
 	end
 	for _, extra in ipairs(ctx.extraPoints) do
 		local pos = extra.cframe.Position
-		table.insert(points, { cframe = extra.cframe * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), size = extra.size, kind = extra.kind, local2 = Vector2.new(pos.X, pos.Z) })
+		local clear = true
+		if extra.kind == "Floor" then
+			for _, box in ipairs(ctx.keepOut) do
+				if inBox(box, pos.X, pos.Z, 1.2) then
+					clear = false
+				end
+			end
+		end
+		if clear then
+			table.insert(points, { cframe = extra.cframe * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), size = extra.size, kind = extra.kind, local2 = Vector2.new(pos.X, pos.Z) })
+		end
 	end
 	for i, p in ipairs(points) do
 		p.index = i
@@ -322,6 +369,7 @@ function VaultBuilder.build()
 		depthFolder.Name = def.Code
 		depthFolder.Parent = folder
 		local b = Props.builder(depthFolder)
+		local layout = Plans.Layout[def.Depth]
 		local ctx = {
 			b = b,
 			folder = depthFolder,
@@ -329,15 +377,36 @@ function VaultBuilder.build()
 			def = def,
 			palette = def.Palette,
 			style = Themes.style(def.Depth),
+			H = layout.H,
+			exitX = layout.exitX,
+			depositSide = layout.depositSide,
 			keepOut = {},
 			extraPoints = {},
-			zones = { { -48, -13, -30, GameConfig.RoomBack - 8 }, { 13, 48, -30, GameConfig.RoomBack - 8 } },
 		}
 		shell(ctx)
 		arrival(ctx)
+		if Plans.has(def.Depth) then
+			Plans.build(ctx) -- B1-B5: their own floor plans, staging and landmarks
+		else
+			classicInterior(ctx)
+		end
 		exitRoute(ctx)
-		Themes.build(ctx) -- landmark, storage, decor; adds keep-outs and extra points
-		ctx.points = spawnPoints(ctx)
+		Themes.build(ctx) -- B6 / B7 dressing, and every depth's preview room
+		-- Keep only spawn points a player can actually reach and pick up (Reach).
+		local reach = Reach.index(depthFolder)
+		local walk = Reach.walk(reach, y0, VaultBuilder.walkBounds(), Vector3.new(0, y0, FRONT + 6))
+		local kept, dropped = {}, 0
+		for _, p in ipairs(spawnPoints(ctx)) do
+			if Reach.pointOk(reach, walk, p.cframe.Position) then
+				table.insert(kept, p)
+			else
+				dropped += 1
+			end
+		end
+		for i, p in ipairs(kept) do
+			p.index = i
+		end
+		ctx.points = kept
 		local record = {
 			depth = def.Depth,
 			def = def,
@@ -354,6 +423,9 @@ function VaultBuilder.build()
 			rarePoint = ctx.rarePoint,
 			ambience = ctx.ambience,
 			parts = b.count,
+			droppedPoints = dropped,
+			exitDoorPosition = ctx.exitDoorPosition,
+			layout = layout,
 		}
 		-- Loot staged in the preview chamber: the next floor's items, decorative only.
 		record.previewItems = ctx.preview.nextDepth
@@ -397,6 +469,11 @@ function VaultBuilder.build()
 	return world
 end
 
+-- Interior bounds for the walk grid: the whole floor plus the exit corridor.
+function VaultBuilder.walkBounds()
+	return { -W2, W2, FRONT, BACK + 24 }
+end
+
 -- Which depth a world position is on (by height band).
 function VaultBuilder.depthAt(position)
 	return DepthConfig.depthAtY(position.Y, GameConfig.DepthSpacing)
@@ -406,7 +483,7 @@ end
 -- and outside every keep-out box.
 function VaultBuilder.validatePoint(record, point)
 	local pos = point.cframe.Position
-	if pos.X < -W2 + 3 or pos.X > W2 - 3 or pos.Z < HALL_END or pos.Z > BACK - 2 then
+	if pos.X < -W2 + 0.5 or pos.X > W2 - 0.5 or pos.Z < HALL_END or pos.Z > BACK - 0.5 then
 		return false, "outside the room"
 	end
 	if pos.Y < record.y0 - 0.01 or pos.Y > record.y0 + 12 then

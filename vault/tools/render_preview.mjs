@@ -17,8 +17,18 @@ const names = ["b1", "b2", "b3", "b4", "b5", "b6", "b7"];
 names.forEach((n, i) => {
 	const y = -i * S;
 	VIEWS.push({ name: `preview-${n}-arrival`, groups: ["world", "loot", "action"], eye: [0, y + 9, -64], target: [0, y + 4, 30], fov: 70, sky: 0x101014 });
-	VIEWS.push({ name: `preview-${n}-chamber`, groups: ["world", "loot", "action"], eye: [-50, y + 17, -32], target: [12, y + 2, 40], fov: 70, sky: 0x101014 });
-	VIEWS.push({ name: `preview-${n}-stacks`, groups: ["world", "loot", "action"], eye: [0, y + 7, -17], target: [0, y + 3.5, -30], fov: 60, sky: 0x101014 });
+	// Chamber views framed for each depth's floor plan (B6 / B7 keep the classic view).
+	const CH = [
+		{ eye: [0, 13, -34], target: [0, 3, 40] }, // B1 nave between the colonnades
+		{ eye: [-30, 17, -32], target: [12, 2, 22] }, // B2 bullion yard
+		{ eye: [0, 15, -30], target: [0, 2, 22] }, // B3 hexagonal hall from the south portal
+		{ eye: [0, 9, -34], target: [0, 7, 40] }, // B4 vaulted gallery
+		{ eye: [32, 18, -34], target: [-28, 3, 30] }, // B5 industrial hall
+	][i] || { eye: [-50, 17, -32], target: [12, 2, 40] };
+	VIEWS.push({ name: `preview-${n}-chamber`, groups: ["world", "loot", "action"], eye: [CH.eye[0], y + CH.eye[1], CH.eye[2]], target: [CH.target[0], y + CH.target[1], CH.target[2]], fov: 70, sky: 0x101014 });
+	// Floor plan from above (ceilings cut away).
+	VIEWS.push({ name: `preview-${n}-plan`, groups: ["world", "loot"], eye: [0, y + 150, -6], target: [0, y, 4], fov: 55, sky: 0x101014, cut: y + 10 });
+	VIEWS.push({ name: `preview-${n}-stacks`, groups: ["world", "loot", "action"], eye: [0, y + 7, -29], target: [0, y + 3.5, -41], fov: 60, sky: 0x101014 });
 });
 VIEWS.push({ name: "preview-b1-exit", groups: ["world", "loot"], eye: [-6, 9, 63], target: [10, 6, 78], fov: 70, sky: 0x101014 });
 VIEWS.push({ name: "preview-b1-deposit", groups: ["world", "loot"], eye: [-20, 8, -40], target: [-30, 4, -60], fov: 60, sky: 0x101014 });
@@ -29,7 +39,7 @@ VIEWS.push({ name: "preview-stack-modes", groups: ["sheet"], eye: [3000, 9, 52],
 
 
 function script(view) {
-	const parts = view.groups.flatMap((g) => data[g]);
+	const parts = view.groups.flatMap((g) => data[g]).filter((p) => view.cut === undefined || p.p[1] - p.s[1] / 2 <= view.cut);
 	return `
 (function(){
 const parts = ${JSON.stringify(parts)};

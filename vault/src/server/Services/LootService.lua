@@ -319,16 +319,24 @@ local function stepMagnet(dt)
 			local rootPos = root.CFrame.Position
 			local now = os.clock()
 			if list and stats.MagnetRadius > 0 and data.Carried.Slots < stats.Capacity then
-				local pulled = 0
+				-- The nearest MagnetMaxPull free items in range slide in.
+				local candidates = {}
 				for _, entry in pairs(list) do
-					if pulled >= GameConfig.MagnetMaxPull then
-						break
+					local offset = rootPos - entry.position
+					local dist = Vector3.new(offset.X, 0, offset.Z).Magnitude
+					local free = not entry.pulledBy or entry.pulledBy == player or now - (entry.pulledAt or 0) > 3
+					if free and dist <= stats.MagnetRadius and dist > 2.2 then
+						table.insert(candidates, { entry = entry, dist = dist })
 					end
+				end
+				table.sort(candidates, function(a, b)
+					return a.dist < b.dist
+				end)
+				for i = 1, math.min(#candidates, GameConfig.MagnetMaxPull) do
+					local entry = candidates[i].entry
 					local offset = rootPos - entry.position
 					local flat = Vector3.new(offset.X, 0, offset.Z)
-					local free = not entry.pulledBy or entry.pulledBy == player or now - (entry.pulledAt or 0) > 3
-					if free and flat.Magnitude <= stats.MagnetRadius and flat.Magnitude > 2.2 then
-						pulled += 1
+					do
 						entry.pulledBy = player
 						entry.pulledAt = now
 						local step = math.min(flat.Magnitude - 2, stats.MagnetSpeed * dt)

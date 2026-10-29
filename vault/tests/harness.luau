@@ -506,6 +506,43 @@ check("world builds: 7 stacked depths, deposits, elevators, exit doors, previews
 	print("        world parts: " .. world.partCount .. " (" .. table.concat(counts, ", ") .. ")")
 end)
 
+check("reachability: every spawn point, machine and exit is reachable on foot; loot is staged", function()
+	local Reach = requireModule(ServerRoot.World.Reach)
+	local VaultBuilder = requireModule(ServerRoot.World.VaultBuilder)
+	local lines = {}
+	for d, record in ipairs(world.depths) do
+		local y0 = record.y0
+		local idx = Reach.index(record.folder)
+		local walk = Reach.walk(idx, y0, VaultBuilder.walkBounds(), V3.new(0, y0, GameConfig.RoomFront + 6))
+		assert(#walk.list > 400, "depth " .. d .. ": walk grid too small (" .. #walk.list .. " cells)")
+		local staged = 0
+		for _, point in ipairs(record.points) do
+			local ok, why = Reach.pointOk(idx, walk, point.cframe.Position)
+			assert(ok, string.format("B%d %s point at %s: %s", d, point.kind, tostring(point.cframe.Position), tostring(why)))
+			if point.kind ~= "Floor" then
+				staged += 1
+			end
+		end
+		assert(Reach.pointOk(idx, walk, record.rarePoint.Position), "B" .. d .. " rare-event point unreachable")
+		for _, machine in ipairs(record.deposits) do
+			assert(Reach.reachable(walk, machine.zone.cframe.Position, 2.5), machine.id .. " deposit zone unreachable")
+		end
+		assert(Reach.reachable(walk, record.terminal.cframe.Position, 4), "B" .. d .. " upgrade terminal unreachable")
+		assert(Reach.reachable(walk, record.exitDoorPosition, 3), "B" .. d .. " exit door unreachable (route blocked)")
+		-- The check itself can fail: a point buried in a wall and one in sealed space.
+		assert(not Reach.pointOk(idx, walk, V3.new(-GameConfig.RoomWidth / 2 - 1, y0 + 2, 0)), "a point inside the wall passed")
+		if d <= 5 then
+			assert(staged / #record.points >= 0.6, string.format("B%d: only %d of %d points are staged", d, staged, #record.points))
+		end
+		table.insert(lines, string.format("B%d %d pts (%d%% staged)", d, #record.points, math.floor(staged / #record.points * 100 + 0.5)))
+	end
+	local b4 = world.depths[4]
+	local idx4 = Reach.index(b4.folder)
+	local walk4 = Reach.walk(idx4, b4.y0, VaultBuilder.walkBounds(), V3.new(0, b4.y0, GameConfig.RoomFront + 6))
+	assert(not Reach.pointOk(idx4, walk4, V3.new(55, b4.y0, 0)), "sealed rock behind the B4 alcoves counted as reachable")
+	print("        " .. table.concat(lines, ", "))
+end)
+
 -- Remote stubs that record traffic.
 local log = {}
 local function stubRemote(name)
@@ -904,7 +941,7 @@ check("magnet pulls loot toward its owner; auto-collect picks up nearby loot", f
 	moveTo(aliceRoot, spot)
 	local entry = nearestItem(2, spot, function(e)
 		local flat = V3.new(e.position.X - spot.X, 0, e.position.Z - spot.Z).Magnitude
-		return flat > 3 and flat < stats.MagnetRadius - 1
+		return flat > 3 and flat < stats.MagnetRadius - 1 and not e.pulledBy
 	end)
 	assert(entry, "no item in magnet range")
 	local d0 = V3.new(entry.position.X - spot.X, 0, entry.position.Z - spot.Z).Magnitude

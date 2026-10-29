@@ -6,8 +6,8 @@ A Roblox collect-and-deposit game set in an underground bank vault. Players pick
 >
 > What *was* verified headlessly, in Lune:
 > - every file lints and compiles;
-> - 31 unit tests pass;
-> - 22 harness checks pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services and a fake clock.
+> - 32 unit tests pass;
+> - 23 harness checks pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services and a fake clock.
 >
 > Persistence, session locking, receipts and multiplayer (two players, races, leaving) have been exercised **only in that harness**. Lune has no physics and no renderer, so characters are moved by the harness. The world was checked visually with three.js renders of the exported parts (`build/preview-*.png`). Those renders are not Roblox's renderer.
 >
@@ -46,8 +46,8 @@ rojo build -o build/Vault.rbxlx     # then open build/Vault.rbxlx in Roblox Stud
    |---|---|
    | 1–3 | In the hand |
    | 4–12 | A bundle at the chest |
-   | 13–36 | A stack |
-   | 37–90 | A tower with interlocked bullion |
+   | 13–36 | A wide stack in both arms |
+   | 37–90 | A large block with interlocked bullion |
    | 91+ | A strapped crate overhead |
 
    Each loot type has its own piece: banded notes, bevelled bars, glass gem trays, artifact crates and velvet chests. Other players see your stack too, within a range limit and a piece budget.
@@ -68,47 +68,61 @@ The rule for death and respawn: **you keep your carried loot when you die.** You
 
 ## The depths
 
-All seven depths are built and playable. Each one has:
-- the same arrival layout: elevator, deposit machine(s), upgrade terminal, signage, cameras and maintenance and security doors;
-- its own main chamber and landmark, lighting preset and ambience mix;
-- an exit corridor with a preview room and a vault door.
+All seven depths are playable. They share one facility language: the same arrival hall (elevator, deposit machine(s), upgrade terminal, signage, cameras, access doors), base materials and trim. Each chamber has **its own floor plan** (`src/server/World/Plans.lua` for B1–B5; B6/B7 use the classic columned chamber plus `Themes.lua`). Depths are stacked 150 studs apart (B1 y = 0 … B7 y = -900), and `FallenPartsDestroyHeight` is -3000.
 
-The depths are stacked 150 studs apart, with B1 at y = 0 and B7 at y = -900. `FallenPartsDestroyHeight` is set to -3000.
+| Depth | Floor plan | Ceiling | Exit door | Parts | Spawn points (staged) |
+|---|---|---|---|---|---|
+| B1 Cash Vault | Long banking hall: marble colonnades split a coffered nave (counting floor, six counting tables) from low-soffit side aisles of cash-rack rows, cash carts, safe-deposit walls with open drawers; caged cash pyramid at the nave's end | 30 (aisles 16) | centre | 976 | 144 (74%) |
+| B2 Gold Reserve | Tall fortified bullion yard: riveted plating and buttresses, mezzanine catwalk on three sides, a ring of eight heavy gold racks round a central bullion stack under a gantry crane, gold pallets and bullion cages; blast-door entrance | 36 | far right (x 38) | 1003 | 104 (79%) |
+| B3 Diamond Chamber | Hexagonal hall: six glass display wings with open pedestals radiate from the faceted crystal in its laser ring; open velvet trays on the slanted walls; stepped ceiling rings, oculus and cool spotlights | 32 | centre, through a vestibule | 621 | 104 (81%) |
+| B4 Emerald Reserve | Narrow vaulted gallery (44 wide) under arch ribs; nine side alcoves behind green-lit arches, each with an emerald tower and premium cases; black stands down the nave; obelisk at the north end | 26 | far left (x -36), via a side passage | 711 | 102 (82%) |
+| B5 Platinum Reserve | Industrial hall: three rows of 14-stud warehouse racks on the left, a conveyor with three presses and output tables on the right, overhead catwalks, refinery vessel, alloy shelving, cold strip lights, corrugated walls | 38 | right (x 40) | 886 | 140 (86%) |
+| B6 Artifact Chamber | Classic chamber: stone columns and arches, mosaic runner, containment pods, sarcophagus | 30 | centre | 673 | 146 |
+| B7 Legendary Reserve | Classic chamber: monumental gold entrance, red carpet, gold columns, treasure heaps, tiered dais | 30 | centre | 658 | 142 |
 
-| Depth | Name | Landmark and storage | Parts | Spawn points |
-|---|---|---|---|---|
-| B1 | Cash Vault | Caged cash pyramid; storage racks, counting tables, safe-deposit wall, wrapped cash pallets. Two deposit machines and the 4 leaderboards. | 897 | 189 |
-| B2 | Gold Reserve | Gantry crane lifting gold; heavy racks, bullion cages, a forklift | 933 | 180 |
-| B3 | Diamond Chamber | Giant crystal inside a laser ring; display cases, laser fences, a security gate | 656 | 151 |
-| B4 | Emerald Reserve | Emerald obelisk; glass towers, sealed containers, a scanner arch | 690 | 151 |
-| B5 | Platinum Reserve | Refinery vessel; press, conveyor, robot arm, blast plates | 742 | 180 |
-| B6 | Artifact Chamber | Sarcophagus under an arch; mosaic floor, columns, pods, stepped platforms | 673 | 146 |
-| B7 | Legendary Reserve | Grand entrance, tiered treasure dais with light shafts, gold columns, treasure heaps | 658 | 142 |
+The world totals **5,572 parts**; the harness budget is under 9,000. Live loot comes on top of that, at 48–64 pooled items per depth.
 
-The world totals **5,293 parts** (the harness asserts a budget of under 9,000). Live loot comes on top of that, at 48–64 items per depth. Pickups come from a pool, so models are reused.
+**Loot staging (B1–B5).** Most spawn points sit on the furniture of each floor:
+- B1: rack shelves, counting tables, carts, open drawers and pallets.
+- B2: ring and wall racks, gold pallets.
+- B3: pedestals and trays.
+- B4: alcove cases and nave stands.
+- B5: rack shelves, the conveyor belt and the press output tables.
+
+The rest are loose floor items along the walking lanes, never on the routes (elevator → chamber → exit door), which are kept-out boxes.
+
+**Reachability.** After a depth is built, `Reach.lua` checks every spawn point against the real parts.
+- It indexes every colliding part.
+- It flood-fills a 2-stud walk grid from the elevator.
+- It keeps a point only if the point isn't buried and some reachable cell is within pickup range with a clear line to it.
+
+The harness re-checks this independently. It also checks that every deposit zone, upgrade terminal and exit door is reachable, and that a point in a wall or in sealed rock fails.
+
+The rendered plans are `build/preview-b*-plan.png`, top-down with the ceiling cut away.
 
 ## Checks (all five pass)
 
 | Check | Command | Result |
 |---|---|---|
 | Lint | `selene src` | `0 errors / 0 warnings / 0 parse errors` |
-| Compile | `lune run tests/compile` | `compiled 48 files, 0 failures` |
-| Unit tests | `lune run tests/run` | `31 passed, 0 failed` |
+| Compile | `lune run tests/compile` | `compiled 50 files, 0 failures` |
+| Unit tests | `lune run tests/run` | `32 passed, 0 failed` |
 | Build | `rojo build -o build/Vault.rbxlx` | `Built project to Vault.rbxlx` |
-| Harness | `lune run tests/harness build/Vault.rbxlx` | `harness: 22 passed, 0 failed` |
+| Harness | `lune run tests/harness build/Vault.rbxlx` | `harness: 23 passed, 0 failed` |
 
 To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build/preview.json && node tools/render_preview.mjs build/preview.json build/`. Setting `ONLY=<name>` renders just one view.
 
 **What the unit tests cover:**
 - **Economy:** the curve, every upgrade's direction, price growth, depth gating, modest multipliers, and value per slot rising at least 4× per depth.
 - **Greedy-player simulation:** B2 at about 16 trips, then B3 at 31, B4 at 39, B5 at 100, B6 at 272 and B7 at 701. That is roughly 30 hours of play, without Robux.
-- **Stack layout:** thresholds, determinism, the piece budget, bottom-to-top order, interlocked layers that don't overlap, and monotonic height.
+- **Stack layout:** thresholds, determinism, the piece budget, bottom-to-top order, interlocked layers that don't overlap, monotonic height, and that no arrangement covers the face or clips into the torso (stacks grow wider and deeper, not taller).
 - **Loot tables:** weights, caps, size limits and luck.
 - **Progress:** the UTC day, deterministic dailies, and book targets.
 - **Config:** every audio id is read from DEAD AIR's own config file; every item has a model; shop ids are 0 and nothing sells power.
 
 **What the harness covers:**
 1. The world build.
+1. Reachability of every spawn point, machine and exit; loot staging share per depth.
 2. Services start, and every depth is stocked.
 3. Join and placement.
 4. Collect: distance, depth, cooldown and junk ids are all checked; the value is fixed at pickup; models are pooled.
@@ -148,6 +162,7 @@ To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build
 - **Elevator:** a cabin with sliding doors, a floor panel and buttons, a shaft window, the depth display above the doors, and sounds.
 - **The ride** is a validated transition, not physics. The server checks that the depth is unlocked, that you are at the cabin, that you aren't already riding, and the cooldown. The ride lasts 1.4 s + 0.35 s per floor, capped at 3.6 s. The client closes the doors, plays the motor, counts floors on an overlay with passing light bars, and shows an arrival title card.
 - **Fixed during this phase:** riders used to arrive facing the back wall of the cabin. They now face out of the doors, and the harness asserts it.
+- **Reworked after render review:** B1–B5 were originally one shared rectangular room with recoloured dressing and loot scattered on bare floor. Each now has its own floor plan, proportions, ceiling, wall treatment and exit position (see "The depths"), with staged loot and a reachability filter. Carried stacks were also lowered and widened so no arrangement covers the face.
 
 ### Phase 3 — Storytelling
 - **On every floor:** vault doors, cameras, ducts and cable trays with joints, pipes with clamps, hanging signs, restricted signage, warning lights, access panels, and maintenance and security doors.
@@ -194,7 +209,7 @@ To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build
 
 ## Final delivery report (10 points)
 
-1. **What was built:** a complete VAULT Rojo project. It has 48 source files: 10 server services, 4 world builders, 11 client controllers, and shared configs and logic.
+1. **What was built:** a complete VAULT Rojo project. It has 50 source files: 10 server services, 6 world modules, 11 client controllers, and shared configs and logic.
 2. **What is playable:** all 7 depths, end to end. The full core loop, upgrades, unlocks, the elevator, rare events, book, achievements, dailies, leaderboards, rebirth, shop and settings are all in.
 3. **Server authority:** the server decides every value, claim, capacity check, payout, price, unlock and ride. The client only displays and requests.
 4. **Persistence:**
@@ -207,14 +222,14 @@ To make the previews, run `lune run tools/export_preview build/Vault.rbxlx build
    - Pickup cooldowns with a tolerance, rate limits, and NaN- and junk-safe remotes.
    - The stack is taken before payment, and claims are atomic.
 6. **Performance:**
-   - 5,293 static parts.
+   - 5,572 static parts.
    - Pooled loot.
    - One Heartbeat step on the server, with no per-object loops.
    - Budgets for stack pieces, effects and the range at which other players' stacks are drawn.
    - Position-based zone checks (no Touched events).
-   - StreamingEnabled is off, because the whole world is about 5,300 parts.
+   - StreamingEnabled is off, because the whole world is about 5,600 parts.
 7. **Testing:** see the checks above. No Studio playtest was done.
-8. **Visual QA:** 27 renders, covering every depth's arrival, chamber and stacks views, plus the exit, deposit, elevator, B7 entrance, catalog and stack modes. Rooms that read too large were rescaled earlier; the catalog view was re-framed.
+8. **Visual QA:** 34 renders, including a top-down plan of every depth, covering every depth's arrival, chamber and stacks views, plus the exit, deposit, elevator, B7 entrance, catalog and stack modes. Fixed from them: rooms rescaled, B1–B5 given distinct floor plans, stacks lowered below the face, the catalog re-framed.
 9. **Known limitations:** listed below.
 10. **What you need to provide:** listed below.
 
@@ -261,7 +276,7 @@ The Rojo project maps the folders like this:
 |---|---|
 | `src/shared/Config` | Game, loot, depth, upgrade, quest, cosmetic, shop, performance and audio configs |
 | `src/shared` | Economy, LootTable, StackLayout, Progress, LootModels, LightingPresets, Net, Signal, Rng, Format |
-| `src/server/World` | Props, Machines, VaultBuilder, Themes |
+| `src/server/World` | Props, Machines, VaultBuilder, Plans (B1–B5 floor plans), Themes (B6/B7), Reach (reachability) |
 | `src/server/Services` | Analytics, DataService, PlayerService, ShopService, UpgradeService, QuestService, LootService, DepositService, ElevatorService, LeaderboardService, RateLimit |
 | `src/client/Controllers` | ClientState, Ui, AudioController, CollectController, InputController, StackController, DepositController, ElevatorController, HudController, MenuController, TutorialController, EffectsController |
 | `tests` | `compile`, `run` with 5 specs, the `harness`, `loader` |

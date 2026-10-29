@@ -96,4 +96,23 @@ test("within each arrangement, more items never make a lower stack", function()
 	end
 end)
 
+test("no arrangement covers the face or clips into the body", function()
+	local P = StackLayout.PieceSize
+	for _, category in ipairs({ "Cash", "Gold", "Diamond", "Emerald", "Platinum", "Artifact", "Legendary" }) do
+		for n = 1, 90 do
+			for _, budget in ipairs({ 12, 24 }) do
+				local layout = StackLayout.layout({ [category] = n }, budget)
+				for _, p in ipairs(layout.pieces) do
+					assert(p.y <= StackLayout.MaxFrontY + 1e-9, string.format("%d %s: a piece at y %.2f would cover the face", n, category, p.y))
+					local turned = math.abs(math.abs(p.yaw) - math.pi / 2) < 1e-3
+					local halfZ = (if turned then P.X else P.Z) / 2 * p.scale
+					if layout.mode ~= "Hand" then
+						assert(p.z + halfZ <= -0.45, string.format("%d %s: a piece at z %.2f clips into the torso", n, category, p.z))
+					end
+				end
+			end
+		end
+	end
+end)
+
 return cases
