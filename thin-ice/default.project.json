@@ -1,0 +1,59 @@
+{
+  "name": "ThinIce",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "ThinIce": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "ThinIceServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 14,
+        "CharacterJumpPower": 42,
+        "CameraMaxZoomDistance": 45,
+        "CameraMinZoomDistance": 6,
+        "EnableMouseLockOption": true
+      },
+      "StarterPlayerScripts": {
+        "ThinIceClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true,
+        "MaxPlayers": 6
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 1.1,
+        "ClockTime": 0.3,
+        "EnvironmentDiffuseScale": 0.6,
+        "EnvironmentSpecularScale": 0.5
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
