@@ -151,7 +151,9 @@ local function build()
 	Ui.list(refs.toasts, 6, Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Right)
 
 	-- Results card
-	local results, body = Ui.window(gui, "Results", "RESULTS", 560, 560)
+	-- (540 tall: a full card - 6 reward lines, a level-up and 6 players - fits inside it,
+	-- and the window still fits a phone in landscape at the smallest UI scale)
+	local results, body = Ui.window(gui, "Results", "RESULTS", 560, 540)
 	refs.results = results
 	refs.resultsBody = body
 
@@ -367,7 +369,9 @@ end
 function HudController.showResults(summary)
 	local body = refs.resultsBody
 	Ui.clear(body)
-	Ui.list(body, 6)
+	if not body:FindFirstChildOfClass("UIListLayout") then
+		Ui.list(body, 2) -- (Ui.clear keeps layouts: one per card, not one more per round)
+	end
 	local escaped = summary.outcome == "Escaped"
 	local title = if escaped then "YOU ESCAPED!" elseif summary.outcome == "LeftBehind" then "LEFT BEHIND" else "THE ICE WON"
 	Ui.title(title, { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 40), TextSize = 32, TextColor3 = if escaped then C.Green else C.Red, Parent = body })

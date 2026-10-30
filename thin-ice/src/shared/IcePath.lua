@@ -10,7 +10,8 @@
 	a cut-off island) the path ends on the reachable tile closest to it and `reached` is
 	false - the caller treats the end of that path as "as close as it can get".
 
-	It is cheap (the lake is 16 x 32 = 512 tiles) and MonsterService only re-plans on a
+	The lake is 26 x 50 = 1,300 tiles. The search is capped at IcePath.MaxNodes expansions
+	(a cut-off goal can't flood the whole lake), and MonsterService only re-plans on a
 	throttle, never per frame.
 ]]
 
@@ -70,69 +71,86 @@ local function heuristic(c, r, gc, gr)
 	return math.max(dx, dz) + (SQRT2 - 1) * math.min(dx, dz)
 end
 
--- Minimal binary heap of { f, idx }.
-local function push(heap, f, idx)
-	table.insert(heap, { f, idx })
-	local i = #heap
+-- Minimal binary heap as two parallel arrays (f values, cell indices): no table per entry.
+local function push(hf, hi, n, f, idx)
+	n += 1
+	local i = n
 	while i > 1 do
 		local parent = i // 2
-		if heap[parent][1] <= heap[i][1] then
+		if hf[parent] <= f then
 			break
 		end
-		heap[parent], heap[i] = heap[i], heap[parent]
+		hf[i], hi[i] = hf[parent], hi[parent]
 		i = parent
 	end
+	hf[i], hi[i] = f, idx
+	return n
 end
 
-local function pop(heap)
-	local top = heap[1]
-	local last = table.remove(heap)
-	if #heap > 0 then
-		heap[1] = last
-		local i, n = 1, #heap
+local function pop(hf, hi, n)
+	local top = hi[1]
+	local f, idx = hf[n], hi[n]
+	hf[n], hi[n] = nil, nil
+	n -= 1
+	if n > 0 then
+		local i = 1
 		while true do
-			local l, r = i * 2, i * 2 + 1
-			local smallest = i
-			if l <= n and heap[l][1] < heap[smallest][1] then
-				smallest = l
-			end
-			if r <= n and heap[r][1] < heap[smallest][1] then
-				smallest = r
-			end
-			if smallest == i then
+			local l = i * 2
+			if l > n then
 				break
 			end
-			heap[smallest], heap[i] = heap[i], heap[smallest]
-			i = smallest
+			if l < n and hf[l + 1] < hf[l] then
+				l += 1
+			end
+			if hf[l] >= f then
+				break
+			end
+			hf[i], hi[i] = hf[l], hi[l]
+			i = l
 		end
+		hf[i], hi[i] = f, idx
 	end
-	return top
+	return top, n
 end
 
 local NEIGHBOURS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }
+
+-- The search gives up after expanding this many cells (a goal cut off from the monster
+-- would otherwise flood the whole 1,300-tile lake on every re-plan).
+IcePath.MaxNodes = GameConfig.Monster.PathNodeCap or 700
 
 --[[
 	A* from cell (sc, sr) to (gc, gr). The start may be blocked (it is where the monster
 	already is); every other cell on the path is open. Returns:
 	  cells    { {c, r}, ... } from the first step to the last cell (empty if already there)
 	  reached  true if the last cell is the goal cell
+	  capped   true if the search hit IcePath.MaxNodes first (the path ends on the cell
+	           closest to the goal found so far: walk it, then plan again from there)
 ]]
-function IcePath.find(tiles, sc, sr, gc, gr, open)
+function IcePath.find(tiles, sc, sr, gc, gr, open, maxNodes)
 	open = open or grid(tiles)
+	maxNodes = maxNodes or IcePath.MaxNodes
 	local start = index(sc, sr)
 	local goal = index(gc, gr)
 	local g = { [start] = 0 }
 	local came = {}
 	local closed = {}
-	local heap = {}
-	push(heap, heuristic(sc, sr, gc, gr), start)
+	local hf, hi, n = {}, {}, 0
+	n = push(hf, hi, n, heuristic(sc, sr, gc, gr), start)
 	local best, bestH = start, heuristic(sc, sr, gc, gr)
-	while #heap > 0 do
-		local idx = pop(heap)[2]
+	local expanded, capped = 0, false
+	while n > 0 do
+		local idx
+		idx, n = pop(hf, hi, n)
 		if not closed[idx] then
 			closed[idx] = true
 			if idx == goal then
 				best = idx
+				break
+			end
+			expanded += 1
+			if expanded > maxNodes then
+				capped = true
 				break
 			end
 			local c, r = idx % COLS, idx // COLS
@@ -140,16 +158,18 @@ function IcePath.find(tiles, sc, sr, gc, gr, open)
 			if h < bestH then
 				best, bestH = idx, h
 			end
+			local gi = g[idx]
 			for _, off in ipairs(NEIGHBOURS) do
-				local nc, nr = c + off[1], r + off[2]
-				local diagonal = off[1] ~= 0 and off[2] ~= 0
-				if isOpen(open, nc, nr) and (not diagonal or (isOpen(open, c + off[1], r) and isOpen(open, c, r + off[2]))) then
-					local n = index(nc, nr)
-					local cost = g[idx] + (if diagonal then SQRT2 else 1)
-					if not closed[n] and (g[n] == nil or cost < g[n]) then
-						g[n] = cost
-						came[n] = idx
-						push(heap, cost + heuristic(nc, nr, gc, gr), n)
+				local dc, dr = off[1], off[2]
+				local nc, nr = c + dc, r + dr
+				local diagonal = dc ~= 0 and dr ~= 0
+				if isOpen(open, nc, nr) and (not diagonal or (isOpen(open, c + dc, r) and isOpen(open, c, r + dr))) then
+					local nb = index(nc, nr)
+					local cost = gi + (if diagonal then SQRT2 else 1)
+					if not closed[nb] and (g[nb] == nil or cost < g[nb]) then
+						g[nb] = cost
+						came[nb] = idx
+						n = push(hf, hi, n, cost + heuristic(nc, nr, gc, gr), nb)
 					end
 				end
 			end
@@ -158,10 +178,15 @@ function IcePath.find(tiles, sc, sr, gc, gr, open)
 	local cells = {}
 	local idx = best
 	while idx ~= start do
-		table.insert(cells, 1, { idx % COLS, idx // COLS })
+		table.insert(cells, { idx % COLS, idx // COLS })
 		idx = came[idx]
 	end
-	return cells, best == goal
+	-- (built goal-first above; reverse once instead of inserting at the front each step)
+	local m = #cells
+	for i = 1, m // 2 do
+		cells[i], cells[m + 1 - i] = cells[m + 1 - i], cells[i]
+	end
+	return cells, best == goal, capped
 end
 
 -- Is the straight walk from a to b (world X/Z) over open tiles all the way, with
@@ -189,6 +214,8 @@ function IcePath.clearLine(tiles, a, b, radius, open)
 	return true
 end
 
+local PULL_AHEAD = 6
+
 local function centre(c, r)
 	local x, z = LakeGen.cellToWorld(c, r)
 	return Vector3.new(x, L.IceTop, z)
@@ -202,11 +229,12 @@ local function insideCell(p, c, r, margin)
 end
 
 --[[
-	World-space plan from `from` to `goal`: a list of waypoints (Vector3 at ice level) and
-	whether the goal itself is reached. The last waypoint is the goal point (kept inside
+	World-space plan from `from` to `goal`: a list of waypoints (Vector3 at ice level),
+	whether the goal itself is reached, and whether the search was capped (a partial path
+	toward it: not "unreachable"). maxNodes overrides IcePath.MaxNodes (tests: math.huge). The last waypoint is the goal point (kept inside
 	the last tile), so the monster can step right up to the edge of a hole.
 ]]
-function IcePath.plan(tiles, from, goal)
+function IcePath.plan(tiles, from, goal, maxNodes)
 	local sc, sr = LakeGen.worldToCell(from.X, from.Z)
 	local gc, gr = LakeGen.worldToCell(goal.X, goal.Z)
 	if not sc or not gc then
@@ -228,7 +256,7 @@ function IcePath.plan(tiles, from, goal)
 			end
 		end
 	end
-	local cells, reached = IcePath.find(tiles, sc, sr, tc, tr, open)
+	local cells, reached, capped = IcePath.find(tiles, sc, sr, tc, tr, open, maxNodes)
 	reached = reached and tc == gc and tr == gr
 	local points = {}
 	for _, cell in ipairs(cells) do
@@ -255,16 +283,18 @@ function IcePath.plan(tiles, from, goal)
 	local at = from
 	local i = 1
 	while i <= #points do
-		-- (forward greedy: stop at the first waypoint out of sight - linear, not quadratic)
+		-- (forward greedy: stop at the first waypoint out of sight, and look at most
+		-- PULL_AHEAD waypoints ahead - each check walks the whole line, so an unlimited
+		-- look-ahead on a straight cross-lake path cost O(n^2) samples)
 		local j = i
-		while j < #points and IcePath.clearLine(tiles, at, points[j + 1], nil, open) do
+		while j < #points and j - i < PULL_AHEAD and IcePath.clearLine(tiles, at, points[j + 1], nil, open) do
 			j += 1
 		end
 		table.insert(smooth, points[j])
 		at = points[j]
 		i = j + 1
 	end
-	return smooth, reached
+	return smooth, reached, capped
 end
 
 -- Cells reachable on foot from the shore (row 0), as a set of keys.

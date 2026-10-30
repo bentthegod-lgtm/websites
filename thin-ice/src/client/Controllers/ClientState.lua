@@ -127,10 +127,20 @@ function ClientState.applySettings(changes)
 	ClientState.SettingsChanged:Fire(ClientState.settings)
 end
 
+-- Saves are coalesced: tapping a slider's +/- several times sends one save a moment
+-- later (the server rate-limits SaveSettings, and a dropped save lost the final value).
+local savePending = false
 function ClientState.saveSettings()
-	if ClientState.settings then
-		Net.event("SaveSettings"):FireServer(ClientState.settings)
+	if not ClientState.settings or savePending then
+		return
 	end
+	savePending = true
+	task.delay(1.2, function()
+		savePending = false
+		if ClientState.settings then
+			Net.event("SaveSettings"):FireServer(ClientState.settings)
+		end
+	end)
 end
 
 function ClientState.setMode(mode)

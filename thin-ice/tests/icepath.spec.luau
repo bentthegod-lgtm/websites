@@ -112,7 +112,7 @@ test("shore-connected set skips islands; generated lakes always path from the sh
 	for seed = 1, 20 do
 		local layout = LakeGen.generate(seed, "Nightmare")
 		for _, core in ipairs(layout.cores) do
-			local points, reached = IcePath.plan(layout.tiles, pos(core.c, 0), pos(core.c, core.r))
+			local points, reached = IcePath.plan(layout.tiles, pos(core.c, 0), pos(core.c, core.r), math.huge)
 			assert(reached, "seed " .. seed .. ": core unreachable")
 			walkable(layout.tiles, pos(core.c, 0), points)
 		end
@@ -138,6 +138,26 @@ test("planning stays cheap on the bigger 26 x 50 lake (whole-lake paths, real la
 	end
 	print(string.format("        IcePath: worst plan %.2f ms, mean %.2f ms (Lune)", worst * 1000, total / n * 1000))
 	assert(worst < 0.015, string.format("a plan took %.1f ms", worst * 1000))
+end)
+
+test("a cut-off goal can't flood the whole lake: the search is capped and walks partway", function()
+	local ring = {}
+	for dc = -1, 1 do
+		for dr = -1, 1 do
+			if dc ~= 0 or dr ~= 0 then
+				table.insert(ring, { 20 + dc, 45 + dr })
+			end
+		end
+	end
+	local tiles = lake(ring)
+	local _, reachedAll, cappedAll = IcePath.find(tiles, 2, 1, 20, 45, nil, math.huge)
+	assert(not reachedAll and not cappedAll, "uncapped: floods everything and fails")
+	local cells, reached, capped = IcePath.find(tiles, 2, 1, 20, 45)
+	assert(not reached and capped, "capped search reports capped, not unreachable")
+	assert(#cells > 0, "it still walks toward the goal")
+	local points, ok, planCapped = IcePath.plan(tiles, pos(2, 1), pos(20, 45))
+	assert(not ok and planCapped and #points > 0)
+	walkable(tiles, pos(2, 1), points)
 end)
 
 return cases

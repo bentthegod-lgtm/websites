@@ -283,9 +283,11 @@ local function tick()
 			local c, r = LakeGen.worldToCell(nextStep.X, nextStep.Z)
 			blocked = not c or not IcePath.open(run.layout.tiles, c, r)
 		end
-		local stale = not nav.goal or flat(nav.goal, goal) > 2 or blocked or now - nav.plannedAt >= 2
+		-- (a capped plan is only partway there: plan again from its end)
+		local partEnd = nav.capped and not nextStep
+		local stale = not nav.goal or flat(nav.goal, goal) > 2 or blocked or partEnd or now - nav.plannedAt >= 2
 		if stale and now - nav.plannedAt >= Mon.ReplanInterval then
-			nav.path, nav.reached = IcePath.plan(run.layout.tiles, position, goal)
+			nav.path, nav.reached, nav.capped = IcePath.plan(run.layout.tiles, position, goal)
 			nav.index = 1
 			nav.goal = goal
 			nav.plannedAt = now
@@ -352,7 +354,7 @@ local function move(dt)
 		local to = nav.path[nav.index]
 		if not to then
 			-- End of the path. If the goal was out of reach, this is as close as it gets.
-			if not nav.reached and nav.goal and flat(nav.goal, clampToLake(intent.goal)) <= 2 then
+			if not nav.reached and not nav.capped and nav.goal and flat(nav.goal, clampToLake(intent.goal)) <= 2 then
 				brain:arrive(position)
 			end
 			break

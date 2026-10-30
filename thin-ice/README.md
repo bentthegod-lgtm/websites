@@ -6,7 +6,7 @@ A co-op survival horror game for Roblox, for 1–6 players. Your group crosses a
 >
 > What *was* verified headlessly, in Lune:
 > - every file lints (selene) and compiles;
-> - 38 unit tests pass (lake generation incl. the 5th zone, ice / stamina / warmth / noise maths, the monster's brain and pathing, presence cues, rewards, config, audio coverage);
+> - 40 unit tests pass (lake generation incl. the 5th zone, ice / stamina / warmth / noise maths, the monster's brain and pathing, presence cues, rewards, config, audio coverage);
 > - 31 harness checks pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services and a fake clock. They play whole rounds: vote, ready, countdown, the lake built over 21 frames, footsteps, ice breaking under a sprinter, falling in and climbing out, the monster waking, hearing, hunting, cracking the ice behind it and catching, whiteouts, thawing, the flask, chipping and delivering cores, the beacon beam, the sled horn, the sled escape, rounds that fail, players leaving, receipts, the session lock and every client screen, presence cue and ambient scare.
 >
 > Lune has no physics and no renderer, so the harness moves characters itself. The world was checked visually with three.js renders of the exported parts (`build/preview-*.png`), which are not Roblox's renderer. **Follow the Studio test plan below before publishing.**
@@ -44,7 +44,7 @@ The lake is **26 × 50 tiles** (208 × 400 studs; it was 16 × 32) in **five zon
 | Thin Flats | 120 – 200 | lots of dark, thin ice |
 | Boulder Isles | 200 – 280 | rocks and ice crystals to hide behind |
 | Wreck Bay | 280 – 360 | the wrecked boat, more holes |
-| **The Deep Hollow** (new) | 360 – 440 | black glassy ice over black water, the most holes, a **half-sunken frozen lighthouse** at (0, 400) with a dying blue lamp, ringed by **eight standing ice spires** (~29 studs out). The Antlered sleeps here, at about (-68, 428). |
+| **The Deep Hollow** (new) | 360 – 440 | black glassy ice over black water, the most holes, a **half-sunken frozen lighthouse** at (0, 400) with a dying blue lamp, ringed by **eight standing ice spires** (~29 studs out). The Antlered sleeps here, at about (-68, 428); no core or brazier is placed within 4 tiles of it. |
 
 Every difficulty puts at least one core in The Deep Hollow. Cores (4 / 5 / 6 / 7), braziers (10 / 8 / 7 / 6), drifts (17 per lake), time limits (12 / 11 / 10.5 / 10 min) and the sled wait (60 s) were retuned so a round still takes about 8–11 minutes. Hard and Nightmare make the Antlered smarter rather than adding a second one: it keeps searching around a lost sound 1.5× / 2× longer (a second monster would double the presence noise and make the shore-to-Deep-Hollow trip unfair for small groups).
 
@@ -195,4 +195,4 @@ node tools/store_art.mjs build/preview.json .
 | A round's lake | 2,016–2,127 | Varies by difficulty; 21 build frames, worst frame 3–8 ms in Lune (the harness fails above 30 ms) |
 | During a round | about 3,200 | Plus players, the Antlered (~85 parts) and its crack trail (at most 24 tiles) |
 
-Monster path planning (A* over 1,300 tiles) takes about 2.5 ms on average and 6–7 ms worst-case in Lune, re-planned at most twice a second.
+Monster path planning (A* over 1,300 tiles) takes about 2 ms on average and 3–5 ms worst-case in Lune, re-planned at most twice a second. The search is capped at 800 expanded cells (`Monster.PathNodeCap`): a goal cut off by holes walks it partway and re-plans instead of flooding the whole lake (that took up to 13 ms).

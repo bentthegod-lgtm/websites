@@ -190,7 +190,9 @@ GameConfig.Monster = {
 	ListenPause = 2.2,
 	StepInterval = 0.12, -- how often it listens / decides (it moves every frame)
 	ReplanInterval = 0.5, -- it re-plans its path over the ice at most this often (never per frame)
+	PathNodeCap = 800, -- A* gives up after this many cells (a partial path; it re-plans from its end)
 	TrailLength = 24, -- tiles of cracked ice it leaves behind (cosmetic)
+	SleepClear = 4, -- no core or brazier within this many tiles of where it sleeps
 	StuckTime = 10, -- awake but hasn't got 1.5 tiles from where it was in this long: it dives and resurfaces elsewhere
 }
 

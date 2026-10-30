@@ -11,7 +11,7 @@ Everything is on GitHub: `bentthegod-lgtm/websites`, branch `claude/new-game-yhh
 | **MAGNET MAYHEM** | `magnet-mayhem/` | magnet scrap simulator (your spec) | lint 0 · compile 47/47 · unit 33/33 · harness 29/29 |
 | **CRASH LAB** | `crash-lab/` | physics crash-test launcher (your spec) | lint 0 · compile 57/57 · unit 38/38 · harness 33/33 |
 | **VAULT** | `vault/` | 7 deep treasure pools, each deeper than the last (your spec) | lint 0 · compile 55/55 · unit 38/38 · harness 28/28 |
-| **THIN ICE** | `thin-ice/` | co-op survival horror on a cracking frozen lake (daily idea) | lint 0 · compile 39/39 · unit 29/29 · harness 30/30 |
+| **THIN ICE** | `thin-ice/` | co-op survival horror on a huge cracking frozen lake, 5 zones (daily idea) | lint 0 · compile 40/40 · unit 40/40 · harness 31/31 |
 | **PHONES AWAY!** | `phones-away/` | high-school test cheating with your phone (Cheating During Testing) | lint 0 · compile 47/47 · unit 53/53 · harness 39/39 |
 
 I reran every check myself after each game was built, after its bug review, and after my

@@ -63,7 +63,7 @@ return {
 	BrazierCrackle = { Id = "rbxassetid://9117864897", Volume = 0.18, Pitch = 0.5, Looped = true, MaxDistance = 32, MinDistance = 4, Group = "Ambient" }, -- "FuelPour" pitched into a fire hiss (stand-in - a real fire loop would be better)
 
 	-- The Antlered (3D, attached to / at the monster) ---------------------------------
-	MonsterBreath = { Id = "rbxassetid://9113983944", Volume = 0.7, Pitch = 0.75, Looped = true, MaxDistance = 45, MinDistance = 6 },
+	MonsterBreath = { Id = "rbxassetid://9113983944", Volume = 0.5, Pitch = 0.75, Looped = true, MaxDistance = 45, MinDistance = 6 },
 	MonsterStep = { Id = "rbxassetid://9113473249", Volume = 0.8, Pitch = 0.4, MaxDistance = 70, MinDistance = 8 }, -- heavy crunch ("Land", pitched down)
 	MonsterCall = { Id = "rbxassetid://9113985466", Volume = 0.35, Pitch = 0.6, MaxDistance = 400, MinDistance = 60, Duration = 4, Fade = 1.5 }, -- distant call: "MonsterVocal" pitched down, quiet
 	MonsterVocal = { Id = "rbxassetid://9113985466", Volume = 0.8, Pitch = 0.75, MaxDistance = 180, Duration = 3.5, Fade = 1 },
@@ -81,19 +81,19 @@ return {
 			{ Id = "rbxassetid://9125474518", Volume = 0.6, Pitch = 0.7 },
 		},
 	},
-	Heartbeat = { Id = "rbxassetid://9043365842", Volume = 0.6, Looped = true },
+	Heartbeat = { Id = "rbxassetid://9043365842", Volume = 0.45, Looped = true },
 
 	-- Ambience ---------------------------------------------------------------------------
 	Wind = { Id = "rbxassetid://9125446564", Volume = 0.35, Pitch = 0.55, Looped = true, Group = "Ambient" }, -- "VentilationLoop" pitched down into wind (stand-in)
 	WindHum = { Id = "rbxassetid://9112889082", Volume = 0.05, Pitch = 0.5, Looped = true, Group = "Ambient" }, -- "ElectricalHum" very low under the wind
-	GustWind = { Id = "rbxassetid://9125446564", Volume = 0.7, Pitch = 0.8, Looped = true, Group = "Ambient" }, -- whiteout: the same wind, louder and higher
+	GustWind = { Id = "rbxassetid://9125446564", Volume = 0.45, Pitch = 0.8, Looped = true, Group = "Ambient" }, -- whiteout: the same wind, louder and higher
 	WindHowl = { Id = "rbxassetid://9125446564", Volume = 0.35, Pitch = 2.1, Group = "Ambient", Duration = 3.5, Fade = 1.5, MaxDistance = 400, MinDistance = 60 }, -- ambient scare: a distant scream-like gust (stand-in)
 	ShadowSwell = { Id = "rbxassetid://9113134899", Volume = 0.45, Pitch = 0.35, Group = "Ambient", Duration = 3, Fade = 1 }, -- ambient scare: something huge passing under the ice
 
 	-- Music --------------------------------------------------------------------------------
 	LobbyMusic = { Id = "rbxassetid://134959834418523", Volume = 0.3, Looped = true, Group = "Music" },
 	LakeMusic = { Id = "rbxassetid://9043359885", Volume = 0.3, Pitch = 0.9, Looped = true, Group = "Music" }, -- "TensionLayer": the tension bed out on the ice
-	Chase = { Id = "rbxassetid://80586845389169", Volume = 0.55, Looped = true, Group = "Music" }, -- "ChaseLayer": only while it hunts YOU
+	Chase = { Id = "rbxassetid://80586845389169", Volume = 0.45, Looped = true, Group = "Music" }, -- "ChaseLayer": only while it hunts YOU
 
 	-- Round / UI ---------------------------------------------------------------------------
 	Countdown = { Id = "rbxassetid://9113880475", Volume = 0.5, Group = "UI" }, -- "TerminalBeep"

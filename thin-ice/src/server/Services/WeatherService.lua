@@ -46,6 +46,20 @@ function WeatherService.gusting()
 	return state.gust
 end
 
+-- No new whiteout once the sled is waiting, or when it would still be raging as the time
+-- limit runs out (the last dash and the results shouldn't happen blind).
+function WeatherService.canStart(now)
+	local rs = services and services.RoundService
+	if not rs then
+		return true
+	end
+	if rs.phase() == "Sled" then
+		return false
+	end
+	local run = rs.run()
+	return not (run and run.endsAt and run.endsAt - now < W.WhiteoutMax + 5)
+end
+
 -- Starts a gust right now (tests, or a future "storm" event).
 function WeatherService.forceGust()
 	state.nextAt = os.clock()
@@ -56,7 +70,7 @@ function WeatherService.step()
 		return
 	end
 	local now = os.clock()
-	if not state.gust and now >= state.nextAt then
+	if not state.gust and now >= state.nextAt and WeatherService.canStart(now) then
 		local duration = rng:NextNumber(W.WhiteoutMin, W.WhiteoutMax)
 		set(true, duration)
 		state.endsAt = now + duration

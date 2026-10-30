@@ -250,6 +250,20 @@ function LakeGen.generate(seed, difficultyName)
 		return nil
 	end
 
+	-- The monster sleeps at the far end of The Deep Hollow, off to one side. Nothing you
+	-- need (a core or a fire) is placed within SleepClear tiles of it, so it can't wake
+	-- right on top of someone chipping a core.
+	layout.monsterCell = { 4, LakeGen.Rows - 2 }
+	do
+		local mc, mr = layout.monsterCell[1], layout.monsterCell[2]
+		local clear = GameConfig.Monster.SleepClear
+		for dc = -clear, clear do
+			for dr = -clear, clear do
+				reserved[key(mc + dc, mr + dr)] = true
+			end
+		end
+	end
+
 	-- 3. Braziers spread over the zones (round-robin), on solid ice.
 	for i = 1, diff.Braziers do
 		local t = pickIce(((i - 1) % #GameConfig.Zones) + 1, 2)
@@ -292,8 +306,6 @@ function LakeGen.generate(seed, difficultyName)
 		end
 	end
 
-	-- 7. The monster sleeps at the far end of The Deep Hollow, off to one side.
-	layout.monsterCell = { 4, LakeGen.Rows - 2 }
 	return layout
 end
 

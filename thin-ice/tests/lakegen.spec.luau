@@ -135,4 +135,21 @@ test("The Deep Hollow: half-sunken lighthouse ringed by ice spires, cores out th
 	end
 end)
 
+test("the Antlered never sleeps next to a core or a fire", function()
+	local clear = GameConfig.Monster.SleepClear
+	for _, d in ipairs({ "Easy", "Normal", "Hard", "Nightmare" }) do
+		for seed = 1, 60 do
+			local layout = LakeGen.generate(seed * 13 + 7, d)
+			local mc, mr = layout.monsterCell[1], layout.monsterCell[2]
+			for _, t in ipairs(layout.cores) do
+				assert(math.max(math.abs(t.c - mc), math.abs(t.r - mr)) > clear, string.format("%s seed %d: core at %d,%d", d, seed, t.c, t.r))
+			end
+			for _, t in ipairs(layout.braziers) do
+				assert(math.max(math.abs(t.c - mc), math.abs(t.r - mr)) > clear, string.format("%s seed %d: fire at %d,%d", d, seed, t.c, t.r))
+			end
+			assert(#layout.cores == GameConfig.Difficulties[d].Cores, "a core went missing")
+		end
+	end
+end)
+
 return cases

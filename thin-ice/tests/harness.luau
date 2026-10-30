@@ -1112,6 +1112,10 @@ check("whiteout: 15-20 s, it hears half as much but moves faster; chills you fas
 	local gustLoss = 80 - rec.warmth
 	tick(GameConfig.Weather.WhiteoutMax + 0.5)
 	assert(not WS.gusting(), "whiteout never ended")
+	-- no new whiteout right before the time limit (or once the sled waits)
+	local runEnds = RSv.run().endsAt
+	assert(not WS.canStart(runEnds - GameConfig.Weather.WhiteoutMax), "a whiteout could start as time runs out")
+	assert(WS.canStart(runEnds - GameConfig.Weather.WhiteoutMax - 30), "whiteouts blocked mid-round")
 	rec.warmth = 80
 	putAt(alice, cellPos(3, 1))
 	tick(1)

@@ -40,6 +40,8 @@ local monsterStepTimer = 0
 local lastMonsterPos = nil
 local nextCallAt = 0
 local wasHuntingMe = false
+local chaseLevel = 0 -- the chase layer fades in / out instead of cutting
+local CHASE_FADE_IN, CHASE_FADE_OUT = 4, 0.6 -- per second (in ~0.25 s, out ~1.7 s)
 local braziers = {}
 local brazierScanAt = -math.huge
 local MIN_GAP = { Step = 0.1, Crack = 0.12, Break = 0.2, Splash = 0.2, Chip = 0.25, UIClick = 0.05, Pickup = 0.15, MonsterStep = 0.25, Horn = 1.5, Spotted = 6 }
@@ -263,8 +265,9 @@ function AudioController.step(dt)
 		end
 	end
 
-	-- The Antlered.
-	local info = ClientState.monsterInfo()
+	-- The Antlered. (Presence cues only for players out in the round - never at camp in the
+	-- lobby, nor while the results are up.)
+	local info = if inRound then ClientState.monsterInfo() else nil
 	local cues = Presence.cues(info and info.distance, info and info.state, info and info.huntingMe)
 	local body = info and info.model.PrimaryPart
 	if body and cues.breath then
@@ -295,12 +298,16 @@ function AudioController.step(dt)
 	else
 		AudioController.stopLoop("Heartbeat")
 	end
-	if cues.chase and not wasHuntingMe then
+	local hunted = cues.chase and me.state == "Active"
+	if hunted and not wasHuntingMe then
 		AudioController.play("Spotted")
 	end
-	wasHuntingMe = cues.chase
-	if cues.chase and me.state == "Active" then
+	wasHuntingMe = hunted
+	-- The chase layer: only while it hunts YOU; fades out when it loses you (or you freeze).
+	chaseLevel = math.clamp(chaseLevel + (if hunted then CHASE_FADE_IN else -CHASE_FADE_OUT) * dt, 0, 1)
+	if chaseLevel > 0 then
 		AudioController.loop("Chase", "Chase", SoundService)
+		AudioController.loopLevel("Chase", chaseLevel)
 	else
 		AudioController.stopLoop("Chase")
 	end
@@ -310,7 +317,8 @@ function AudioController.step(dt)
 	AudioController.loop("Wind", "Wind", SoundService)
 	AudioController.loop("WindHum", "WindHum", SoundService)
 	local farOut = if root then math.clamp((root.Position.Z - GameConfig.Lake.ShoreZ) / 300, 0, 1) else 0
-	AudioController.loopLevel("Wind", 0.6 + farOut * 0.5)
+	-- (the whiteout's gust replaces the wind rather than stacking on top of it)
+	AudioController.loopLevel("Wind", if gust and inRound then 0.4 else 0.6 + farOut * 0.5)
 	if gust and inRound then
 		AudioController.loop("Gust", "GustWind", SoundService)
 	else
@@ -338,7 +346,7 @@ function AudioController.step(dt)
 	-- Music: lobby at camp, the tension bed out on the ice (ducked under the chase layer).
 	local music = if inRound then "LakeMusic" else "LobbyMusic"
 	AudioController.loop("Music", music, SoundService)
-	AudioController.loopLevel("Music", if cues.chase then 0.35 else 1)
+	AudioController.loopLevel("Music", 1 - chaseLevel * 0.65)
 	return cues
 end
 

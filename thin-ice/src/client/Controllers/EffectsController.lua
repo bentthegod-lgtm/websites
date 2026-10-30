@@ -344,7 +344,11 @@ end
 local function stepScares(now, root)
 	local me = ClientState.me()
 	local onIce = root and root.Position.Z > L.ShoreZ + 8 and me.state == "Active"
-	if not ClientState.inRound() or ClientState.setting("ScareEffects") == false or not onIce then
+	if not ClientState.inRound() then
+		nextScareAt = nil -- (scheduled afresh from the next round's start)
+		return
+	end
+	if ClientState.setting("ScareEffects") == false or ClientState.setting("ReducedEffects") == true or not onIce then
 		return
 	end
 	local roundStart = ClientState.roundStartedAt
@@ -447,7 +451,9 @@ function EffectsController.step(dt)
 	end
 	local root = ClientState.root()
 	local info = ClientState.monsterInfo()
-	local cues = Presence.cues(info and info.distance, info and info.state, info and info.huntingMe)
+	-- (presence cues only for players out in the round: none at camp in the lobby)
+	local inRound = ClientState.inRound()
+	local cues = Presence.cues(info and inRound and info.distance, info and info.state, info and info.huntingMe)
 	-- Frost at the edges + a dark vignette as it closes in.
 	if vignette then
 		vignette.BackgroundTransparency = 1 - cues.vignette * 0.5
@@ -472,11 +478,11 @@ function EffectsController.step(dt)
 			highlight.Enabled = false
 			highlight.Parent = info.model
 		end
-		if cues.silhouette and now >= nextSilhouetteAt and ClientState.setting("ScareEffects") ~= false then
+		if cues.silhouette and now >= nextSilhouetteAt and ClientState.setting("ScareEffects") ~= false and not reduced then
 			silhouetteUntil = now + 1.3
 			nextSilhouetteAt = now + GameConfig.Presence.SilhouetteGap + rng:NextNumber() * 15
 		end
-		highlight.Enabled = now < silhouetteUntil and cues.silhouette
+		highlight.Enabled = now < silhouetteUntil and cues.silhouette and not reduced
 	end
 	stepScares(now, root)
 	stepBreath(now)

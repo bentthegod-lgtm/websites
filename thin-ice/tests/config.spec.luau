@@ -97,6 +97,13 @@ test("audio: every slot filled, only IDs DEAD AIR already uses, sane volumes, kn
 		distinct += 1
 	end
 	assert(slots >= 34 and distinct >= 20, string.format("%d slots, %d distinct ids", slots, distinct))
+	-- Every loop that can play at once out on the ice (whiteout + chase + heartbeat + its
+	-- breath + a fire), at their slot volumes with every slider at 100%: nothing deafening.
+	local sum = 0
+	for _, slot in ipairs({ "Wind", "WindHum", "GustWind", "LakeMusic", "Chase", "Heartbeat", "MonsterBreath", "BrazierCrackle" }) do
+		sum += AudioAssets[slot].Volume
+	end
+	assert(sum <= 2.75, string.format("loops sum to %.2f at full volume", sum))
 end)
 
 test("goals and codes reward something; noise categories have intervals", function()
