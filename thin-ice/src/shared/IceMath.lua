@@ -31,7 +31,7 @@ end
 
 -- Largest flat distance a player may cover in dt before the server snaps them back.
 function IceMath.maxStep(allowedSpeed, dt)
-	return (allowedSpeed * Move.Tolerance + Move.Slack) * dt
+	return allowedSpeed * Move.Tolerance * dt + Move.Slack
 end
 
 ---------------------------------------------------------------------------------------------

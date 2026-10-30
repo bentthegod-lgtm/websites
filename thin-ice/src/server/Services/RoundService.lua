@@ -520,14 +520,38 @@ function RoundService.onPlayerRemoving(player)
 	end
 end
 
+local function loseToReset(player, rec)
+	services.ObjectiveService.drop(player)
+	services.SurvivalService.release(player)
+	rec.state = "Lost"
+	player:SetAttribute("TI_State", "Lost")
+end
+
+-- A participant died mid-round (reset): lost for this round. Handled at the moment of
+-- death, while the old character still stands where it fell (the core drops there).
+function RoundService.onCharacterDied(player, character)
+	local rec = run and run.players[player]
+	if player.Character == character and type(rec) == "table" and (rec.state == "Active" or rec.state == "Frozen") then
+		loseToReset(player, rec)
+	end
+end
+
 -- A participant's character respawned mid-round (reset): they are lost for this round.
+-- (Someone who had no character when the round began - mid-respawn - joins on the dock.)
 function RoundService.onCharacterAdded(player)
 	local rec = run and run.players[player]
-	if type(rec) == "table" and (rec.state == "Active" or rec.state == "Frozen") then
-		services.ObjectiveService.drop(player)
-		services.SurvivalService.release(player)
-		rec.state = "Lost"
-		player:SetAttribute("TI_State", "Lost")
+	if type(rec) ~= "table" then
+		return
+	end
+	if rec.state == "Active" and rec.spawnPending then
+		rec.spawnPending = nil
+		task.defer(function()
+			if run and run.players[player] == rec and rec.state == "Active" then
+				services.SurvivalService.moveTo(player, gatherPoint(1, 1))
+			end
+		end)
+	elseif rec.state == "Active" or rec.state == "Frozen" then
+		loseToReset(player, rec)
 	end
 end
 

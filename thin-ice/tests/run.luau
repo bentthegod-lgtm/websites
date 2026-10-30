@@ -9,6 +9,7 @@ local specs = {
 	require("./lakegen.spec"),
 	require("./icemath.spec"),
 	require("./monster.spec"),
+	require("./icepath.spec"),
 	require("./progress.spec"),
 	require("./config.spec"),
 }

@@ -122,6 +122,12 @@ local function reconcile(data)
 			data.Stats[k] = math.max(0, v)
 		end
 	end
+	-- Receipts are PurchaseId -> grant time; anything else would break trimming (sorted by time).
+	for k, v in pairs(data.Receipts) do
+		if type(k) ~= "string" or type(v) ~= "number" or v ~= v then
+			data.Receipts[k] = nil
+		end
+	end
 	for k in pairs(data.Cosmetics.Owned) do
 		local kind, id = string.match(tostring(k), "^(%a+):(%w+)$")
 		local catalog = kind and CosmeticConfig.Kinds[kind]

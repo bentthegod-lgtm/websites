@@ -84,10 +84,13 @@ GameConfig.Move = {
 	Sprint = 22,
 	CarryMultiplier = 0.85,
 	WaterSpeed = 6,
-	-- Anti-speed: a flat move faster than (allowed speed * Tolerance + Slack) per second is
-	-- snapped back.
+	-- Anti-speed: a flat move longer than (allowed speed * Tolerance * window + Slack) over
+	-- a check window is snapped back. Slack is a flat allowance in studs (not per second):
+	-- position updates from a laggy client arrive in bursts, so one window can hold ~0.5 s
+	-- of extra travel, and a short window must not punish that.
 	Tolerance = 1.35,
-	Slack = 6,
+	Slack = 8,
+	TeleportGrace = 0.75, -- after a server move (climb-out, thaw, snap) the client's stale positions are ignored this long
 }
 
 GameConfig.Stamina = {
@@ -178,6 +181,8 @@ GameConfig.Monster = {
 	RecoverTime = 4,
 	ListenPause = 2.2,
 	StepInterval = 0.12, -- how often it listens / decides (it moves every frame)
+	ReplanInterval = 0.5, -- it re-plans its path over the ice at most this often (never per frame)
+	StuckTime = 10, -- awake but hasn't got 1.5 tiles from where it was in this long: it dives and resurfaces elsewhere
 }
 
 GameConfig.Weather = {

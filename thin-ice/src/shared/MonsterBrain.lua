@@ -114,6 +114,15 @@ function MonsterBrain:feel(source, position, now)
 	return true
 end
 
+-- The body got as close to the goal as the ice allows (the goal is over water, behind
+-- rocks, or it is stuck): count it as arrived, so every state moves on instead of
+-- walking at an unreachable point forever.
+function MonsterBrain:arrive(position)
+	if self.goal then
+		self.goal = position
+	end
+end
+
 -- It caught someone: pause, then go back to prowling.
 function MonsterBrain:caught(now)
 	self.target = nil

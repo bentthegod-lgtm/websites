@@ -139,6 +139,14 @@ local function onCharacter(player, character)
 	end)
 	if services.RoundService then
 		services.RoundService.onCharacterAdded(player)
+		-- Dying (reset, or any other death) ends your round right there - a carried core
+		-- drops where you fell, not where you respawn.
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.Died:Connect(function()
+				services.RoundService.onCharacterDied(player, character)
+			end)
+		end
 	end
 end
 

@@ -1,6 +1,6 @@
 # Overnight build report
 
-Seven new Roblox games, each built from code with a Robux shop, plus DEAD AIR from before.
+Eight new Roblox games, each built from code with a Robux shop, plus DEAD AIR from before.
 Everything is on GitHub: `bentthegod-lgtm/websites`, branch `claude/new-game-yhhbwg`.
 
 | Game | Folder | Genre (inspired by) | Checks |
@@ -11,6 +11,7 @@ Everything is on GitHub: `bentthegod-lgtm/websites`, branch `claude/new-game-yhh
 | **MAGNET MAYHEM** | `magnet-mayhem/` | magnet scrap simulator (your spec) | lint 0 · compile 47/47 · unit 33/33 · harness 29/29 |
 | **CRASH LAB** | `crash-lab/` | physics crash-test launcher (your spec) | lint 0 · compile 57/57 · unit 38/38 · harness 33/33 |
 | **VAULT** | `vault/` | 7 deep treasure pools, each deeper than the last (your spec) | lint 0 · compile 55/55 · unit 38/38 · harness 28/28 |
+| **THIN ICE** | `thin-ice/` | co-op survival horror on a cracking frozen lake (daily idea) | lint 0 · compile 39/39 · unit 29/29 · harness 30/30 |
 | **PHONES AWAY!** | `phones-away/` | high-school test cheating with your phone (Cheating During Testing) | lint 0 · compile 47/47 · unit 53/53 · harness 39/39 |
 
 I reran every check myself after each game was built, after its bug review, and after my
@@ -49,7 +50,7 @@ DataStore limits, and performance with full servers. **Play-test each game in St
 before publishing:** solo first, then Test → Clients and Servers with 2–4 players.
 
 ## Prompt for the Claude on your PC
-> This folder has seven Roblox games (snatch-tycoon, sprout-valley, rebound-rumble, phones-away, magnet-mayhem, crash-lab, vault). Read
+> This folder has eight Roblox games (snatch-tycoon, sprout-valley, rebound-rumble, phones-away, magnet-mayhem, crash-lab, vault, thin-ice). Read
 > OVERNIGHT-REPORT.md and each game's README.md and POLISH.md. Help me playtest them in
 > Studio with `rojo serve`, fix bugs I report, then work through POLISH.md: make the
 > Blender models and generate the ComfyUI icon and thumbnails.

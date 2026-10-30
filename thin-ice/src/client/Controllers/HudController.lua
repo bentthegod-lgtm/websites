@@ -153,14 +153,37 @@ local function build()
 	-- Touch buttons
 	if UserInputService.TouchEnabled then
 		local touch = Ui.new("Frame", { Name = "Touch", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -150), Size = UDim2.fromOffset(250, 120), BackgroundTransparency = 1, Parent = gui })
+		local uiScale = gui:FindFirstChildOfClass("UIScale")
+		local function layout()
+			touch.Position = HudController.touchPosition(Ui.viewportSize(), if uiScale then uiScale.Scale else 1)
+		end
+		layout()
+		local camera = workspace.CurrentCamera
+		if camera then
+			camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+				task.defer(layout) -- after Ui.screen's UIScale has refitted
+			end)
+		end
 		local sprint = Ui.button("SPRINT", { Name = "Sprint", Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(120, 54) }, C.PanelLighter)
 		sprint.Parent = touch
-		sprint.InputBegan:Connect(function()
-			InputController.setSprint(true)
+		-- Hold to sprint. (GuiObject.InputBegan also fires for mouse movement over the button,
+		-- so only a touch or click counts; a finger that slides off still releases it.)
+		local sprintInput = nil
+		sprint.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+				sprintInput = input
+				InputController.setSprint(true)
+			end
 		end)
-		sprint.InputEnded:Connect(function()
-			InputController.setSprint(false)
-		end)
+		local function release(input)
+			if sprintInput and input == sprintInput then
+				sprintInput = nil
+				InputController.setSprint(false)
+			end
+		end
+		sprint.InputEnded:Connect(release)
+		UserInputService.TouchEnded:Connect(release)
+		UserInputService.InputEnded:Connect(release)
 		local sneak = Ui.button("SNEAK", { Name = "Sneak", Position = UDim2.fromOffset(130, 0), Size = UDim2.fromOffset(120, 54) }, C.PanelLighter)
 		sneak.Parent = touch
 		sneak.Activated:Connect(function()
@@ -171,6 +194,19 @@ local function build()
 		throw.Activated:Connect(InputController.throw)
 		refs.touch = touch
 	end
+end
+
+--[[
+	Where the touch buttons go: bottom-right, stacked just above Roblox's own Jump button
+	(70 px at the bottom-right corner on phones, 120 px and higher up on tablets - see the
+	default TouchJump module), never on top of it. `scale` is the HUD's UIScale: offsets
+	are scaled by it, the core Jump button is not.
+]]
+function HudController.touchPosition(viewport, scale)
+	scale = math.max(scale or 1, 0.01)
+	local small = math.min(viewport.X, viewport.Y) <= 500
+	local jumpTop = if small then 70 + 20 else 120 * 1.75
+	return UDim2.new(1, -16 / scale, 1, -(jumpTop + 12) / scale)
 end
 
 function HudController.toast(text, kind)
@@ -328,6 +364,15 @@ function HudController.init()
 	ClientState.Results:Connect(HudController.showResults)
 	HudController.renderRound()
 	RunService.RenderStepped:Connect(HudController.tick)
+	-- Your own ice block's "Thaw" prompt is for your friends: hide it from you (locally).
+	pcall(function()
+		game:GetService("ProximityPromptService").PromptShown:Connect(function(prompt)
+			local block = prompt.Parent
+			if prompt.Name == "ThawPrompt" and block and block.Parent and block.Parent.Name == "Frozen_" .. Players.LocalPlayer.Name then
+				prompt.Enabled = false
+			end
+		end)
+	end)
 end
 
 return HudController

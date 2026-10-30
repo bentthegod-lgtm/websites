@@ -870,6 +870,14 @@ check("ice: sprinting on thin ice cracks it (loud), breaks it, you fall in, clim
 	assert(rec.warmth < warmth - 15, "water barely chilled: " .. warmth .. " -> " .. rec.warmth)
 	local now = tileAt(aliceRoot.Position)
 	assert(now and LakeGen.walkable(now), "climbed out onto nothing")
+	assert(now.type == "ice", "climbed out into a brazier")
+	-- a stale client position (sent before it got the climb-out move) must not drop her back in
+	local outAt = aliceRoot.Position
+	setPos(aliceRoot, center)
+	tick(DT * 2)
+	assert(not rec.inWater, "stale position dropped her back in the hole")
+	setPos(aliceRoot, outAt)
+	tick(DT)
 	putAt(alice, world.spawnCFrame.Position + V3.new(0, 0, 30)) -- warm up on the shore meanwhile
 	tick(GameConfig.Ice.RefreezeAfter + 0.5)
 	assert(tile.type == "ice" and tile.thick == 1 and tile.part.CanCollide, "did not refreeze as thin ice")
@@ -1170,6 +1178,81 @@ check("a round always ends: time limit", function()
 	tick(GameConfig.Round.ResultsTime + 0.1)
 end)
 
+check("the Antlered walks the ice: around holes and rocks (never over them), and never stays stuck", function()
+	local run = startRound("Hard")
+	local tiles = run.layout.tiles
+	-- A wall of open water across row 15 with one gap at column 6.
+	for c = 0, L.Columns - 1 do
+		local t = tiles[LakeGen.key(c, 15)]
+		if c == 6 then
+			t.type, t.thick = "ice", 2
+		elseif t.type ~= "water" then
+			IS.forceBreak(t)
+		end
+		for _, r in ipairs({ 14, 16 }) do
+			local u = tiles[LakeGen.key(c, r)]
+			if u.type ~= "ice" and u.type ~= "brazier" then
+				u.type, u.thick = "ice", 2 -- keep the approach open
+			end
+		end
+	end
+	local goal = cellPos(2, 18, L.IceTop)
+	tiles[LakeGen.key(2, 12)].type = "ice"
+	tiles[LakeGen.key(2, 18)].type = "ice"
+	MS.place(cellPos(2, 12))
+	local brain = MS.brain()
+	brain.opts.wakeAt = 0
+	tick(0.2)
+	brain:_enter("Prowl", fakeOs.clock(), "test")
+	brain.goal = goal
+	local sawGap, maxStep, last = false, 0, MS.position()
+	local guard = 0
+	while brain.state == "Prowl" and guard < 30 * 40 do
+		tick(DT, function()
+			brain.goal = goal -- (keep the test's goal; prowl picks its own otherwise)
+		end)
+		guard += 1
+		local p = MS.position()
+		local c, r = LakeGen.worldToCell(p.X, p.Z)
+		assert(c and LakeGen.walkable(tiles[LakeGen.key(c, r)]), string.format("walked onto %s at %d,%d", tostring(c and tiles[LakeGen.key(c, r)].type), c or -1, r or -1))
+		if r == 15 then
+			sawGap = sawGap or c == 6
+		end
+		maxStep = math.max(maxStep, (p - last).Magnitude)
+		last = p
+	end
+	assert(brain.state == "Listen", "never got round the wall: " .. brain.state .. " at " .. tostring(MS.position()))
+	assert(sawGap, "did not go through the gap")
+	assert(maxStep < 2, "it teleported " .. maxStep)
+	local path = MS.path()
+	assert(type(path) == "table")
+	-- Sealed on an island: it dives and resurfaces on shore-connected ice.
+	local island = { c = 10, r = 25 }
+	for dc = -1, 1 do
+		for dr = -1, 1 do
+			local t = tiles[LakeGen.key(island.c + dc, island.r + dr)]
+			if dc == 0 and dr == 0 then
+				t.type, t.thick = "ice", 2
+			elseif t.type ~= "water" then
+				IS.forceBreak(t)
+			end
+		end
+	end
+	MS.place(cellPos(island.c, island.r))
+	brain:_enter("Prowl", fakeOs.clock(), "test")
+	brain.goal = cellPos(2, 4, L.IceTop)
+	tick(GameConfig.Monster.StuckTime + 3)
+	local p = MS.position()
+	local c, r = LakeGen.worldToCell(p.X, p.Z)
+	assert(not (c == island.c and r == island.r), "stuck on the island forever")
+	assert(LakeGen.walkable(tiles[LakeGen.key(c, r)]), "resurfaced on " .. tiles[LakeGen.key(c, r)].type)
+	SS.freeze(alice, "cold")
+	SS.freeze(bob, "cold")
+	tick(DT)
+	assert(RSv.phase() == "Results")
+	tick(GameConfig.Round.ResultsTime + 0.1)
+end)
+
 check("leaving mid-round drops the core; character reset = lost; everyone leaving aborts", function()
 	local dana = makePlayer("Dana")
 	local run = startRound("Normal")
@@ -1182,6 +1265,17 @@ check("leaving mid-round drops the core; character reset = lost; everyone leavin
 	assert(core.state == "Dropped" and core.model and core.model.Parent, "core vanished with the leaver")
 	tick(DT)
 	assert(RSv.phase() == "Running", "round ended when one player left")
+	-- Bob carries a core out on the ice and dies (reset): it drops where he fell, not at spawn
+	local second = OS.cores()[2]
+	putAt(bob, second.position + V3.new(2, 3, 0))
+	second.prompt.Triggered:Fire(bob)
+	assert(second.state == "Carried", "bob could not take the core")
+	local fellAt = second.position + V3.new(0, 3, 6)
+	putAt(bob, fellAt)
+	bob.Character.Humanoid.Died:Fire()
+	assert(second.state == "Dropped" and second.model and second.model.Parent, "core vanished with the dead carrier")
+	assert(second.position.Z >= L.ShoreZ and (second.position - fellAt).Magnitude < 12, "core dropped away from where he died: " .. tostring(second.position))
+	assert(SS.record(bob).state == "Lost", "death did not count as lost")
 	-- Bob resets his character
 	local newChar = roblox.Instance.new("Model")
 	local newRoot = roblox.Instance.new("Part")

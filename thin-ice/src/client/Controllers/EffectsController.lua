@@ -24,6 +24,7 @@ local EffectsController = {}
 local gui, vignette
 local snowPart, snow
 local shake = 0
+local shakeOffset = nil -- the rotation added to the camera this frame (taken off next frame)
 local rng = Random.new()
 
 function EffectsController.dread(distance)
@@ -135,15 +136,34 @@ function EffectsController.step(dt)
 	if vignette then
 		vignette.BackgroundTransparency = 1 - dread * 0.55
 	end
-	-- Camera shake.
-	if shake > 0 and camera then
-		if ClientState.setting("CameraShake") ~= false then
-			local s = shake * 0.4
-			camera.CFrame = camera.CFrame * CFrame.Angles(rng:NextNumber(-s, s) * 0.05, rng:NextNumber(-s, s) * 0.05, 0)
-		end
+	-- (Camera shake runs in its own render steps: EffectsController.applyShake / undoShake.)
+	if shake > 0 then
 		shake = math.max(0, shake - dt * 2.5)
 	end
 	return dread
+end
+
+--[[
+	Camera shake as a temporary offset. The default camera scripts read the camera's own
+	CFrame to work out where you are looking, so a jolt written straight into it would be
+	kept: the view would drift and stay tilted after the scare. Instead the offset is
+	added after the camera scripts run and taken off again before they run next frame.
+]]
+function EffectsController.undoShake()
+	local camera = workspace.CurrentCamera
+	if shakeOffset and camera then
+		camera.CFrame = camera.CFrame * shakeOffset:Inverse()
+	end
+	shakeOffset = nil
+end
+
+function EffectsController.applyShake()
+	local camera = workspace.CurrentCamera
+	if shake > 0 and camera and ClientState.setting("CameraShake") ~= false then
+		local s = shake * 0.4
+		shakeOffset = CFrame.Angles(rng:NextNumber(-s, s) * 0.05, rng:NextNumber(-s, s) * 0.05, 0)
+		camera.CFrame = camera.CFrame * shakeOffset
+	end
 end
 
 function EffectsController.init()
@@ -168,6 +188,8 @@ function EffectsController.init()
 		end
 	end)
 	RunService.RenderStepped:Connect(EffectsController.step)
+	RunService:BindToRenderStep("TI_ShakeUndo", Enum.RenderPriority.First.Value, EffectsController.undoShake)
+	RunService:BindToRenderStep("TI_Shake", Enum.RenderPriority.Camera.Value + 1, EffectsController.applyShake)
 end
 
 return EffectsController

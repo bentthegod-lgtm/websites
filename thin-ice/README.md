@@ -6,8 +6,8 @@ A co-op survival horror game for Roblox, for 1–6 players. Your group crosses a
 >
 > What *was* verified headlessly, in Lune:
 > - every file lints (selene) and compiles;
-> - 24 unit tests pass (lake generation, ice / stamina / warmth / noise maths, the monster's brain, rewards, config);
-> - 29 harness checks pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services and a fake clock. They play whole rounds: vote, ready, countdown, the lake built over 11 frames, footsteps, ice breaking under a sprinter, falling in and climbing out, the monster waking, hearing, hunting and catching, thawing, the flask, chipping and delivering cores, the sled escape, rounds that fail, players leaving, receipts, the session lock and every client screen.
+> - 29 unit tests pass (lake generation, ice / stamina / warmth / noise maths, the monster's brain and pathing, rewards, config);
+> - 30 harness checks pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services and a fake clock. They play whole rounds: vote, ready, countdown, the lake built over 11 frames, footsteps, ice breaking under a sprinter, falling in and climbing out, the monster waking, hearing, hunting and catching, thawing, the flask, chipping and delivering cores, the sled escape, rounds that fail, players leaving, receipts, the session lock and every client screen.
 >
 > Lune has no physics and no renderer, so the harness moves characters itself. The world was checked visually with three.js renders of the exported parts (`build/preview-*.png`), which are not Roblox's renderer. **Follow the Studio test plan below before publishing.**
 

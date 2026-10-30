@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("ThinIce")
 local GameConfig = require(Shared.Config.GameConfig)
 local IceMath = require(Shared.IceMath)
+local IcePath = require(Shared.IcePath)
 local LakeGen = require(Shared.LakeGen)
 local Models = require(Shared.Models)
 local RateLimit = require(script.Parent.RateLimit)
@@ -32,6 +33,7 @@ local services
 local world
 local run
 local records = {}
+local requested = {} -- player -> the move mode they last asked for (kept across rounds)
 local modeLimit = RateLimit.new(8, 12)
 local throwLimit = RateLimit.new(3, 4)
 
@@ -112,19 +114,47 @@ function SurvivalService.moveTo(player, cframe)
 		rec.checkPos = pos
 		rec.checkAt = os.clock()
 		rec.windowMax = 0
+		-- The client owns its character: positions it sent before it got this move are still
+		-- in flight. Until it shows up at the destination (or the grace runs out) those stale
+		-- positions are ignored, so they can't drop you back in the hole or trip the speed check.
+		rec.teleportTo = pos
+		rec.teleportUntil = os.clock() + GameConfig.Move.TeleportGrace
 	end
 end
 
--- Nearest walkable tile centre to a world position (for climbing out / dropping things).
+--[[
+	Nearest safe spot on the ice to a world position (climbing out, being frozen in the
+	water, dropping a core): a plain ice tile's centre - never a hole or a rock, and
+	preferably not the middle of a brazier, a core's ice block, a snow drift or someone's
+	frozen block, nor a cut-off island you couldn't walk back from.
+]]
 function SurvivalService.nearestIce(position)
 	if not run then
 		return nil
+	end
+	local connected = IcePath.shoreConnected(run.layout.tiles)
+	local taken = {}
+	for _, rec in pairs(records) do
+		if rec.block and rec.block.Parent then
+			local p = rec.block:GetPivot().Position
+			local c, r = LakeGen.worldToCell(p.X, p.Z)
+			if c then
+				taken[LakeGen.key(c, r)] = true
+			end
+		end
 	end
 	local best, bestD = nil, math.huge
 	for _, tile in ipairs(run.layout.order) do
 		if LakeGen.walkable(tile) then
 			local x, z = LakeGen.cellToWorld(tile.c, tile.r)
-			local d = (x - position.X) ^ 2 + (z - position.Z) ^ 2
+			local k = LakeGen.key(tile.c, tile.r)
+			local d = math.sqrt((x - position.X) ^ 2 + (z - position.Z) ^ 2)
+			if tile.type == "brazier" or tile.core or tile.drift or taken[k] then
+				d += L.TileSize * 2
+			end
+			if not connected[k] then
+				d += L.TileSize * 8
+			end
 			if d < bestD then
 				best, bestD = tile, d
 			end
@@ -151,8 +181,9 @@ function SurvivalService.startRun(newRun)
 			stamina = S.Max,
 			exhausted = false,
 			sinceSprint = 99,
-			mode = "Walk",
+			mode = requested[player] or "Walk",
 			effective = "Walk",
+			spawnPending = root == nil, -- no character at the start (respawning): not a reset
 			moving = false,
 			speed = 0,
 			lastPos = pos,
@@ -204,6 +235,7 @@ function SurvivalService.setMode(player, mode)
 	if type(mode) ~= "string" or not MODES[mode] then
 		return false
 	end
+	requested[player] = mode
 	if rec then
 		rec.mode = mode
 	end
@@ -316,6 +348,11 @@ function SurvivalService.thaw(player, rescuer)
 			side = Vector3.new(side.X, 0, side.Z)
 			side = if side.Magnitude > 0.1 then side.Unit else Vector3.new(1, 0, 0)
 			pos = rescuerRoot.Position + side * 3
+			-- Not into a rock or a hole beside them: then right where they stand.
+			local c, r = LakeGen.worldToCell(pos.X, pos.Z)
+			if c and run and not LakeGen.walkable(run.layout.tiles[LakeGen.key(c, r)]) then
+				pos = rescuerRoot.Position
+			end
 		end
 		SurvivalService.moveTo(player, CFrame.new(pos.X, math.max(pos.Y, L.IceTop + 3), pos.Z))
 	end
@@ -451,13 +488,20 @@ end
 local function stepActive(rec, root, humanoid, dt, now)
 	local player = rec.player
 	local pos = root.Position
+	-- Right after a server move: positions far from the destination are stale (sent before
+	-- the client got the move) and must not drop you back into the hole you just left.
+	local settling = rec.teleportTo ~= nil and now < rec.teleportUntil
+	local stale = settling and flat(pos, rec.teleportTo) > 3
+	if not settling then
+		rec.teleportTo = nil
+	end
 	local onShore = pos.Z < L.ShoreZ
 	local c, r = LakeGen.worldToCell(pos.X, pos.Z)
 	local tile = c and run.layout.tiles[LakeGen.key(c, r)]
 
 	-- Water: falling in, and hauling yourself out.
 	local overWater = tile ~= nil and tile.type == "water"
-	if overWater and not rec.inWater then
+	if overWater and not rec.inWater and not stale then
 		rec.inWater = true
 		rec.waterSince = now
 		services.NoiseService.emit("Splash", pos, player)
@@ -465,7 +509,7 @@ local function stepActive(rec, root, humanoid, dt, now)
 		if services.ObjectiveService then
 			services.ObjectiveService.drop(player)
 		end
-	elseif rec.inWater and (not overWater or now - rec.waterSince >= W.ClimbOutTime) then
+	elseif rec.inWater and not stale and (not overWater or now - rec.waterSince >= W.ClimbOutTime) then
 		rec.inWater = false
 		if overWater then
 			SurvivalService.moveTo(player, CFrame.new((SurvivalService.nearestIce(pos))))
@@ -491,7 +535,12 @@ local function stepActive(rec, root, humanoid, dt, now)
 
 	-- Speed check over a short window (network updates arrive in bursts).
 	rec.windowMax = math.max(rec.windowMax, IceMath.speed(rec.mode, false, false))
-	if now - rec.checkAt >= CHECK_WINDOW then
+	if settling then
+		-- (no verdicts while settling; the window restarts from wherever they really are)
+		rec.checkPos = pos
+		rec.checkAt = now
+		rec.windowMax = 0
+	elseif now - rec.checkAt >= CHECK_WINDOW then
 		local window = now - rec.checkAt
 		if flat(pos, rec.checkPos) > IceMath.maxStep(rec.windowMax, window) then
 			rec.violations += 1
@@ -584,6 +633,7 @@ function SurvivalService.step(dt)
 end
 
 function SurvivalService.onPlayerRemoving(player)
+	requested[player] = nil
 	modeLimit:forget(player)
 	throwLimit:forget(player)
 end

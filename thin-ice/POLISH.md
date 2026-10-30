@@ -37,8 +37,8 @@ What was checked while rebuilding, and what is left for a Studio pass.
 ## Worth a look in Studio
 
 - **Water feel.** Breaking through drops you to the lakebed under a translucent water plane. The server hauls you out after 2.5 s. Check it doesn't look like you're stuck in the floor. Optionally add a splash ParticleEmitter at the hole.
-- **Rubber-banding.** The speed check allows `speed × 1.35 + 6` studs/s over 0.5 s windows. Watch for false snaps on high ping.
-- **Monster pathing.** It walks straight to its goal over holes and through rocks (it's a monster). If that reads badly, add simple steering around rock tiles.
+- **Rubber-banding.** The speed check allows `speed × 1.35 × window + 8` studs per 0.5 s window (a flat 8-stud allowance for bursty network updates), and ignores stale positions for up to 0.75 s after any server move (climb-out, thaw, snap-back). Watch for false snaps on high ping.
+- **Monster pathing.** It walks the tile grid (A* in `IcePath`, re-planned at most twice a second) around open water, rocks and the wreck. A goal it can't reach counts as reached at the nearest tile; if it makes no progress for 10 s it dives and resurfaces on open ice away from players. Check that its turns read well.
 - **Carried shard.** It is welded to the carrier's HumanoidRootPart above the head. Check that it's visible from the carrier's own camera.
 - **Lighting.** Night lighting with Atmosphere, Bloom and a cold ColorCorrection. Check Future lighting on low-end phones, and use Settings → Reduced effects for less fog and snow.
 - **Audio.** The 18 sound IDs are reused from DEAD AIR. Re-pitch or replace any that don't fit the cold setting. Wind and music slots are empty.

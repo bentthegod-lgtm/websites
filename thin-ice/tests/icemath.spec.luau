@@ -17,6 +17,11 @@ test("speeds: sneak < walk < sprint; carrying slower; water slowest", function()
 	assert(IceMath.speed("Sprint", false, true) == GameConfig.Move.WaterSpeed)
 	assert(IceMath.speed("Bogus") == GameConfig.Move.Walk)
 	assert(IceMath.maxStep(14, 0.5) > 14 * 0.5, "no tolerance")
+	-- a laggy client's positions arrive in bursts: ~0.5 s of catch-up inside a 0.5 s window is fine
+	assert(IceMath.maxStep(GameConfig.Move.Walk, 0.5) > GameConfig.Move.Walk * 1.2, "walk burst would rubber-band")
+	assert(IceMath.maxStep(GameConfig.Move.Sprint, 0.5) > GameConfig.Move.Sprint * 1.0, "sprint burst would rubber-band")
+	-- ...but a teleport, or 3x walking speed, is not
+	assert(IceMath.maxStep(GameConfig.Move.Walk, 0.5) < GameConfig.Move.Walk * 3 * 0.5, "speed hack allowed")
 end)
 
 test("stamina: sprint drains to exhaustion, no sprint until RecoverTo, regen after delay", function()

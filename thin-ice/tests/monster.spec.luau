@@ -81,4 +81,16 @@ test("losing the target falls back to searching; listen pause after reaching a p
 	assert(#c.history >= 3 and c.history[1].from == "Dormant")
 end)
 
+test("arrive: an unreachable goal counts as reached, so prowling never stalls", function()
+	local b = brain(0)
+	local intent = b:update(0, V3.new())
+	assert(intent.state == "Prowl")
+	b:arrive(V3.new(5, 0, 0))
+	assert(b:update(0.2, V3.new(5, 0, 0)).state == "Listen", "still walking at an unreachable point")
+	b:hear({ position = V3.new(40, 0, 0), intensity = 0.3 }, 3)
+	assert(b.state == "Investigate")
+	b:arrive(V3.new(10, 0, 0))
+	assert(b:update(3.2, V3.new(10, 0, 0)).state == "Search")
+end)
+
 return cases

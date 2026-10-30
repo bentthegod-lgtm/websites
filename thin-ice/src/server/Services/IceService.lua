@@ -126,10 +126,12 @@ function IceService.step(dt)
 	-- 3. Refreeze old breaks (as thin ice) once nobody is splashing about in them.
 	for tile in pairs(broken) do
 		if now - tile.brokenAt >= GameConfig.Ice.RefreezeAfter then
+			-- Anyone in the hole (by state, or physically below the ice whatever their state)
+			-- keeps it open: refreezing would seal them inside the slab.
 			local occupied = false
 			for _, rec in pairs(services.SurvivalService.records()) do
 				local root = rec.player.Character and rec.player.Character:FindFirstChild("HumanoidRootPart")
-				if rec.inWater and root and IceService.tileAt(root.Position) == tile then
+				if root and IceService.tileAt(root.Position) == tile and (rec.inWater or root.Position.Y < GameConfig.Lake.IceTop + 1.5) then
 					occupied = true
 				end
 			end
