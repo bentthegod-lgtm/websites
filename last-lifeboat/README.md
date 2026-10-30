@@ -17,7 +17,7 @@ The ship doesn't sink smoothly. It goes down in sudden **LURCHES**. Every ~20 s 
 >   - Loot slots, weight, rarity rolls and the payout.
 >   - Upgrade costs and effects; the daily streak, codes, ship unlocks and the vote.
 >   - Config sanity and audio coverage.
-> - **33 harness checks** pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services, stubbed Terrain (`FillBlock` is recorded) and a fake clock. They time the world build and play three ship rounds. They cover:
+> - **34 harness checks** pass. They run the real server and client modules against Lune's Roblox instance model, with stubbed engine services, stubbed Terrain (`FillBlock` is recorded) and a fake clock. They time the world build and play three ship rounds. They cover:
 >   - Voting and ready-up (locked ships, ties, pads, the 25 s auto-start).
 >   - Lurches that really move the ship's pivot, with the brace warning first.
 >   - Loot with slots and weight, legendary announcements and drops.
@@ -26,7 +26,8 @@ The ship doesn't sink smoothly. It goes down in sudden **LURCHES**. Every ~20 s 
 >   - Drowning, then downed, revive and bleed-out; the life jacket and the rescue flare.
 >   - The grapple validation and the ship guard.
 >   - A Full Crew early launch with the x2 pass, a timed launch, an empty launch, and leaving mid-round.
->   - Receipts sent twice, the session lock, junk remotes, and every client controller rendering real server data.
+>   - Receipts sent twice (including a retry while the first save is still running), the session lock, junk remotes, and every client controller rendering real server data.
+>   - The anti-teleport check: a raw jump into the lifeboat is refused for the round, walking there is fine.
 >
 > Lune has no physics, no terrain voxels and no renderer, so the harness moves characters itself and "underwater" is the same world-Y test the game uses. The ship and harbour were checked visually with three.js renders of the exported parts (`build/preview-*.png`). Those are not Roblox's renderer. **Follow the Studio test plan below before publishing.**
 
@@ -96,7 +97,9 @@ All three come from one parametric generator, **`ShipGen`**. It is a pure planni
   - Grand Dining Hall: round tables with candles, chairs, chandeliers, a grand piano and the grand staircase.
   - Promenade: deck chairs, benches, palms, brass railings.
 
-Part counts (vary a little by seed): Gull ≈ 710, Aurora ≈ 1,670–1,690, Leviathan ≈ 2,860–2,910, plus loot (about 4 parts per item, 14–36 items). The harness checks the Leviathan stays within 1,500–3,500 and that the ShipGen estimate is within 30% of the real count.
+Every interior deck also gets structural frames (a ceiling beam and hull ribs per cell), wainscoting and brass dado rails in the wood-panelled decks, hazard stripes along the walkway in the engine room and cargo hold, and 2–3 extra **fill clusters** per cell on free spots: pipe columns, gauge panels, pumps and oil drums; crate stacks, sack pallets, barrels and steamer trunks; lockers, mess tables and laundry; wardrobes, writing desks and armchairs; ferns, sideboards and service carts; planters, deck chairs and café tables.
+
+Part counts (vary a little by seed): Gull ≈ 920, Aurora ≈ 2,390, Leviathan ≈ 4,230, plus loot (about 4 parts per item, 14–36 items). The harness checks the Leviathan stays within 1,500–5,000 and that the ShipGen estimate is within 30% of the real count.
 
 ## Sinking (the lurch)
 
@@ -106,6 +109,10 @@ Part counts (vary a little by seed): Gull ≈ 710, Aurora ≈ 1,670–1,690, Lev
 - **On the client**, the `Lurch` remote carries both pivots. Each client moves its own character by the delta (`LurchMath.relocate`): same spot on the deck, kept upright, turned with the ship's yaw.
 - **Valve wheels** (one per deck, single use) push the next lurch back 6 s, so a crew that closes valves ends the round less tilted.
 - **The sea** is terrain water. It fills a wide harbour 24 studs deep and a 240-stud trench under the berth, deep enough for the Leviathan's bow at its final plunge (unit-tested). It is filled two blocks per frame at startup.
+
+## Anti-cheat: boarding
+
+Characters are moved by their own clients (that's how Roblox works), so an exploit client could teleport into the lifeboat. The server samples every living player's position every 0.2 s and compares it with where they were about 1 s earlier. A horizontal jump faster than `Lifeboat.MaxTravelSpeed` (110 studs/s; walking is ~16–24, the grapple pulls at 70), plus an 80-stud allowance right after a lurch, marks the player for the rest of the round: they get a notice and can't board. Server-side moves (boarding at round start, revives) reset the tracker first, so they never count. Tune the numbers in `GameConfig.Lifeboat` after a Studio test if laggy players get caught.
 
 ## Obstacles and hazards
 
@@ -280,6 +287,10 @@ tests/           run.luau (unit specs), harness.luau (headless game), compile.lu
 tools/           export_preview.luau, render_preview.mjs (three.js previews into build/)
 ```
 
+## Store art
+
+`thumbnail-1920x1080.png` and `icon-512.png` (in this folder) are rendered from the real game models (the Iron Leviathan mid-sink) by `node tools/store_art.mjs build/preview.json .` after exporting the preview JSON. Upload the thumbnail as a custom 16:9 thumbnail: Roblox's Home recommendations require one since Oct 2026.
+
 ## Checks
 
 ```bash
@@ -297,9 +308,9 @@ node tools/render_preview.mjs build/preview.json build/
 - The harbour (~390 parts) builds in about 0.01 s.
 - The sea is 134 `FillBlock`s, two per frame (67 frames), each at most ~86k voxels.
 - Ships are built 260 parts per frame:
-  - Gull: 3 frames
-  - Aurora: 7 frames
-  - Leviathan: 11 frames; the worst frame of any ship was 7–13 ms in the last runs, and the harness fails above 50 ms.
+  - Gull: 4 frames
+  - Aurora: 9 frames
+  - Leviathan: 16 frames; the worst frame of any ship was about 7–8 ms in the last runs, and the harness fails above 50 ms.
 
 Nothing big runs synchronously at startup, so Roblox's ~10 s script timeout can't hit.
 

@@ -1,6 +1,6 @@
 # Overnight build report
 
-Eight new Roblox games, each built from code with a Robux shop, plus DEAD AIR from before.
+Nine new Roblox games, each built from code with a Robux shop, plus DEAD AIR from before.
 Everything is on GitHub: `bentthegod-lgtm/websites`, branch `claude/new-game-yhhbwg`.
 
 | Game | Folder | Genre (inspired by) | Checks |
@@ -10,9 +10,10 @@ Everything is on GitHub: `bentthegod-lgtm/websites`, branch `claude/new-game-yhh
 | **Rebound Rumble** | `rebound-rumble/` | parry-ball PvP (Blade Ball) | lint 0 · compile 41/41 · unit 34/34 · harness 22/22 |
 | **MAGNET MAYHEM** | `magnet-mayhem/` | magnet scrap simulator (your spec) | lint 0 · compile 47/47 · unit 33/33 · harness 29/29 |
 | **CRASH LAB** | `crash-lab/` | physics crash-test launcher (your spec) | lint 0 · compile 57/57 · unit 38/38 · harness 33/33 |
-| **VAULT** | `vault/` | 7 deep treasure pools, each deeper than the last (your spec) | lint 0 · compile 55/55 · unit 38/38 · harness 28/28 |
+| **VAULT** | `vault/` | 7 deep treasure pools, each deeper than the last (your spec) | lint 0 · compile 56/56 · unit 38/38 · harness 29/29 |
 | **THIN ICE** | `thin-ice/` | co-op survival horror on a huge cracking frozen lake, 5 zones (daily idea) | lint 0 · compile 40/40 · unit 40/40 · harness 31/31 |
 | **PHONES AWAY!** | `phones-away/` | high-school test cheating with your phone (Cheating During Testing) | lint 0 · compile 47/47 · unit 53/53 · harness 39/39 |
+| **LAST LIFEBOAT** | `last-lifeboat/` | co-op escape from a sinking, tilting ship to the last lifeboat; 3 ships (daily idea, Oct 30) | lint 0 · compile 43/43 · unit 41/41 · harness 34/34 |
 
 I reran every check myself after each game was built, after its bug review, and after my
 own fixes.
@@ -50,7 +51,7 @@ DataStore limits, and performance with full servers. **Play-test each game in St
 before publishing:** solo first, then Test → Clients and Servers with 2–4 players.
 
 ## Prompt for the Claude on your PC
-> This folder has eight Roblox games (snatch-tycoon, sprout-valley, rebound-rumble, phones-away, magnet-mayhem, crash-lab, vault, thin-ice). Read
+> This folder has nine Roblox games (snatch-tycoon, sprout-valley, rebound-rumble, phones-away, magnet-mayhem, crash-lab, vault, thin-ice, last-lifeboat). Read
 > OVERNIGHT-REPORT.md and each game's README.md and POLISH.md. Help me playtest them in
 > Studio with `rojo serve`, fix bugs I report, then work through POLISH.md: make the
 > Blender models and generate the ComfyUI icon and thumbnails.

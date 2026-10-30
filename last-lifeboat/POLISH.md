@@ -4,6 +4,8 @@ Everything in LAST LIFEBOAT is built from parts in code. Gameplay, monetisation 
 
 ## 1. Store art (ComfyUI)
 
+A working **thumbnail (`thumbnail-1920x1080.png`) and icon (`icon-512.png`) already exist**. They are three.js renders of the real models with the title and callouts (`tools/store_art.mjs`), good enough to publish with. The prompts below are for nicer painted versions.
+
 The palette is dusk orange to purple sky, navy hull, warm portholes, brass and signal red. **Never** use a real ship's name or livery (no famous liners), and no brand logos.
 
 | Asset | Size | Prompt |
@@ -75,3 +77,7 @@ Also consider:
 - Badges (create them in Creator Hub first; never invent IDs): first escape, Full Crew, a legendary find, all three ships.
 - Cosmetic trails or boat skins for coins.
 - A spectator "camera drone" with free look for players who are out.
+
+## Done in the polish pass (for reference)
+- Interiors filled: structural frames on every deck, wainscoting, hazard stripes, 2–3 fill clusters per cell (see README → The ships). If FPS is low on phones, reduce `FILL_COUNT` in `ShipBuilder.lua` first.
+- Server anti-teleport check for boarding (README → Anti-cheat). Tune `GameConfig.Lifeboat.MaxTravelSpeed` / `LurchAllowance` after testing with laggy clients.

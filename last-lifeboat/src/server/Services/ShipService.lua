@@ -32,6 +32,7 @@ local job, record, shipKey
 local inUse = false
 local lurch = nil
 local plunge = nil
+local lurchSeq = 0 -- never resets: clients use it to apply each lurch exactly once
 local seedRng = Random.new()
 local rng = Random.new()
 
@@ -210,6 +211,7 @@ end
 local function moveShip(newPivot)
 	local old = record.model:GetPivot()
 	record.model:PivotTo(newPivot)
+	services.LifeboatService.noteLurch()
 	local delta = LurchMath.delta(old, newPivot)
 	local downhill = LurchMath.slide(newPivot, math.max(lurch and lurch.tilt or 0, SK.SlideTilt + 1), lurch and lurch.def.MaxTilt or 25, 1)
 	local nudge = if downhill.Magnitude > 0 then downhill.Unit * SK.PropNudge else Vector3.zero
@@ -235,7 +237,19 @@ function ShipService.lurchNow()
 	lurch.nextAt = os.clock() + LurchMath.interval(lurch.def, rng)
 	lurch.braced = false
 	setAttributes()
-	services.Remotes.Lurch:FireAllClients(old, newPivot, { tilt = lurch.tilt, sink = lurch.sink, k = lurch.k })
+	lurchSeq += 1
+	-- The pivots AND the ship's box travel in the remote, so a client never depends on the
+	-- replicated model (or on whether its CFrame arrived before or after this event).
+	local plan = record.plan
+	services.Remotes.Lurch:FireAllClients(old, newPivot, {
+		tilt = lurch.tilt,
+		sink = lurch.sink,
+		k = lurch.k,
+		seq = lurchSeq,
+		length = plan.length,
+		beam = plan.beam,
+		height = ShipService.height(),
+	})
 	if services.SurvivalService then
 		services.SurvivalService.onLurch(old, newPivot)
 	end

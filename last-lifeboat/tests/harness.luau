@@ -654,6 +654,7 @@ check("services initialise and start (same order as Main.server)", function()
 end)
 
 local nextUserId = 5000
+local newCharacter
 local function setPos(part, position)
 	part.CFrame = CF.new(position)
 	part.Position = position
@@ -665,6 +666,15 @@ local function makePlayer(name, position)
 	player.DisplayName = name
 	player.UserId = nextUserId
 	player.Parent = place:GetService("Players")
+	local character, root = newCharacter(name, position)
+	player.Character = character
+	table.insert(playerList, player)
+	fakePlayers.PlayerAdded:Fire(player)
+	player.CharacterAdded:Fire(character)
+	flushDeferred()
+	return player, root
+end
+function newCharacter(name, position)
 	local character = roblox.Instance.new("Model")
 	character.Name = name
 	local root = roblox.Instance.new("Part")
@@ -691,12 +701,7 @@ local function makePlayer(name, position)
 	humanoid.Parent = character
 	character.PrimaryPart = root
 	character.Parent = workspaceService
-	player.Character = character
-	table.insert(playerList, player)
-	fakePlayers.PlayerAdded:Fire(player)
-	player.CharacterAdded:Fire(character)
-	flushDeferred()
-	return player, root
+	return character, root
 end
 local function leave(player)
 	local i = table.find(playerList, player)
@@ -727,7 +732,11 @@ local function rootOf(player)
 	return player.Character.HumanoidRootPart
 end
 -- Moves a character (root + head) to a world position, feet ~3 below the root.
+-- Stands in for walking there: the anti-teleport tracker forgets the old spot.
 local function putAt(player, position)
+	if LB then
+		LB.forgetTrack(player)
+	end
 	local root = rootOf(player)
 	root.Anchored = false
 	setPos(root, position)
@@ -916,6 +925,15 @@ check("loot: hold E to grab, 3 slots, weight slows you, too far refused, drop, l
 	standAt(bob, tiara)
 	tiara.prompt.Triggered:Fire(bob)
 	assert(count("Announce", "found the Ruby Tiara") >= 1 and DS.getProfile(bob).Stats.Legendaries == 1, "legendary not announced")
+	-- drop it and grab it again: not a new find (no announcement spam, no stat farming)
+	local announced = count("Announce", "found the Ruby Tiara")
+	remotes.DropLoot.OnServerEvent:Fire(bob, table.find(LS.carried(bob), "RubyTiara"))
+	local again = itemNear(function(e)
+		return e.key == "RubyTiara"
+	end)
+	standAt(bob, again)
+	again.prompt.Triggered:Fire(bob)
+	assert(table.find(LS.carried(bob), "RubyTiara") and count("Announce", "found the Ruby Tiara") == announced and DS.getProfile(bob).Stats.Legendaries == 1, "re-grabbing a dropped legendary announced again")
 	putAt(alice, DOCK(1))
 	putAt(bob, DOCK(2))
 	putAt(carl, DOCK(3))
@@ -1041,6 +1059,19 @@ check("hazards: a chandelier shows its shadow on BRACE and drops on the lurch", 
 		end
 	end
 	assert(warnedH and warnedH.src.shadow.Transparency < 0.5, "no warning shadow")
+	-- a valve pushes this lurch back after its BRACE: the second BRACE warns no extra chandelier
+	ShipS.delayNextLurch(GameConfig.Sinking.ValveDelay)
+	braces = count("Brace")
+	while count("Brace") == braces do
+		tick(DT)
+	end
+	local warnedCount = 0
+	for _, x in ipairs(OS.hazards()) do
+		if x.kind == "Chandelier" and x.warned then
+			warnedCount += 1
+		end
+	end
+	assert(warnedCount == GameConfig.Hazards.Chandelier.PerLurch and warnedH.warned, "a delayed lurch warned " .. warnedCount .. " chandeliers")
 	carl.Character.Humanoid.Health = 100
 	local ringY = warnedH.src.model:GetPivot().Position.Y
 	local lurches = count("Lurch")
@@ -1236,6 +1267,26 @@ local function seat(player, i)
 	putAt(player, zone.CFrame.Position + V3.new((i - 1.5) * 2, 0.5, 0))
 end
 
+check("anti-teleport: jumping into the lifeboat from across the ship is refused for the round", function()
+	LB.setLaunchAt(fakeOs.clock() + 120)
+	local far = deckPoint(#ShipS.record().plan.decks, 0, ShipS.record().plan.length - 30)
+	putAt(alice, far)
+	tick(1.2)
+	assert(not SS.record(alice).flagged, "walking flagged")
+	-- a raw teleport (what an exploit client does): no forgetTrack
+	local zone = ShipS.record().lifeboat.zone
+	local root = rootOf(alice)
+	setPos(root, zone.CFrame.Position + V3.new(0, 0.5, 0))
+	setPos(alice.Character.Head, zone.CFrame.Position + V3.new(0, 2, 0))
+	tick(0.5)
+	assert(SS.record(alice).flagged and not SS.record(alice).aboard, "teleporter boarded")
+	assert(count("Notify", "Movement check", alice) >= 1)
+	-- reset for the rest of the run
+	SS.record(alice).flagged = nil
+	putAt(alice, far)
+	tick(0.3)
+end)
+
 local aliceCoinsBefore, aliceItems, bobCoinsBefore
 check("lifeboat: FULL CREW aboard launches early -> cinematic -> ESCAPED with loot x ship x 1.25 x2 pass", function()
 	SH.buy(alice, "DoubleLoot")
@@ -1362,8 +1413,16 @@ check("timed launch + leaving mid-round: the boat leaves on time with whoever is
 end)
 
 check("a round always ends: everyone leaving aborts it; nobody left alive launches the boat empty", function()
-	-- everyone down and out -> the boat launches empty
+	-- Carl died on the dock during the countdown: he boards when he respawns (not counted out)
+	carl.Character.Humanoid.Health = 0
 	local round = startRound("Gull")
+	assert(SS.record(carl).state == "Alive" and not ShipS.aboard(rootOf(carl).CFrame.Position), "corpse moved aboard / counted out")
+	local fresh = newCharacter("Carl", world.spawnCFrame.Position)
+	carl.Character = fresh
+	carl.CharacterAdded:Fire(fresh)
+	flushDeferred()
+	assert(SS.record(carl).state == "Alive" and ShipS.aboard(rootOf(carl).CFrame.Position), "respawned crew member not boarded")
+	-- everyone down and out -> the boat launches empty
 	for _, p in ipairs({ alice, bob, carl }) do
 		DS.getProfile(p).Boosts.LifeJacket = 0
 		SS.record(p).oxygen = 0.05
@@ -1514,8 +1573,13 @@ check("session lock: load locks, migration runs before defaults, a taken-over pr
 		end
 		return t
 	end
+	local holdNext = false
 	local fakeStore = {
 		UpdateAsync = function(_, k, fn)
+			if holdNext then
+				holdNext = false
+				coroutine.yield() -- a slow DataStore call: the test resumes it later
+			end
 			local new = fn(copy(stored[k]))
 			if new ~= nil then
 				stored[k] = copy(new)
@@ -1555,6 +1619,18 @@ check("session lock: load locks, migration runs before defaults, a taken-over pr
 		assert(DS.isPersistent(jo) and DS.getProfile(jo).Coins == 55, "stale lock blocked the load")
 		-- a purchase on a persistent profile is saved before it's granted
 		assert(receipt(jo, "p-1") == roblox.Enum.ProductPurchaseDecision.PurchaseGranted and stored[joKey].Receipts["p-1"], "receipt not saved before granting")
+		-- Roblox retries a receipt while the first call is still saving: not acknowledged early
+		local granted = roblox.Enum.ProductPurchaseDecision.PurchaseGranted
+		local jackets = DS.getProfile(jo).Boosts.LifeJacket
+		holdNext = true
+		local slow = coroutine.create(function()
+			return receipt(jo, "p-2")
+		end)
+		assert(coroutine.resume(slow) and coroutine.status(slow) == "suspended", "save didn't yield")
+		assert(receipt(jo, "p-2") == roblox.Enum.ProductPurchaseDecision.NotProcessedYet, "acknowledged a receipt whose save is still in flight")
+		local resumed, first = coroutine.resume(slow)
+		assert(resumed and first == granted and stored[joKey].Receipts["p-2"], "slow save not granted")
+		assert(receipt(jo, "p-2") == granted and DS.getProfile(jo).Boosts.LifeJacket == jackets + 1, "granted twice")
 		DS.getProfile(jo).Coins = 99
 		leave(jo)
 		assert(stored[joKey].Coins == 99 and stored[joKey].Lock == nil, "leave save did not persist and unlock")
@@ -1676,9 +1752,27 @@ check("client controllers initialise and render real server data (lobby, round H
 	local relAfter = ShipS.toLocal(kimRoot.CFrame.Position)
 	assert((relAfter - relBefore).Magnitude < 0.3, string.format("character slid off its spot: %.2f", (relAfter - relBefore).Magnitude))
 	assert(math.abs(kimRoot.CFrame.UpVector.Y - 1) < 1e-4, "character tilted with the ship")
+	assert(entryL.args[3].seq and entryL.args[3].length == plan.length and entryL.args[3].height, "lurch remote lacks seq / ship box")
+	-- the same lurch delivered twice moves you once
+	local spot = kimRoot.CFrame.Position
+	assert(Move.onLurch(entryL.args[1], entryL.args[2], entryL.args[3]) == nil and (kimRoot.CFrame.Position - spot).Magnitude < 1e-6, "lurch applied twice")
+	-- the remote arrives BEFORE the ship's new CFrame: wait for the ship, then move by the remote's delta
+	local shipModel = ShipS.record().model
+	local p0 = shipModel:GetPivot()
+	local p1 = p0 * CF.new(0, -3, 0) * CF.Angles(math.rad(1), 0, 0)
+	local early = table.clone(entryL.args[3])
+	early.seq += 1
+	relBefore = p0:PointToObjectSpace(kimRoot.CFrame.Position)
+	assert(Move.onLurch(p0, p1, early) == nil and (kimRoot.CFrame.Position - spot).Magnitude < 1e-6, "moved before the ship did")
+	shipModel:PivotTo(p1)
+	Move.step(1 / 60)
+	assert((p1:PointToObjectSpace(kimRoot.CFrame.Position) - relBefore).Magnitude < 0.3, "not moved once the ship arrived")
+	shipModel:PivotTo(p0)
 	-- off the ship: a lurch doesn't touch you
 	putAt(kim, DOCK(4))
-	assert(Move.onLurch(entryL.args[1], entryL.args[2], entryL.args[3]) == nil, "dock character moved by a lurch")
+	local again = table.clone(entryL.args[3])
+	again.seq += 2
+	assert(Move.onLurch(entryL.args[1], entryL.args[2], again) == nil, "dock character moved by a lurch")
 	-- slide force on a steep deck, reduced by Grip
 	workspaceService:SetAttribute("LL_Tilt", 22)
 	local steep = LurchMath.pivot(ShipS.record().base, 0, 22)

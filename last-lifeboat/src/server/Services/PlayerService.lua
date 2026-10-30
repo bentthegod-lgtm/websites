@@ -218,6 +218,9 @@ function PlayerService.start()
 	Players.PlayerAdded:Connect(hook)
 	for _, player in ipairs(Players:GetPlayers()) do
 		hook(player)
+		if player.Character then
+			onCharacter(player, player.Character) -- spawned before this ran (Studio)
+		end
 	end
 	if world then
 		PlayerService.prompts = {

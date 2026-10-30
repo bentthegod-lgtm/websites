@@ -30,6 +30,7 @@ local productsByKey, productsById = {}, {}
 local passesByKey, passesById = {}, {}
 local passCache = {}
 local lastRequest = {}
+local inFlight = {} -- PurchaseIds whose grant is being saved right now
 
 function ShopService.init(registry)
 	services = registry
@@ -142,6 +143,11 @@ function ShopService.processReceipt(receipt)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local id = tostring(receipt.PurchaseId)
+	-- Roblox can call again while the first call is still saving. Receipts[id] is already set
+	-- then, but the save may still fail and be undone: never acknowledge it from here.
+	if inFlight[id] then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	if profile.Receipts[id] then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
@@ -156,7 +162,10 @@ function ShopService.processReceipt(receipt)
 	local undo = grantProduct(profile, product)
 	profile.Receipts[id] = os.time()
 	trimReceipts(profile)
-	if services.DataService.isPersistent(player) and not services.DataService.save(player) then
+	inFlight[id] = true
+	local saved = not services.DataService.isPersistent(player) or services.DataService.save(player)
+	inFlight[id] = nil
+	if not saved then
 		undo()
 		profile.Receipts[id] = nil
 		return Enum.ProductPurchaseDecision.NotProcessedYet

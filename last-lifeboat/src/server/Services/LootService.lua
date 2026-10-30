@@ -105,6 +105,9 @@ function LootService.items()
 end
 
 function LootService.pickup(player, entry)
+	-- Slots first: the pass lookup can yield, and nothing may yield between the checks below
+	-- and taking the item (two players grabbing one item would both get it).
+	local slots = services.UpgradeService.slots(player)
 	local rec = services.SurvivalService.record(player)
 	if not rec or rec.state ~= "Alive" or not entry.model.Parent then
 		return false, "gone"
@@ -115,7 +118,6 @@ function LootService.pickup(player, entry)
 	end
 	local list = carried[player] or {}
 	carried[player] = list
-	local slots = services.UpgradeService.slots(player)
 	if #list >= slots then
 		services.Remotes.Notify:FireClient(player, string.format("Your hands are full (%d/%d). Drop something or upgrade Loot Slots.", #list, slots), "error")
 		return false, "full"
@@ -126,7 +128,7 @@ function LootService.pickup(player, entry)
 	local def = GameConfig.Loot[entry.key]
 	services.Remotes.WorldSound:FireClient(player, if LootMath.rank(def.Rarity) >= 2 then "PickupRare" else "Pickup", nil)
 	services.Remotes.Notify:FireClient(player, string.format("+ %s (%s, %d)%s", def.Name, def.Rarity, def.Value, if def.Weight >= 2 then " - heavy!" else ""), "loot:" .. def.Rarity)
-	if def.Rarity == "Legendary" then
+	if def.Rarity == "Legendary" and not entry.dropped then -- a re-grab isn't a new find
 		services.DataService.bump(player, "Legendaries", 1)
 		services.Remotes.Announce:FireAllClients(string.format("%s found the %s!", player.DisplayName, def.Name), GameConfig.Rarities.Legendary.Color)
 		services.Remotes.WorldSound:FireAllClients("Legendary", nil)
@@ -150,7 +152,7 @@ function LootService.drop(player, index)
 	table.remove(list, index)
 	sync(player)
 	local localCF = ship.model:GetPivot():ToObjectSpace(CFrame.new(root.CFrame.Position - Vector3.new(0, 2.8, 0)))
-	spawnItem(key, CFrame.new(localCF.Position), ship)
+	spawnItem(key, CFrame.new(localCF.Position), ship).dropped = true
 	services.Remotes.WorldSound:FireClient(player, "Drop", nil)
 	return true
 end

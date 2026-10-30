@@ -37,29 +37,87 @@ local function shipInfo()
 	return ship, ship:GetPivot(), ship:GetAttribute("Length") or 200, ship:GetAttribute("Beam") or 50, ship:GetAttribute("Height") or 80
 end
 
--- Moves my character with the ship. Returns the new root CFrame (or nil if not moved).
-function MovementController.onLurch(oldPivot, newPivot, info)
+-- Lurches already applied (the server's sequence number) and ones waiting for the
+-- replicated ship to arrive at their new pivot.
+local lastSeq = nil
+local pending = {}
+local PENDING_MAX = 0.5
+
+local function samePivot(a, b)
+	return (a.Position - b.Position).Magnitude < 0.05 and a.LookVector:Dot(b.LookVector) > 0.99999 and a.UpVector:Dot(b.UpVector) > 0.99999
+end
+
+-- Moves my character by the lurch delta. Everything comes from the remote (both pivots and
+-- the ship's box), never from the replicated model, so the delta is exact whichever arrived
+-- first. Only an Alive, unanchored character moves: downed bodies (anchored) are carried by
+-- the server, the escaped are anchored in the boat, everyone else isn't playing.
+local function applyLurch(oldPivot, newPivot, info)
 	local root = ClientState.root()
 	local me = ClientState.me()
-	local moved = nil
-	if root and (me.state == "Alive" or me.state == "Lobby" or me.state == "Escaped") and not root.Anchored then
-		local ship, _, length, beam, height = shipInfo()
-		if ship and LurchMath.onShip(oldPivot, root.CFrame.Position, length, beam, height) then
-			moved = LurchMath.relocate(oldPivot, newPivot, root.CFrame, 0.15)
-			local character = root.Parent
-			if character and character.PrimaryPart == root then
-				character:PivotTo(moved)
-			else
-				root.CFrame = moved
-			end
-			root.AssemblyLinearVelocity = Vector3.zero
+	if not root or me.state ~= "Alive" or root.Anchored then
+		return nil
+	end
+	local length, beam, height = info and info.length, info and info.beam, info and info.height
+	if type(length) ~= "number" or type(beam) ~= "number" or type(height) ~= "number" then
+		local ship, _, l, b, h = shipInfo()
+		if not ship then
+			return nil
 		end
+		length, beam, height = l, b, h
+	end
+	if not LurchMath.onShip(oldPivot, root.CFrame.Position, length, beam, height) then
+		return nil
+	end
+	local moved = LurchMath.relocate(oldPivot, newPivot, root.CFrame, 0.15)
+	local character = root.Parent
+	if character and character.PrimaryPart == root then
+		character:PivotTo(moved)
+	else
+		root.CFrame = moved
+	end
+	root.AssemblyLinearVelocity = Vector3.zero
+	return moved
+end
+
+local function flushPending(force)
+	while pending[1] do
+		local p = pending[1]
+		local ship = ClientState.ship()
+		local pivot = ship and ship.PrimaryPart and ship:GetPivot()
+		if not force and pivot and samePivot(pivot, p.old) and os.clock() < p.untilAt then
+			return -- the ship hasn't moved here yet: keep standing on it where it is
+		end
+		table.remove(pending, 1)
+		applyLurch(p.old, p.new, p.info)
+	end
+end
+
+-- Moves my character with the ship. Returns the new root CFrame (or nil if not moved now).
+function MovementController.onLurch(oldPivot, newPivot, info)
+	if typeof(oldPivot) ~= "CFrame" or typeof(newPivot) ~= "CFrame" then
+		return nil
+	end
+	local seq = type(info) == "table" and info.seq or nil
+	if type(seq) == "number" then
+		if lastSeq and seq <= lastSeq then
+			return nil -- already applied: never move twice for one lurch
+		end
+		lastSeq = seq
 	end
 	if MovementController.shake then
-		local k = (info and info.tilt or 5) / 25
+		local k = (type(info) == "table" and info.tilt or 5) / 25
 		MovementController.shake(GameConfig.Sinking.ShakeStrength * (0.6 + k), 0.9)
 	end
-	return moved
+	flushPending(true) -- an older lurch still waiting goes first
+	-- If the remote beat the ship's replicated CFrame, wait (briefly) for the ship to move so
+	-- the character isn't put over a deck that is still drawn at the old pivot.
+	local ship = ClientState.ship()
+	local pivot = ship and ship.PrimaryPart and ship:GetPivot()
+	if pivot and not samePivot(pivot, newPivot) and samePivot(pivot, oldPivot) then
+		table.insert(pending, { old = oldPivot, new = newPivot, info = info, untilAt = os.clock() + PENDING_MAX })
+		return nil
+	end
+	return applyLurch(oldPivot, newPivot, info)
 end
 
 local function ensureForce(root)
@@ -123,6 +181,9 @@ function MovementController.speedNow()
 end
 
 function MovementController.step(dt)
+	if pending[1] then
+		flushPending(false)
+	end
 	local root = ClientState.root()
 	local humanoid = ClientState.humanoid()
 	if not root or not humanoid then
@@ -187,6 +248,7 @@ function MovementController.init()
 	RunService.Heartbeat:Connect(MovementController.step)
 	Players.LocalPlayer.CharacterAdded:Connect(function()
 		force, attachment, grapple = nil, nil, nil
+		table.clear(pending)
 	end)
 end
 

@@ -253,8 +253,8 @@ end
 ---------------------------------------------------------------------------------------------
 
 function ObstacleService.onBrace()
-	if not ship then
-		return
+	if not ship or #pendingDrops > 0 then
+		return -- a valve pushed the lurch back after its BRACE: the warned chandelier still waits
 	end
 	local candidates = {}
 	for _, h in ipairs(hazards) do

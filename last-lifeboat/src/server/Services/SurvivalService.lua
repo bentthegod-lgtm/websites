@@ -233,6 +233,7 @@ function SurvivalService.revive(player, by, how)
 	local root = rootOf(player)
 	if root then
 		local pos = root.CFrame.Position
+		services.LifeboatService.forgetTrack(player)
 		root.Anchored = false
 		root.CFrame = CFrame.new(pos + Vector3.new(0, 1, 0))
 	end
@@ -339,6 +340,7 @@ function SurvivalService.moveTo(player, cf)
 	if not character or not root then
 		return
 	end
+	services.LifeboatService.forgetTrack(player)
 	root.Anchored = false
 	if character.PrimaryPart then
 		character:PivotTo(cf)
@@ -350,13 +352,16 @@ end
 
 -- Downed bodies are anchored by the server, so the server carries them on a lurch.
 function SurvivalService.onLurch(oldPivot, newPivot)
-	if not run then
+	local ship = services.ShipService.record()
+	if not run or not ship then
 		return
 	end
+	local height = services.ShipService.height()
 	for player, rec in pairs(run.players) do
 		if type(rec) == "table" and rec.state == "Downed" then
 			local root = rootOf(player)
-			if root then
+			-- only bodies on/in the ship ride it (one floating in the harbour stays put)
+			if root and LurchMath.onShip(oldPivot, root.CFrame.Position, ship.plan.length, ship.plan.beam, height) then
 				root.CFrame = LurchMath.relocate(oldPivot, newPivot, root.CFrame)
 				float(player)
 			end
@@ -385,6 +390,11 @@ function SurvivalService.step(dt)
 					end
 				end
 			elseif rec.state == "Downed" then
+				if rec.reviver and not SurvivalService.canRevive(player, rec.reviver) then
+					-- the reviver left, went down or walked off: drop the stale progress bar
+					rec.reviver = nil
+					player:SetAttribute("LL_ReviveStart", nil)
+				end
 				if rec.jacketAt and now >= rec.jacketAt then
 					local profile = services.DataService.getProfile(player)
 					if profile and Survival.jacketAvailable(profile.Boosts.LifeJacket, rec.jacketsUsed) then

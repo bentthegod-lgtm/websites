@@ -214,6 +214,11 @@ GameConfig.Lifeboat = {
 	LowerDepth = 0, -- the boat is lowered to the sea surface, then rows away
 	RowDistance = 80,
 	SeatZone = { 9, 8, 15 }, -- (X, Y, Z) size of the boarding zone (ship-local, on the boat)
+	-- anti-teleport (server samples living players; see LifeboatService)
+	SampleEvery = 0.2,
+	TrackWindow = 1, -- compare with where the player was about this long ago
+	MaxTravelSpeed = 110, -- studs/s horizontally (walk ~16-24, grapple 70, downhill slides)
+	LurchAllowance = 80, -- extra studs right after a lurch (the client moves you with the ship)
 }
 
 ---------------------------------------------------------------------------------------------

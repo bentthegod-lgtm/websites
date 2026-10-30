@@ -303,7 +303,17 @@ local function beginRunning()
 	services.ShipService.startRun(run)
 	services.LifeboatService.startRun(run, record)
 	for i, player in ipairs(list) do
-		services.SurvivalService.moveTo(player, services.ShipService.spawnCFrame(i, #list))
+		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if rootOf(player) and humanoid and humanoid.Health > 0 then
+			services.SurvivalService.moveTo(player, services.ShipService.spawnCFrame(i, #list))
+		else
+			-- still respawning (died on the dock during the countdown): board when the new
+			-- character arrives instead of counting that respawn as leaving the round
+			local rec = services.SurvivalService.record(player)
+			if rec then
+				rec.spawnSlot = { i, #list }
+			end
+		end
 	end
 	setPhase("Running", run.def.RoundTime)
 	services.Remotes.Announce:FireAllClients("The ship is sinking! One boat. GO!", { 255, 120, 100 })
@@ -512,9 +522,20 @@ function RoundService.onCharacterDied(player, character)
 	end
 end
 
--- A participant respawned mid-round: they're out (spectating from the dock).
-function RoundService.onCharacterAdded(player)
+-- A participant respawned mid-round: they're out (spectating from the dock). One who had
+-- no character when the round started boards now instead.
+function RoundService.onCharacterAdded(player, character)
 	local rec = services.SurvivalService.record(player)
+	if rec and rec.spawnSlot and rec.state == "Alive" then
+		local slot = rec.spawnSlot
+		rec.spawnSlot = nil
+		task.defer(function()
+			if player.Character == character and run and phase == "Running" and services.ShipService.record() then
+				services.SurvivalService.moveTo(player, services.ShipService.spawnCFrame(slot[1], slot[2]))
+			end
+		end)
+		return
+	end
 	if rec and (rec.state == "Alive" or rec.state == "Downed") then
 		services.SurvivalService.out(player, "respawned")
 	end

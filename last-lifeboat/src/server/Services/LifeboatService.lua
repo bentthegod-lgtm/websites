@@ -8,6 +8,11 @@
 	* Launch: everyone alive in the seat zone ESCAPES. The boat swings out past the stern,
 	  lowers to the sea and rows away (a short server-driven cinematic, clients get a camera
 	  cue) while the ship takes its final plunge. Everyone else is LOST AT SEA.
+	* Anti-teleport: characters are moved by their own clients, so the server samples each
+	  living player's position and compares it with where they were ~1 s earlier. A
+	  horizontal jump faster than MaxTravelSpeed (plus an allowance right after a lurch)
+	  marks them for the round and they can't board. Server-side moves (boarding, revives)
+	  call forgetTrack first so they never count.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,6 +28,8 @@ local launchAt
 local fullSince
 local launched = false
 local cine = nil
+local tracks = {} -- [player] = { samples = { {t, x, z}, ... } }
+local lastLurchAt = -math.huge
 
 local LB = GameConfig.Lifeboat
 
@@ -45,6 +52,8 @@ function LifeboatService.startRun(newRun, record)
 	fullSince = nil
 	launched = false
 	cine = nil
+	tracks = {}
+	lastLurchAt = -math.huge
 	run.launchAt = launchAt
 	workspace:SetAttribute("LL_LaunchAt", serverTime(launchAt))
 end
@@ -59,6 +68,42 @@ function LifeboatService.setLaunchAt(t)
 		run.launchAt = t
 	end
 	workspace:SetAttribute("LL_LaunchAt", serverTime(t))
+end
+
+function LifeboatService.forgetTrack(player)
+	tracks[player] = nil
+end
+
+function LifeboatService.noteLurch()
+	lastLurchAt = os.clock()
+end
+
+-- Samples a living player's root; returns true if they moved impossibly fast.
+local function teleported(player, pos, now)
+	local tr = tracks[player]
+	if not tr then
+		tr = { samples = {} }
+		tracks[player] = tr
+	end
+	local list = tr.samples
+	local last = list[#list]
+	if not last or now - last[1] >= LB.SampleEvery then
+		table.insert(list, { now, pos.X, pos.Z })
+		while #list > 2 and now - list[2][1] >= LB.TrackWindow do
+			table.remove(list, 1)
+		end
+	end
+	local first = list[1]
+	local dt = now - first[1]
+	if dt <= 0 then
+		return false
+	end
+	local dist = math.sqrt((pos.X - first[2]) ^ 2 + (pos.Z - first[3]) ^ 2)
+	local allowance = LB.MaxTravelSpeed * math.max(dt, LB.TrackWindow)
+	if now - lastLurchAt < LB.TrackWindow + 0.5 then
+		allowance += LB.LurchAllowance
+	end
+	return dist > allowance
 end
 
 function LifeboatService.inZone(position)
@@ -171,7 +216,12 @@ function LifeboatService.step()
 			if rec.state == "Alive" then
 				needed += 1
 				local root = rootOf(player)
-				local aboard = root ~= nil and LifeboatService.inZone(root.CFrame.Position)
+				if root and not rec.flagged and teleported(player, root.CFrame.Position, now) then
+					rec.flagged = true
+					warn(string.format("[LastLifeboat] %s moved impossibly fast; they can't board this round", player.Name))
+					services.Remotes.Notify:FireClient(player, "Movement check failed - you can't board the lifeboat this round.", "bad")
+				end
+				local aboard = root ~= nil and not rec.flagged and LifeboatService.inZone(root.CFrame.Position)
 				if aboard ~= rec.aboard then
 					rec.aboard = aboard
 					player:SetAttribute("LL_Aboard", aboard)
@@ -220,6 +270,7 @@ function LifeboatService.stopRun()
 end
 
 function LifeboatService.onPlayerRemoving(player)
+	tracks[player] = nil
 	if cine then
 		cine.rel[player] = nil
 	end
