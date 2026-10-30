@@ -93,4 +93,23 @@ test("arrive: an unreachable goal counts as reached, so prowling never stalls", 
 	assert(b:update(3.2, V3.new(10, 0, 0)).state == "Search")
 end)
 
+test("smarter on Hard / Nightmare: it keeps searching around a lost sound longer", function()
+	local function searchLength(scale)
+		local b = MonsterBrain.new({ huntSpeed = 19, wakeAt = 0, searchScale = scale, prowlPoint = function(from)
+			return from + V3.new(30, 0, 0)
+		end, rng = Rng.new(2) })
+		b:update(0, V3.new())
+		b:hear({ position = V3.new(9, 0, 0), intensity = 0.9 }, 1)
+		b:loseTarget(2)
+		local t = 2
+		while b.state == "Search" and t < 60 do
+			t += 0.1
+			b:update(t, V3.new(9, 0, 0))
+		end
+		return t - 2
+	end
+	assert(searchLength(2) > searchLength(1) * 1.8, "search scale ignored")
+	assert(GameConfig.Difficulties.Nightmare.MonsterSearch > GameConfig.Difficulties.Normal.MonsterSearch)
+end)
+
 return cases

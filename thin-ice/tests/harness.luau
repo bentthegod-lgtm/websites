@@ -466,7 +466,21 @@ check("models: the Antlered (antlers, long arms, no eyes), ice block, core, kid"
 			top = math.max(top, d.CFrame.Position.Y)
 		end
 	end
-	assert(top > 12, "the Antlered should tower over a kid (" .. top .. ")")
+	assert(top > 15, "the Antlered should tower over a kid (" .. top .. ")")
+	local head = monster:FindFirstChild("Head")
+	assert(head and head:FindFirstChild("Skull") and #head:GetChildren() >= 12, "no separate head to animate")
+	local breath, crystals = false, 0
+	for _, d in ipairs(monster:GetDescendants()) do
+		if d:IsA("ParticleEmitter") and d.Name == "FrostBreath" then
+			breath = true
+		elseif d.Name == "Crystal" then
+			crystals += 1
+		end
+	end
+	assert(breath and crystals >= 5, "no frost breath / ice growths")
+	local lighthouse, lamp = Models.lighthouse(CF.new(), nil)
+	assert(lamp:FindFirstChild("LighthouseLight") and partsIn(lighthouse) >= 20, "lighthouse")
+	assert(partsIn(Models.spire(CF.new(), nil)) >= 4, "spire")
 	local block = Models.iceBlock(CF.new(), nil)
 	assert(block.Block.CanCollide and block.Block.Transparency > 0.3, "ice block")
 	local core, glow = Models.frozenCore(CF.new(), nil)
@@ -528,8 +542,18 @@ check("lake builds incrementally: <= TilesPerStep tiles a frame, every tile has 
 				assert(t.part.CanCollide, "ice not walkable")
 			end
 		end
-		assert(job.parts < 1800, diff .. " lake parts " .. job.parts)
+		assert(job.parts < 3200, diff .. " lake parts " .. job.parts)
 		assert(total < 2, string.format("%s lake took %.2fs", diff, total))
+		assert(worst < 0.03, string.format("%s worst build frame %.1f ms", diff, worst * 1000))
+		local lighthouses, spires = 0, 0
+		for _, d in ipairs(job.folder:GetDescendants()) do
+			if d:IsA("Model") and d.Name == "Lighthouse" then
+				lighthouses += 1
+			elseif d:IsA("Model") and d.Name == "IceSpire" then
+				spires += 1
+			end
+		end
+		assert(lighthouses == 1 and spires == #layout.spires and spires >= 6, "Deep Hollow landmark missing")
 		table.insert(lines, string.format("%s %d parts / %d frames / worst frame %.1fms", diff, job.parts, frames, worst * 1000))
 		job:destroy()
 	end
@@ -899,6 +923,7 @@ check("warmth: drains on the ice, a brazier and the shore warm you up", function
 	tick(2)
 	assert(rec.warmth > w + 10, "brazier did not warm")
 	putAt(alice, world.spawnCFrame.Position + V3.new(0, 0, 20))
+	rec.warmth = 60
 	w = rec.warmth
 	tick(2)
 	assert(rec.warmth > w, "shore did not warm")
@@ -949,6 +974,7 @@ check("the Antlered: asleep for the grace period, wakes, hears sprinting, hunts,
 	assert(MS.brain():awake(), "never woke")
 	assert(count("MonsterCue", "Wake") >= 1 and count("Announce", "woke up") >= 1)
 	assert(MS.model():GetPivot().Position.Y >= L.IceTop - 0.1, "still under the ice")
+	WS.startRun() -- calm air for this test (a whiteout would halve its hearing)
 	-- Bob sprints near it.
 	local rec = SS.record(bob)
 	rec.stamina, rec.exhausted = 100, false
@@ -1003,37 +1029,93 @@ check("thaw: a friend holds E beside the block; you stand up next to them; rescu
 	assert(NS.count("Thaw") >= 1, "thawing made no noise")
 end)
 
-check("blizzard gust: halves what it hears (a lure that starts a hunt in calm only gets a look)", function()
+check("the Antlered's weight cracks the ice behind it (bounded trail); it flags who it hunts", function()
 	local brain = MS.brain()
 	tick(GameConfig.Monster.RecoverTime + 0.5)
-	local mpos = MS.position()
-	assert(MS.hearing() == RSv.run().diff.MonsterHearing)
+	MS.place(cellPos(13, 20))
+	local arec = SS.record(alice)
+	if arec.state == "Frozen" then
+		SS.thaw(alice, nil)
+	end
+	putAt(alice, cellPos(13, 44 - 4))
+	brain.state = "Hunt"
+	brain.target = alice
+	brain.goal = cellPos(13, 40)
+	brain.lastHeardAt = fakeOs.clock()
+	brain.since = fakeOs.clock()
+	tick(0.3)
+	assert(MS.model():GetAttribute("TI_Target") == alice.UserId, "hunted player not flagged")
+	tick(2.5, function()
+		brain.lastHeardAt = fakeOs.clock()
+	end)
+	local trail = MS.trailTiles()
+	assert(#trail >= 3 and #trail <= GameConfig.Monster.TrailLength, "trail " .. #trail)
+	local cracked = 0
+	for _, t in ipairs(trail) do
+		if t.part and t.part:FindFirstChild("Cracks") then
+			cracked += 1
+		end
+	end
+	-- (older trail tiles may have healed / refrozen from earlier stress in this round)
+	assert(cracked >= 3, "trail tiles without cracks: " .. cracked .. "/" .. #trail)
+	-- it cracks, but doesn't stress, the ice (purely a warning sign)
+	local newest = trail[#trail]
+	assert(LakeGen.walkable(newest) and (newest.stress or 0) == 0, "its weight stressed the ice")
+	brain:caught(fakeOs.clock())
+	tick(0.3)
+	assert(MS.model():GetAttribute("TI_Target") == 0, "still flagged after the catch pause")
+	putAt(alice, cellPos(3, 1))
+end)
+
+check("whiteout: 15-20 s, it hears half as much but moves faster; chills you faster", function()
+	local brain = MS.brain()
+	tick(GameConfig.Monster.RecoverTime + 0.5)
+	WS.startRun() -- calm
 	local calm = registry.MonsterService
-	-- A snowball 22 studs away: loud enough to hunt in calm air.
+	-- How far it gets hunting a far-off sound in 1 s (calm, then in a whiteout).
+	local function stride()
+		local from = MS.position()
+		local goal = MS.clampToLake(from + V3.new(0, 0, if from.Z > 300 then -120 else 120))
+		brain.state = "Hunt"
+		brain.goal = goal
+		brain.target = nil
+		brain.lastHeardAt = fakeOs.clock()
+		brain.since = fakeOs.clock()
+		tick(1)
+		return (MS.position() - from).Magnitude
+	end
+	MS.place(cellPos(13, 20))
+	local calmStride = stride()
+	local mpos = MS.position()
 	local lure = mpos + V3.new(22, 0, 0)
 	local loudCalm = requireModule(Shared.IceMath).perceived("Snowball", 22, MS.hearing())
 	assert(loudCalm >= GameConfig.Noise.HuntThreshold, "test lure too quiet " .. loudCalm)
 	WS.forceGust()
 	tick(DT)
-	assert(WS.gusting() and workspaceService:GetAttribute("TI_Gust") == true, "no gust")
-	assert(count("Announce", "BLIZZARD") >= 1)
+	assert(WS.gusting() and workspaceService:GetAttribute("TI_Gust") == true, "no whiteout")
+	assert(count("Announce", "WHITEOUT") >= 1)
+	local ends = workspaceService:GetAttribute("TI_GustEnds") - workspaceService:GetServerTimeNow()
+	assert(ends >= GameConfig.Weather.WhiteoutMin - 0.1 and ends <= GameConfig.Weather.WhiteoutMax + 0.1, "whiteout length " .. ends)
 	assert(math.abs(MS.hearing() - RSv.run().diff.MonsterHearing * GameConfig.Noise.GustHearing) < 1e-6)
 	brain.state = "Prowl"
 	brain.target = nil
 	calm.hear("Snowball", lure, nil)
-	assert(brain.state ~= "Hunt", "hunted through a blizzard")
-	-- warmth drains faster out on the ice in a gust
+	assert(brain.state ~= "Hunt", "hunted through a whiteout")
+	MS.place(cellPos(13, 20))
+	local gustStride = stride()
+	assert(gustStride > calmStride * 1.15, string.format("not faster in the whiteout: %.1f vs %.1f", gustStride, calmStride))
+	-- warmth drains faster out on the ice in a whiteout
 	local rec = SS.record(alice)
 	putAt(alice, cellPos(3, 1))
 	rec.warmth = 80
 	tick(1)
 	local gustLoss = 80 - rec.warmth
-	tick(GameConfig.Weather.GustTime + 0.5)
-	assert(not WS.gusting(), "gust never ended")
+	tick(GameConfig.Weather.WhiteoutMax + 0.5)
+	assert(not WS.gusting(), "whiteout never ended")
 	rec.warmth = 80
 	putAt(alice, cellPos(3, 1))
 	tick(1)
-	assert(gustLoss > 80 - rec.warmth, "gust did not chill")
+	assert(gustLoss > 80 - rec.warmth, "whiteout did not chill")
 	brain.state = "Prowl"
 	calm.hear("Snowball", MS.position() + V3.new(22, 0, 0), nil)
 	assert(brain.state == "Hunt" and brain.target == nil, "calm lure did not draw a hunt at the lure")
@@ -1117,6 +1199,8 @@ check("cores: chip (loud) -> carry -> fall in drops it -> pick up -> deliver at 
 	tick(DT * 2)
 	assert(first.state == "Delivered" and run.delivered == 1 and rec.cores == 1, "not delivered")
 	assert(world.beacon.light.Brightness > 0.2, "beacon did not light up")
+	local beam = world.beacon.model.BeaconBeam
+	assert(beam.Transparency < 1 and beam.Transparency > 0.5, "no faint beam after one core")
 	assert(DS.getProfile(alice).Stats.Cores == 1 and count("Announce", "Core delivered") >= 1)
 	-- the rest
 	for i = 2, #cores do
@@ -1131,6 +1215,12 @@ check("cores: chip (loud) -> carry -> fall in drops it -> pick up -> deliver at 
 	assert(RSv.phase() == "Sled", "sled not ready: " .. RSv.phase())
 	assert(count("Announce", "ALL CORES IN! Get to the sled") >= 1, "no all-cores announcement")
 	assert(world.beacon.light.Brightness >= 3, "beacon not fully lit")
+	assert(math.abs(world.beacon.model.BeaconBeam.Transparency - 0.35) < 1e-6, "beam not blazing when all cores are in")
+	-- the sled horn sounds 10 s before it leaves (Alice waits at the beacon)
+	local horns = count("WorldSound", "Horn")
+	tick(GameConfig.Round.SledWait - GameConfig.Round.SledHornAt + 0.3)
+	assert(RSv.phase() == "Sled" and count("WorldSound", "Horn") == horns + 1, "no horn at 10 s")
+	assert(count("Announce", "The sled leaves in 10 seconds") >= 1)
 end)
 
 check("escape: reach the sled -> results (escaped, paid, stat), lake cleared, back to camp", function()
@@ -1144,6 +1234,14 @@ check("escape: reach the sled -> results (escaped, paid, stat), lake cleared, ba
 	local result = lastFor("Results", alice).args[1]
 	assert(result.outcome == "Escaped" and result.coins > 0 and result.delivered == run.total, "bad result")
 	assert(DS.getProfile(alice).Stats.Escapes == 1 and DS.getProfile(alice).Coins >= result.coins)
+	assert(count("WorldSound", "Horn") >= 2, "no horn as the sled pulls away")
+	local mine
+	for _, row in ipairs(result.team) do
+		if row.userId == alice.UserId then
+			mine = row
+		end
+	end
+	assert(mine and mine.cores == run.total and mine.rescues == 1 and mine.state == "Escaped" and mine.freezes ~= nil, "per-player stats missing from results")
 	local bobResult = lastFor("Results", bob).args[1]
 	assert(bobResult.outcome == "LeftBehind" and bobResult.coins > 0 and bobResult.coins < result.coins, "lost player paid like an escapee")
 	assert(DS.getProfile(alice).Xp > 0)
@@ -1588,6 +1686,85 @@ check("client controllers initialise and render real server data (HUD, lobby, ov
 	assert(Input.handle(roblox.Enum.KeyCode.F, true), "throw key")
 	assert(clientSent[#clientSent].name == "Throw" and typeof(clientSent[#clientSent].args[1]) == "Vector3", "throw not sent")
 	controllers.AudioController.step(1 / 60)
+	-- Presence: put the Antlered 12 studs from Kim, awake and hunting her.
+	local kimRec = SS.record(kim)
+	if kimRec.state ~= "Active" then
+		SS.thaw(kim, nil)
+	end
+	local kimRoot = kim.Character.HumanoidRootPart
+	setPos(kimRoot, cellPos(10, 6))
+	MS.place(kimRoot.Position + V3.new(12, 0, 0))
+	local monsterModel = MS.model()
+	monsterModel:SetAttribute("TI_State", "Hunt")
+	monsterModel:SetAttribute("TI_Target", kim.UserId)
+	tick(1.1) -- (ClientState looks the monster up at most once a second)
+	monsterModel:SetAttribute("TI_State", "Hunt")
+	monsterModel:SetAttribute("TI_Target", kim.UserId)
+	local info = ClientState.monsterInfo()
+	assert(info and info.huntingMe and info.distance and info.distance < 20, "client can't see the hunt")
+	local cues = controllers.AudioController.step(1 / 60)
+	assert(cues.heartbeat and cues.breath and cues.chase, "presence cues missing up close")
+	local Audio = controllers.AudioController
+	assert(Audio.playing("Heartbeat") and Audio.playing("Chase") and Audio.playing("Breath"), "heartbeat / chase / breath not playing")
+	assert(Audio.playing("Wind") and Audio.playing("WindHum") and Audio.playing("Music"), "ambience not playing")
+	for _, slot in ipairs({ "Crack", "Caught", "Deliver", "Splash" }) do
+		local layers = Audio.layers(requireModule(Shared.Config.AudioAssets)[slot])
+		assert(#layers >= 2, slot .. " should be layered")
+		for _, layer in ipairs(layers) do
+			assert(layer.volume <= 1, slot .. " too loud")
+		end
+	end
+	local vign = Fx.step(1 / 60)
+	assert(vign > 0.4 and playerGui.IceFx.Frost.BackgroundTransparency < 0.8, "no frost vignette up close")
+	-- head pose: listening cocks the head
+	local skull = monsterModel.Head.Skull
+	monsterModel:SetAttribute("TI_State", "Listen")
+	Fx.poseHead(monsterModel, 1)
+	local listenCF = skull.CFrame
+	monsterModel:SetAttribute("TI_State", "Prowl")
+	Fx.poseHead(monsterModel, 0)
+	assert((listenCF.Position - skull.CFrame.Position).Magnitude > 0.3, "head doesn't move to listen")
+	-- far away: it shows through the fog now and then; then out of range nothing at all
+	MS.place(kimRoot.Position + V3.new(0, 0, 80))
+	monsterModel:SetAttribute("TI_State", "Prowl")
+	Fx.step(1 / 60)
+	local hl = monsterModel:FindFirstChild("TI_Silhouette")
+	assert(hl and hl:IsA("Highlight") and hl.Enabled, "no silhouette at 80 studs")
+	assert(not controllers.AudioController.step(1 / 60).heartbeat, "heartbeat at 80 studs")
+	-- ambient scares (client-only)
+	ClientState.applySettings({ ScareEffects = true, ReducedEffects = false })
+	local prints = Fx.ambientScare("Footprints")
+	assert(prints and #prints:GetChildren() == 0, "footprints should appear one by one")
+	flushDeferred() -- (the harness runs every delayed task at once: the prints appear, then get cleaned up)
+	assert(prints.Parent == nil, "footprints never cleaned up")
+	assert(Fx.ambientScare("UnderIceShadow"):IsA("BasePart"), "no shadow under the ice")
+	assert(Fx.ambientScare("IceGroan") == "groan" and Fx.ambientScare("DistantScream") == "howl")
+	ClientState.applySettings({ ReducedEffects = true })
+	assert(Fx.ambientScare("Footprints") == nil, "reduced effects still spawns footprints")
+	ClientState.applySettings({ ReducedEffects = false })
+	-- HUD: smooth bars, compass while carrying, the sled countdown
+	assert(math.abs(Hud.ease(0, 1, 1 / 60) - 8 / 60) < 1e-6 and Hud.ease(nil, 0.5, 0.1) == 0.5)
+	assert(math.abs(Hud.arrowAngle(V3.new(0, 0, 1), V3.new(), V3.new(0, 0, 10))) < 1e-6, "straight ahead")
+	assert(math.abs(math.abs(Hud.arrowAngle(V3.new(0, 0, 1), V3.new(), V3.new(10, 0, 0))) - 90) < 1e-6, "side")
+	kim:SetAttribute("TI_Carrying", true)
+	Hud.tick(1 / 60)
+	assert(playerGui.IceHUD.Compass.Visible and string.find(playerGui.IceHUD.Compass.Text.Text, "BEACON", 1, true), "no beacon compass")
+	kim:SetAttribute("TI_Carrying", false)
+	ClientState.round = { phase = "Sled", timeLeft = 8, participants = ClientState.round.participants }
+	Hud.tick(1 / 60)
+	assert(playerGui.IceHUD.SledCountdown.Visible and string.find(playerGui.IceHUD.SledCountdown.Text, "0:08", 1, true), "no sled countdown")
+	Fx.step(1 / 60)
+	assert(world.sled.model.SledLight1, "sled lights")
+	ClientState.round = RSv.state()
+	-- the full catch scare: a face lunging in + frost cracks; reduced = gentle
+	local strong = Fx.scare(true)
+	local cracks = 0
+	for _, c in ipairs(strong:GetChildren()) do
+		if c.Name == "Crack" then
+			cracks += 1
+		end
+	end
+	assert(cracks >= 4 and strong:FindFirstChild("Face"), "catch scare too tame")
 	-- Finish the round and show the real results card.
 	for _, p in ipairs(RSv.participantList()) do
 		SS.freeze(p, "cold")
@@ -1597,6 +1774,13 @@ check("client controllers initialise and render real server data (HUD, lobby, ov
 	local result = lastFor("Results", kim).args[1]
 	Hud.showResults(result)
 	assert(Hud.resultsShown() and playerGui.IceHUD.Results.Visible, "results card")
+	local playerRows = 0
+	for _, d in ipairs(playerGui.IceHUD.Results:GetDescendants()) do
+		if d.Name == "Player" then
+			playerRows += 1
+		end
+	end
+	assert(playerRows == #result.team and playerRows >= 2, "results table rows " .. playerRows)
 	tick(GameConfig.Round.ResultsTime + 0.1)
 	assert(run.folder.Parent == nil)
 	stubServices.RunService.IsServer = function()

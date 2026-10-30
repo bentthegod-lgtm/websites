@@ -60,19 +60,43 @@ test("cosmetics: valid sources, every product / pass grant exists", function()
 	assert(ShopConfig.Passes[1].Key == "VIP" and CosmeticConfig.Outfits[ShopConfig.Passes[1].Grants.Outfit].Source == "Pass")
 end)
 
-test("audio: no invented IDs (every ID is one DEAD AIR already uses)", function()
+test("audio: every slot filled, only IDs DEAD AIR already uses, sane volumes, known groups", function()
 	local deadAir = fs.readFile("../dead-air/src/shared/Config/AudioAssets.lua")
-	local n = 0
+	local GROUPS = { Effects = true, Ambient = true, Music = true, UI = true }
+	local slots, ids = 0, {}
+	local function checkId(slot, id)
+		assert(type(id) == "string" and id ~= "", slot .. " has an empty id")
+		local n = string.match(id, "^rbxassetid://(%d+)$")
+		assert(n, slot .. " malformed: " .. tostring(id))
+		assert(string.find(deadAir, '"rbxassetid://' .. n .. '"', 1, true), slot .. " uses an ID not found in DEAD AIR: " .. n)
+		ids[n] = true
+	end
 	for slot, def in pairs(AudioAssets) do
-		assert(type(def.Id) == "string", slot)
-		if def.Id ~= "" then
-			local id = string.match(def.Id, "^rbxassetid://(%d+)$")
-			assert(id, slot .. " malformed")
-			assert(string.find(deadAir, id, 1, true), slot .. " uses an ID not found in DEAD AIR")
-			n += 1
+		slots += 1
+		assert(def.Group == nil or GROUPS[def.Group], slot .. " unknown group")
+		assert((def.Volume or 0.5) > 0 and (def.Volume or 0.5) <= 1, slot .. " volume out of range")
+		if def.Layers then
+			assert(#def.Layers > 0, slot .. " has no layers")
+			for _, layer in ipairs(def.Layers) do
+				checkId(slot, layer.Id)
+				assert((def.Volume or 0.5) * (layer.Volume or 1) <= 1, slot .. " layer too loud")
+			end
+		else
+			checkId(slot, def.Id)
+		end
+		if def.Looped then
+			assert((def.Volume or 0.5) <= 0.7, slot .. " loops too loud")
 		end
 	end
-	assert(n >= 15, "only " .. n .. " sounds")
+	-- every slot the game plays exists
+	for _, slot in ipairs({ "Step", "Pickup", "Thaw", "Snowball", "Splash", "Crack", "Break", "IceGroan", "Chip", "Deliver", "BrazierCrackle", "MonsterBreath", "MonsterStep", "MonsterCall", "MonsterVocal", "MonsterHunt", "MonsterListen", "Spotted", "Caught", "Heartbeat", "Wind", "WindHum", "GustWind", "WindHowl", "ShadowSwell", "LobbyMusic", "LakeMusic", "Chase", "Countdown", "UIClick", "AllCores", "Horn", "Escape", "Fail" }) do
+		assert(AudioAssets[slot], "missing slot " .. slot)
+	end
+	local distinct = 0
+	for _ in pairs(ids) do
+		distinct += 1
+	end
+	assert(slots >= 34 and distinct >= 20, string.format("%d slots, %d distinct ids", slots, distinct))
 end)
 
 test("goals and codes reward something; noise categories have intervals", function()

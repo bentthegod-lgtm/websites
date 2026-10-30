@@ -14,7 +14,7 @@
 	  * snowballs: thrown at a spot on the lake to make a loud lure there (refill at drifts)
 
 	Per-player values the HUD needs travel as attributes (TI_Warmth, TI_Stamina, TI_State,
-	TI_Snowballs, TI_Mode, TI_Carrying, TI_InWater, TI_FrozenAt).
+	TI_Snowballs, TI_Mode, TI_Carrying, TI_InWater, TI_FrozenAt, TI_NearFire).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -86,11 +86,12 @@ local function publish(rec)
 	setAttr(p, "TI_Mode", rec.effective)
 	setAttr(p, "TI_Carrying", rec.carrying ~= nil)
 	setAttr(p, "TI_InWater", rec.inWater)
+	setAttr(p, "TI_NearFire", rec.nearFire == true)
 	setAttr(p, "TI_FrozenAt", rec.frozenServerAt or 0)
 end
 
 local function clearAttrs(player)
-	for _, name in ipairs({ "TI_Warmth", "TI_Stamina", "TI_State", "TI_Snowballs", "TI_Mode", "TI_Carrying", "TI_InWater", "TI_FrozenAt" }) do
+	for _, name in ipairs({ "TI_Warmth", "TI_Stamina", "TI_State", "TI_Snowballs", "TI_Mode", "TI_Carrying", "TI_InWater", "TI_FrozenAt", "TI_NearFire" }) do
 		player:SetAttribute(name, nil)
 	end
 end
@@ -554,10 +555,11 @@ local function stepActive(rec, root, humanoid, dt, now)
 	end
 
 	-- Warmth.
+	rec.nearFire = fireNear(pos)
 	rec.warmth = IceMath.stepWarmth(rec.warmth, {
 		onShore = onShore,
 		inWater = rec.inWater,
-		nearFire = fireNear(pos),
+		nearFire = rec.nearFire,
 		gust = services.WeatherService and services.WeatherService.gusting(),
 		drainScale = run.diff.WarmthDrain,
 	}, dt)

@@ -81,7 +81,12 @@ local function build()
 	-- Top bar
 	local top = Ui.panel({ Name = "TopBar", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(560, 44), BackgroundTransparency = 0.15, Parent = gui }, 12)
 	refs.timer = Ui.title("THIN ICE", { Name = "Timer", Size = UDim2.fromScale(1, 1), TextSize = 20, TextColor3 = C.Text, Parent = top })
-	refs.gust = Ui.label("BLIZZARD - it can barely hear you", { Name = "Gust", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 58), Size = UDim2.fromOffset(420, 26), Font = Ui.Fonts.Bold, TextSize = 16, TextColor3 = C.Accent, Visible = false, Parent = gui })
+	refs.gust = Ui.label("WHITEOUT - it can barely hear you... but it moves faster", { Name = "Gust", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 58), Size = UDim2.fromOffset(560, 26), Font = Ui.Fonts.Bold, TextSize = 16, TextColor3 = C.Accent, Visible = false, Parent = gui })
+	-- The sled countdown (big, pulses red in the last seconds) and the beacon compass.
+	refs.sled = Ui.title("", { Name = "SledCountdown", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 92), Size = UDim2.fromOffset(700, 48), TextSize = 40, TextStrokeTransparency = 0.3, TextColor3 = C.Warm, Visible = false, Parent = gui })
+	refs.compass = Ui.new("Frame", { Name = "Compass", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 146), Size = UDim2.fromOffset(150, 74), BackgroundTransparency = 1, Visible = false, Parent = gui })
+	refs.arrow = Ui.title("^", { Name = "Arrow", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(75, 24), Size = UDim2.fromOffset(46, 46), TextSize = 46, TextColor3 = Color3.fromRGB(120, 230, 255), TextStrokeTransparency = 0.3, Parent = refs.compass })
+	refs.compassText = Ui.label("BEACON", { Name = "Text", Position = UDim2.fromOffset(0, 48), Size = UDim2.fromOffset(150, 22), Font = Ui.Fonts.Bold, TextSize = 15, TextColor3 = Color3.fromRGB(150, 235, 255), TextStrokeTransparency = 0.4, Parent = refs.compass })
 
 	-- Coins + menu button
 	refs.coins = Ui.label("0 coins", { Name = "Coins", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 14), Size = UDim2.fromOffset(220, 30), TextXAlignment = Enum.TextXAlignment.Right, Font = Ui.Fonts.Bold, TextSize = 20, TextColor3 = C.Warm, Parent = gui })
@@ -146,13 +151,13 @@ local function build()
 	Ui.list(refs.toasts, 6, Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Right)
 
 	-- Results card
-	local results, body = Ui.window(gui, "Results", "RESULTS", 520, 470)
+	local results, body = Ui.window(gui, "Results", "RESULTS", 560, 560)
 	refs.results = results
 	refs.resultsBody = body
 
 	-- Touch buttons
 	if UserInputService.TouchEnabled then
-		local touch = Ui.new("Frame", { Name = "Touch", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -150), Size = UDim2.fromOffset(250, 120), BackgroundTransparency = 1, Parent = gui })
+		local touch = Ui.new("Frame", { Name = "Touch", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -150), Size = UDim2.fromOffset(310, 146), BackgroundTransparency = 1, Parent = gui })
 		local uiScale = gui:FindFirstChildOfClass("UIScale")
 		local function layout()
 			touch.Position = HudController.touchPosition(Ui.viewportSize(), if uiScale then uiScale.Scale else 1)
@@ -164,7 +169,7 @@ local function build()
 				task.defer(layout) -- after Ui.screen's UIScale has refitted
 			end)
 		end
-		local sprint = Ui.button("SPRINT", { Name = "Sprint", Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(120, 54) }, C.PanelLighter)
+		local sprint = Ui.button("SPRINT", { Name = "Sprint", Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(150, 66), TextSize = 20 }, C.PanelLighter)
 		sprint.Parent = touch
 		-- Hold to sprint. (GuiObject.InputBegan also fires for mouse movement over the button,
 		-- so only a touch or click counts; a finger that slides off still releases it.)
@@ -184,12 +189,12 @@ local function build()
 		sprint.InputEnded:Connect(release)
 		UserInputService.TouchEnded:Connect(release)
 		UserInputService.InputEnded:Connect(release)
-		local sneak = Ui.button("SNEAK", { Name = "Sneak", Position = UDim2.fromOffset(130, 0), Size = UDim2.fromOffset(120, 54) }, C.PanelLighter)
+		local sneak = Ui.button("SNEAK", { Name = "Sneak", Position = UDim2.fromOffset(160, 0), Size = UDim2.fromOffset(150, 66), TextSize = 20 }, C.PanelLighter)
 		sneak.Parent = touch
 		sneak.Activated:Connect(function()
 			InputController.toggleSneak()
 		end)
-		local throw = Ui.button("THROW", { Name = "Throw", Position = UDim2.fromOffset(65, 62), Size = UDim2.fromOffset(120, 54) }, C.Accent)
+		local throw = Ui.button("THROW", { Name = "Throw", Position = UDim2.fromOffset(80, 78), Size = UDim2.fromOffset(150, 66), TextSize = 20 }, C.Accent)
 		throw.Parent = touch
 		throw.Activated:Connect(InputController.throw)
 		refs.touch = touch
@@ -289,16 +294,61 @@ function HudController.renderProfile()
 end
 
 -- Per-frame: my bars, overlays.
-function HudController.tick()
+-- Eases a shown value toward its target (frame-rate independent): smooth bars.
+function HudController.ease(shown, target, dt)
+	if shown == nil then
+		return target
+	end
+	return shown + (target - shown) * math.clamp(dt * 8, 0, 1)
+end
+
+-- Screen rotation (degrees, 0 = straight up) of an arrow from `from` to `to`, given where
+-- the camera faces (flat).
+function HudController.arrowAngle(cameraLook, from, to)
+	local look = Vector3.new(cameraLook.X, 0, cameraLook.Z)
+	local dir = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	if look.Magnitude < 1e-3 or dir.Magnitude < 1e-3 then
+		return 0
+	end
+	look, dir = look.Unit, dir.Unit
+	local angle = math.atan2(look.X * dir.Z - look.Z * dir.X, look.X * dir.X + look.Z * dir.Z)
+	return math.deg(angle)
+end
+
+local shownWarmth, shownStamina
+
+function HudController.tick(dt)
+	dt = dt or 1 / 60
 	local me = ClientState.me()
 	local playing = ClientState.inRound() and me.state ~= nil
 	refs.survival.Visible = playing and me.state == "Active"
 	if me.warmth then
-		refs.warmthFill.Size = UDim2.fromScale(math.clamp(me.warmth / 100, 0, 1), 1)
-		refs.warmthFill.BackgroundColor3 = HudController.warmthColor(me.warmth)
+		shownWarmth = HudController.ease(shownWarmth, math.clamp(me.warmth / 100, 0, 1), dt)
+		refs.warmthFill.Size = UDim2.fromScale(shownWarmth, 1)
+		refs.warmthFill.BackgroundColor3 = HudController.warmthColor(shownWarmth * 100)
 	end
 	if me.stamina then
-		refs.staminaFill.Size = UDim2.fromScale(math.clamp(me.stamina / 100, 0, 1), 1)
+		shownStamina = HudController.ease(shownStamina, math.clamp(me.stamina / 100, 0, 1), dt)
+		refs.staminaFill.Size = UDim2.fromScale(shownStamina, 1)
+	end
+	-- Compass to the beacon while you carry a core.
+	local root = ClientState.root()
+	local camera = workspace.CurrentCamera
+	refs.compass.Visible = playing and me.carrying and root ~= nil
+	if refs.compass.Visible and camera then
+		local b = GameConfig.Lobby.Beacon
+		local beacon = Vector3.new(b[1], 0, b[2])
+		refs.arrow.Rotation = HudController.arrowAngle(camera.CFrame.LookVector, root.Position, beacon)
+		refs.compassText.Text = string.format("BEACON  %dm", math.floor((Vector3.new(root.Position.X, 0, root.Position.Z) - beacon).Magnitude / 3.5))
+	end
+	-- Sled countdown.
+	local round = ClientState.round
+	refs.sled.Visible = round.phase == "Sled"
+	if refs.sled.Visible then
+		local left = round.timeLeft or 0
+		refs.sled.Text = string.format("THE SLED LEAVES IN %s", Format.clock(left))
+		local pulse = left <= GameConfig.Round.SledHornAt and (math.floor(os.clock() * 4) % 2 == 0)
+		refs.sled.TextColor3 = if pulse then C.Red else C.Warm
 	end
 	refs.snowballs.Text = string.format("Snowballs %d  (F)", me.snowballs or 0)
 	local mode = me.mode or ClientState.mode
@@ -332,11 +382,19 @@ function HudController.showResults(summary)
 	if summary.level then
 		Ui.title("LEVEL UP!  Level " .. summary.level, { LayoutOrder = 51, Size = UDim2.new(1, 0, 0, 28), TextSize = 20, TextColor3 = C.Green, Parent = body })
 	end
-	local names = {}
-	for _, row in ipairs(summary.team or {}) do
-		table.insert(names, row.name .. " (" .. (STATE_ICON[row.state] or row.state) .. ")")
+	-- Per-player table: how everyone did.
+	local header = Ui.new("Frame", { LayoutOrder = 60, Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Parent = body })
+	local COLS = { { "PLAYER", 0, 0.4 }, { "CORES", 0.4, 0.15 }, { "THAWS", 0.55, 0.15 }, { "FROZE", 0.7, 0.15 }, { "", 0.85, 0.15 } }
+	for _, col in ipairs(COLS) do
+		Ui.label(col[1], { Position = UDim2.fromScale(col[2], 0), Size = UDim2.fromScale(col[3], 1), TextXAlignment = if col[2] == 0 then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center, Font = Ui.Fonts.Bold, TextSize = 12, TextColor3 = C.Dim, Parent = header })
 	end
-	Ui.label(table.concat(names, "   "), { LayoutOrder = 60, Size = UDim2.new(1, 0, 0, 40), TextWrapped = true, TextColor3 = C.Dim, TextSize = 14, Parent = body })
+	for i, row in ipairs(summary.team or {}) do
+		local r = Ui.new("Frame", { Name = "Player", LayoutOrder = 60 + i, Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1, Parent = body })
+		local values = { row.name, tostring(row.cores or 0), tostring(row.rescues or 0), tostring(row.freezes or 0), STATE_ICON[row.state] or row.state }
+		for c, col in ipairs(COLS) do
+			Ui.label(values[c], { Position = UDim2.fromScale(col[2], 0), Size = UDim2.fromScale(col[3], 1), TextXAlignment = if c == 1 then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, Font = if c == 5 then Ui.Fonts.Title else Ui.Fonts.Body, TextSize = 14, TextColor3 = if c == 5 then (STATE_COLOR[row.state] or C.Text) else C.Text, Parent = r })
+		end
+	end
 	Ui.openWindow("Results")
 	resultsOpen = true
 	task.delay(GameConfig.Round.ResultsTime + 4, function()

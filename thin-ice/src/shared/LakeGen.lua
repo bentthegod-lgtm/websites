@@ -2,13 +2,15 @@
 	LakeGen - pure, seeded generation of the frozen lake (no Roblox instances).
 
 	The lake is a grid of square tiles: columns across, rows away from the shore. Row 0 is
-	the edge by the lobby plaza; rows are grouped into four zones (Pine Shallows, Thin
-	Flats, Boulder Isles, Wreck Bay). Each tile is one of:
+	the edge by the lobby plaza; rows are grouped into five zones (Pine Shallows, Thin
+	Flats, Boulder Isles, Wreck Bay, The Deep Hollow). Each tile is one of:
 	  ice      walkable; thick = 1 (thin), 2 (normal) or 3 (thick) - see GameConfig.Ice
 	  water    an open hole (you fall in)
 	  rock     a boulder or ice-crystal cluster (blocks you)
 	  wreck    part of the wrecked boat in Wreck Bay (blocks you)
 	  brazier  thick ice with a fire on it (never breaks, warms you)
+	  landmark the half-sunken lighthouse in The Deep Hollow (blocks you; ringed by ice spires,
+	           which are "rock" tiles with style "spire")
 
 	The same seed + difficulty always gives the same lake. generate() also guarantees that
 	every frozen core can be walked to from the shore and back (it carves a path of ice
@@ -88,20 +90,60 @@ function LakeGen.pathLength(layout, c, r)
 	return nil
 end
 
--- Turns everything between (c, r) and the shore into walkable ice: straight back toward row
--- 0, which is always solid. Thickness 2, so the path itself is safe to walk once.
+-- Opens a route from (c, r) back to the shore: the route that turns the FEWEST blocked tiles
+-- into ice (0-1 BFS: open ice costs 0, a hole / rock costs 1; the lighthouse is never cut
+-- through). Thickness 2, so the carved tiles are safe to walk once.
 local function carve(layout, c, r)
-	for row = r, 0, -1 do
-		local t = layout.tiles[key(c, row)]
+	local cost, from = {}, {}
+	local deque, head, tail = {}, 0, 0
+	local start = key(c, r)
+	cost[start] = 0
+	deque[tail] = { start, c, r }
+	tail += 1
+	local goal
+	while head < tail do
+		local cur = deque[head]
+		deque[head] = nil
+		head += 1
+		local ck, cc, rr = cur[1], cur[2], cur[3]
+		if rr == 0 then
+			goal = ck
+			break
+		end
+		for _, off in ipairs({ { 0, -1 }, { 1, 0 }, { -1, 0 }, { 0, 1 } }) do
+			local nc, nr = cc + off[1], rr + off[2]
+			local nk = key(nc, nr)
+			local t = layout.tiles[nk]
+			if t and t.type ~= "landmark" then
+				local step = if LakeGen.walkable(t) then 0 else 1
+				if cost[nk] == nil or cost[ck] + step < cost[nk] then
+					cost[nk] = cost[ck] + step
+					from[nk] = ck
+					if step == 0 then
+						head -= 1
+						deque[head] = { nk, nc, nr }
+					else
+						deque[tail] = { nk, nc, nr }
+						tail += 1
+					end
+				end
+			end
+		end
+	end
+	local k = goal
+	while k do
+		local t = layout.tiles[k]
 		if not LakeGen.walkable(t) then
 			t.type = "ice"
 			t.thick = 2
 			t.style = nil
 		end
+		k = from[k]
 	end
 end
 
-local CORE_ZONES = { 2, 3, 4, 4, 3, 2, 1, 4 }
+-- Zones the cores go to, in order: every difficulty has at least one in The Deep Hollow.
+local CORE_ZONES = { 2, 3, 4, 5, 3, 4, 5, 2 }
 
 function LakeGen.generate(seed, difficultyName)
 	local diff = GameConfig.Difficulties[difficultyName] or GameConfig.Difficulties.Normal
@@ -164,6 +206,34 @@ function LakeGen.generate(seed, difficultyName)
 		layout.wreckCell = { wc, wr }
 	end
 
+	-- 2b. The Deep Hollow's landmark: a half-sunken lighthouse (2 x 2 tiles) in the middle of
+	-- the zone, ringed by eight standing ice spires.
+	do
+		local zones = #GameConfig.Zones
+		local lc = L.Columns // 2 - 1
+		local lr = (zones - 1) * L.RowsPerZone + L.RowsPerZone // 2 - 1
+		for dc = 0, 1 do
+			for dr = 0, 1 do
+				local t = layout.tiles[key(lc + dc, lr + dr)]
+				t.type = "landmark"
+				t.style = nil
+			end
+		end
+		layout.landmarkCell = { lc, lr }
+		layout.spires = {}
+		for i = 0, 7 do
+			local a = i * math.pi / 4
+			local sc = math.floor(lc + 0.5 + math.cos(a) * 3.6 + 0.5)
+			local sr = math.floor(lr + 0.5 + math.sin(a) * 3.6 + 0.5)
+			local t = layout.tiles[key(sc, sr)]
+			if t and t.type ~= "landmark" and t.type ~= "wreck" then
+				t.type = "rock"
+				t.style = "spire"
+				table.insert(layout.spires, t)
+			end
+		end
+	end
+
 	-- Picks a random plain-ice tile in a zone (not reserved).
 	local reserved = {}
 	local function pickIce(zoneIndex, minRow)
@@ -222,14 +292,14 @@ function LakeGen.generate(seed, difficultyName)
 		end
 	end
 
-	-- 7. The monster wakes in the far corner of Wreck Bay.
-	layout.monsterCell = { math.floor(L.Columns / 2), LakeGen.Rows - 2 }
+	-- 7. The monster sleeps at the far end of The Deep Hollow, off to one side.
+	layout.monsterCell = { 4, LakeGen.Rows - 2 }
 	return layout
 end
 
 -- Counts tile types (for tests and the debug overlay).
 function LakeGen.summary(layout)
-	local counts = { ice = 0, water = 0, rock = 0, wreck = 0, brazier = 0, thin = 0 }
+	local counts = { ice = 0, water = 0, rock = 0, wreck = 0, brazier = 0, landmark = 0, thin = 0 }
 	for _, t in ipairs(layout.order) do
 		counts[t.type] += 1
 		if t.type == "ice" and t.thick == 1 then

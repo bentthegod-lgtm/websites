@@ -35,3 +35,4 @@ globals:
   BrickColor: { any: true }
   Ray: { any: true }
   Region3: { any: true }
+  UserSettings: { any: true }

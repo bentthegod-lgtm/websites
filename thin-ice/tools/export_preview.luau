@@ -133,12 +133,13 @@ local monster = Models.monster(stand(8, 15) * CF.Angles(0, math.rad(10), 0), act
 local carried = Models.carriedShard(stand(9, 10) * CF.new(0, 7.4, 0), action)
 local _ = frozen and carried and monster
 
--- Poster staging for the store art: a kid with a lantern facing the Antlered across the ice.
+-- Poster staging for the store art: out in The Deep Hollow, a kid with a lantern, the
+-- half-sunken lighthouse behind, and the Antlered stepping out of the fog toward them.
 local poster = roblox.Instance.new("Folder")
-kid(CF.new(-15, L.IceTop, 118) * CF.Angles(0, math.rad(186), 0), poster, "Berry", "Warm")
-Models.monster(CF.new(-18, L.IceTop, 150) * CF.Angles(0, math.rad(-25), 0), poster)
-kid(CF.new(-44, L.IceTop, 150) * CF.Angles(0, math.rad(150), 0), poster, "Mint", "Frost")
-Models.iceBlock(CF.new(-44, L.IceTop, 150), poster)
+kid(CF.new(-12, L.IceTop, 346) * CF.Angles(0, math.rad(212), 0), poster, "Berry", "Warm")
+Models.monster(CF.new(4, L.IceTop, 372) * CF.Angles(0, math.rad(31), 0), poster)
+kid(CF.new(-30, L.IceTop, 366) * CF.Angles(0, math.rad(150), 0), poster, "Mint", "Frost")
+Models.iceBlock(CF.new(-30, L.IceTop, 366), poster)
 
 -- Character sheet far away (x = 2000).
 local sheet = roblox.Instance.new("Folder")

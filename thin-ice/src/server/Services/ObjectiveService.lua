@@ -70,6 +70,11 @@ local function setBeacon()
 		light.Range = 40 + 20 * fraction
 	end
 	world.beacon.flame.Transparency = 0.7 - 0.6 * fraction
+	-- The beam into the sky: faint per core, blazing once they're all in (seen from the far end).
+	local beam = world.beacon.model:FindFirstChild("BeaconBeam")
+	if beam then
+		beam.Transparency = if fraction <= 0 then 1 elseif fraction >= 1 then 0.35 else 0.92 - 0.3 * fraction
+	end
 end
 
 local function canAct(player)

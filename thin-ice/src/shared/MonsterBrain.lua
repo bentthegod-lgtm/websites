@@ -186,7 +186,7 @@ function MonsterBrain:update(now, position)
 		end
 		return { state = self.state, goal = self.goal, speed = opts.huntSpeed or 18 }
 	elseif s == States.Search then
-		if elapsed >= M.SearchTime then
+		if elapsed >= M.SearchTime * (opts.searchScale or 1) then
 			self.goal = opts.prowlPoint(position)
 			self:_enter(States.Prowl, now, "search over")
 		elseif not self.goal or flat(position, self.goal) < 3 then

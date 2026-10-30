@@ -81,6 +81,34 @@ function ClientState.monster()
 	return nil
 end
 
+-- Where it is and what it's doing, relative to me (nil while there's no monster).
+function ClientState.monsterInfo()
+	local m = ClientState.monster()
+	if not m or not m.PrimaryPart then
+		return nil
+	end
+	local pos = m:GetPivot().Position
+	local root = ClientState.root()
+	local distance = nil
+	if root then
+		distance = (Vector3.new(pos.X, 0, pos.Z) - Vector3.new(root.Position.X, 0, root.Position.Z)).Magnitude
+	end
+	local target = m:GetAttribute("TI_Target")
+	return {
+		model = m,
+		position = pos,
+		state = m:GetAttribute("TI_State"),
+		distance = distance,
+		huntingMe = target ~= nil and target ~= 0 and target == Players.LocalPlayer.UserId,
+	}
+end
+
+-- The current round's lake folder (braziers, spires, the lighthouse...).
+function ClientState.lake()
+	local m = ClientState.monster()
+	return m and m.Parent
+end
+
 function ClientState.inRound()
 	local r = ClientState.round
 	return (r.phase == "Running" or r.phase == "Sled") and r.participants ~= nil and r.participants[tostring(Players.LocalPlayer.UserId)] == true
@@ -127,7 +155,13 @@ function ClientState.init()
 		ClientState.ProfileChanged:Fire(snapshot)
 	end)
 	on("RoundState", function(state)
+		local before = ClientState.round and ClientState.round.phase
 		ClientState.round = state or ClientState.round
+		if ClientState.round.phase == "Running" and before ~= "Running" and before ~= "Sled" then
+			ClientState.roundStartedAt = os.clock()
+		elseif ClientState.round.phase == "Lobby" then
+			ClientState.roundStartedAt = nil
+		end
 		ClientState.RoundChanged:Fire(ClientState.round)
 	end)
 	on("Team", function(rows)

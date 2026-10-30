@@ -168,6 +168,10 @@ function RoundService.team()
 			warmth = math.floor((rec.warmth or 0) + 0.5),
 			carrying = rec.carrying ~= nil,
 			vip = player:GetAttribute("TI_VIP") == true,
+			cores = rec.cores or 0,
+			rescues = rec.rescues or 0,
+			thrown = rec.thrown or 0,
+			freezes = rec.freezes or 0,
 		})
 	end
 	table.sort(rows, function(a, b)
@@ -316,6 +320,9 @@ local function finish(outcome, reason)
 	local now = os.clock()
 	local thisRun = run
 	services.WeatherService.stopRun()
+	if outcome == "Success" and world then
+		services.Remotes.WorldSound:FireAllClients("Horn", world.sled.position) -- the sled pulls away
+	end
 	local team = RoundService.team()
 	local summaries = {}
 	for player, rec in pairs(thisRun.players) do
@@ -463,6 +470,11 @@ function RoundService.step(dt)
 		services.ObjectiveService.step(dt)
 		services.MonsterService.step(dt)
 		services.WeatherService.step(dt)
+		if phase == "Sled" and world and run and not run.hornBlown and run.sledLeavesAt - now <= R.SledHornAt then
+			run.hornBlown = true
+			services.Remotes.WorldSound:FireAllClients("Horn", world.sled.position)
+			services.Remotes.Announce:FireAllClients(string.format("The sled leaves in %d seconds!", R.SledHornAt), { 255, 200, 120 })
+		end
 		if phase == "Sled" and world then
 			for player, rec in pairs(run.players) do
 				local root = rootOf(player)

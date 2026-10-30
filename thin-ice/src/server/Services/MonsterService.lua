@@ -35,8 +35,10 @@ local accumulator = 0
 local lastState
 local intent
 local rng = Random.new()
+local LakeBuilder
 -- Navigation: the current path (waypoints), what it was planned for, and stuck tracking.
 local nav = {}
+local trail = {} -- tiles its weight has cracked, oldest first
 
 local Mon = GameConfig.Monster
 local L = GameConfig.Lake
@@ -44,6 +46,7 @@ local MARGIN = 3
 
 function MonsterService.init(registry)
 	services = registry
+	LakeBuilder = require(script.Parent.Parent.World.LakeBuilder)
 end
 
 local function flat(a, b)
@@ -148,6 +151,7 @@ function MonsterService.startRun(newRun)
 	model:SetAttribute("TI_State", "Dormant")
 	brain = MonsterBrain.new({
 		huntSpeed = run.diff.MonsterSpeed,
+		searchScale = run.diff.MonsterSearch, -- Hard / Nightmare keep hunting around a lost sound longer
 		wakeAt = run.wakeAt,
 		prowlPoint = prowlPoint,
 		rng = rng,
@@ -155,6 +159,7 @@ function MonsterService.startRun(newRun)
 	lastState = brain.state
 	accumulator = 0
 	intent = nil
+	trail = {}
 	resetNav()
 end
 
@@ -262,6 +267,13 @@ local function tick()
 	end
 	intent = brain:update(now, position)
 	announceState()
+	-- Who it's hunting (clients play the chase layer / spotted sting for that player only).
+	if model then
+		local targetId = if brain.state == "Hunt" and brain.target and typeof(brain.target) == "Instance" then brain.target.UserId else 0
+		if model:GetAttribute("TI_Target") ~= targetId then
+			model:SetAttribute("TI_Target", targetId)
+		end
+	end
 	-- Re-plan (throttled) when the goal moved, the next step broke into water, or now and then.
 	if intent.goal and intent.speed > 0 then
 		local goal = clampToLake(intent.goal)
@@ -300,12 +312,41 @@ local function tick()
 	end
 end
 
+-- Its weight cracks the ice it walks over (cosmetic: no stress, no noise). The trail keeps
+-- the last Monster.TrailLength tiles; older ones heal so the part count stays bounded.
+function MonsterService.trail()
+	if not run or not LakeBuilder then
+		return
+	end
+	local c, r = LakeGen.worldToCell(position.X, position.Z)
+	local tile = c and run.layout.tiles[LakeGen.key(c, r)]
+	if not tile or tile == trail[#trail] or not LakeGen.walkable(tile) then
+		return
+	end
+	LakeBuilder.addCracks(tile, rng)
+	table.insert(trail, tile)
+	while #trail > Mon.TrailLength do
+		local old = table.remove(trail, 1)
+		if not old.cracked and not table.find(trail, old) then
+			LakeBuilder.removeCracks(old)
+		end
+	end
+end
+
+function MonsterService.trailTiles()
+	return trail
+end
+
 -- Moves the body along its planned path (every frame, so it glides instead of ticking).
 local function move(dt)
 	if not intent or not intent.goal or intent.speed <= 0 or brain.state == "Dormant" then
 		return
 	end
-	local budget = intent.speed * dt
+	local speed = intent.speed
+	if services.WeatherService and services.WeatherService.gusting() then
+		speed *= GameConfig.Weather.WhiteoutSpeed -- deaf-ish in a whiteout, but faster
+	end
+	local budget = speed * dt
 	local facing
 	while budget > 1e-4 do
 		local to = nav.path[nav.index]
@@ -334,6 +375,7 @@ local function move(dt)
 	if model and facing then
 		model:PivotTo(CFrame.lookAt(position, position + facing))
 	end
+	MonsterService.trail()
 end
 
 function MonsterService.step(dt)

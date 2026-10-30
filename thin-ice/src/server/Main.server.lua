@@ -13,21 +13,33 @@ local Shared = ReplicatedStorage:WaitForChild("ThinIce")
 local Net = require(Shared.Net)
 Net.setup()
 
--- Night over the lake: cold blue ambient, a little fog, soft bloom on the fires.
+-- A dim night with the moon behind clouds: cold blue ambient (never pitch black - you can
+-- always read the ice), fog that clients thicken the further out you go, soft bloom on fires.
 Lighting.ClockTime = 0.3
-Lighting.Ambient = Color3.fromRGB(70, 86, 120)
-Lighting.OutdoorAmbient = Color3.fromRGB(90, 110, 150)
-Lighting.FogColor = Color3.fromRGB(40, 54, 84)
+Lighting.Brightness = 0.7
+Lighting.Ambient = Color3.fromRGB(58, 72, 104)
+Lighting.OutdoorAmbient = Color3.fromRGB(78, 96, 136)
+Lighting.FogColor = Color3.fromRGB(32, 44, 70)
 if not Lighting:FindFirstChildOfClass("Atmosphere") then
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.32
-	atmosphere.Offset = 0.1
-	atmosphere.Color = Color3.fromRGB(120, 150, 200)
-	atmosphere.Decay = Color3.fromRGB(40, 50, 80)
+	atmosphere.Density = 0.3
+	atmosphere.Offset = 0.12
+	atmosphere.Color = Color3.fromRGB(110, 138, 186)
+	atmosphere.Decay = Color3.fromRGB(34, 44, 72)
 	atmosphere.Glare = 0
-	atmosphere.Haze = 1.4
+	atmosphere.Haze = 1.8
 	atmosphere.Parent = Lighting
 end
+pcall(function()
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain and not terrain:FindFirstChildOfClass("Clouds") then
+		local clouds = Instance.new("Clouds")
+		clouds.Cover = 0.72 -- the moon mostly hidden
+		clouds.Density = 0.6
+		clouds.Color = Color3.fromRGB(70, 82, 110)
+		clouds.Parent = terrain
+	end
+end)
 if not Lighting:FindFirstChildOfClass("BloomEffect") then
 	local bloom = Instance.new("BloomEffect")
 	bloom.Intensity = 0.6

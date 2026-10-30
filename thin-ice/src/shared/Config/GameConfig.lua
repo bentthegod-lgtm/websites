@@ -20,11 +20,14 @@ GameConfig.Leaderboard = { WriteInterval = 120, Refresh = 90 }
 
 GameConfig.Lake = {
 	TileSize = 8,
-	Columns = 16, -- 128 studs wide
-	RowsPerZone = 8, -- 4 zones -> 32 rows -> 256 studs out from the shore
+	Columns = 26, -- 208 studs wide
+	RowsPerZone = 10, -- 5 zones -> 50 rows -> 400 studs out from the shore
 	ShoreZ = 40, -- the first ice row starts here; the lobby plaza is at Z < ShoreZ
 	IceTop = 0.6, -- top surface of a tile (players walk at about Y = 3.6)
-	TilesPerStep = 48, -- the lake is built this many tiles per server frame (no long freeze)
+	TilesPerStep = 64, -- the lake is built this many tiles per server frame (no long freeze)
+	-- Fog thickens the further you walk from the shore (client Atmosphere density, by Z).
+	FogNear = 0.3,
+	FogFar = 0.56,
 }
 
 -- Lobby / shore landmarks (world positions, Y = ground top). The shore is safe: the
@@ -41,10 +44,12 @@ GameConfig.Lobby = {
 }
 
 GameConfig.Zones = {
-	{ Id = "PineShallows", Name = "Pine Shallows", Thin = 0.08, Holes = 0.02, Rocks = 0.04, Drifts = 3, Tint = { 205, 228, 240 } },
-	{ Id = "ThinFlats", Name = "Thin Flats", Thin = 0.38, Holes = 0.06, Rocks = 0.02, Drifts = 2, Tint = { 176, 214, 236 } },
-	{ Id = "BoulderIsles", Name = "Boulder Isles", Thin = 0.2, Holes = 0.05, Rocks = 0.16, Drifts = 3, Tint = { 190, 220, 236 } },
-	{ Id = "WreckBay", Name = "Wreck Bay", Thin = 0.3, Holes = 0.1, Rocks = 0.06, Drifts = 2, Tint = { 160, 200, 228 } },
+	{ Id = "PineShallows", Name = "Pine Shallows", Thin = 0.08, Holes = 0.02, Rocks = 0.04, Drifts = 4, Tint = { 205, 228, 240 } },
+	{ Id = "ThinFlats", Name = "Thin Flats", Thin = 0.38, Holes = 0.06, Rocks = 0.02, Drifts = 3, Tint = { 176, 214, 236 } },
+	{ Id = "BoulderIsles", Name = "Boulder Isles", Thin = 0.2, Holes = 0.05, Rocks = 0.16, Drifts = 4, Tint = { 190, 220, 236 } },
+	{ Id = "WreckBay", Name = "Wreck Bay", Thin = 0.3, Holes = 0.1, Rocks = 0.06, Drifts = 3, Tint = { 160, 200, 228 } },
+	-- The far end: black water, ice spires and a half-sunken lighthouse. The Antlered sleeps here.
+	{ Id = "DeepHollow", Name = "The Deep Hollow", Thin = 0.34, Holes = 0.13, Rocks = 0.05, Drifts = 3, Tint = { 112, 150, 196 }, Dark = true },
 }
 
 ---------------------------------------------------------------------------------------------
@@ -52,11 +57,13 @@ GameConfig.Zones = {
 ---------------------------------------------------------------------------------------------
 
 GameConfig.DifficultyOrder = { "Easy", "Normal", "Hard", "Nightmare" }
+-- (The lake is ~2x the original; cores, braziers and time limits were scaled so a round
+-- still takes 8-11 minutes. MonsterSearch: how much longer it hunts around a lost sound.)
 GameConfig.Difficulties = {
-	Easy = { Cores = 3, ThinScale = 0.7, HoleScale = 0.6, Braziers = 6, WarmthDrain = 0.7, MonsterSpeed = 15, MonsterHearing = 0.8, Grace = 30, TimeLimit = 540, Reward = 1, Color = { 120, 220, 140 } },
-	Normal = { Cores = 4, ThinScale = 1, HoleScale = 1, Braziers = 5, WarmthDrain = 1, MonsterSpeed = 17, MonsterHearing = 1, Grace = 22, TimeLimit = 480, Reward = 1.4, Color = { 140, 200, 255 } },
-	Hard = { Cores = 5, ThinScale = 1.25, HoleScale = 1.3, Braziers = 4, WarmthDrain = 1.25, MonsterSpeed = 19, MonsterHearing = 1.15, Grace = 16, TimeLimit = 450, Reward = 2, Color = { 255, 170, 90 } },
-	Nightmare = { Cores = 6, ThinScale = 1.5, HoleScale = 1.6, Braziers = 3, WarmthDrain = 1.5, MonsterSpeed = 21, MonsterHearing = 1.3, Grace = 12, TimeLimit = 420, Reward = 3, Color = { 255, 90, 110 } },
+	Easy = { Cores = 4, ThinScale = 0.7, HoleScale = 0.6, Braziers = 10, WarmthDrain = 0.7, MonsterSpeed = 15, MonsterHearing = 0.8, MonsterSearch = 1, Grace = 30, TimeLimit = 720, Reward = 1, Color = { 120, 220, 140 } },
+	Normal = { Cores = 5, ThinScale = 1, HoleScale = 1, Braziers = 8, WarmthDrain = 1, MonsterSpeed = 17, MonsterHearing = 1, MonsterSearch = 1, Grace = 24, TimeLimit = 660, Reward = 1.4, Color = { 140, 200, 255 } },
+	Hard = { Cores = 6, ThinScale = 1.25, HoleScale = 1.3, Braziers = 7, WarmthDrain = 1.2, MonsterSpeed = 19, MonsterHearing = 1.15, MonsterSearch = 1.5, Grace = 18, TimeLimit = 630, Reward = 2, Color = { 255, 170, 90 } },
+	Nightmare = { Cores = 7, ThinScale = 1.5, HoleScale = 1.6, Braziers = 6, WarmthDrain = 1.4, MonsterSpeed = 21, MonsterHearing = 1.3, MonsterSearch = 2, Grace = 14, TimeLimit = 600, Reward = 3, Color = { 255, 90, 110 } },
 }
 
 ---------------------------------------------------------------------------------------------
@@ -66,7 +73,8 @@ GameConfig.Difficulties = {
 GameConfig.Round = {
 	Countdown = 8, -- after everyone in the lobby is ready (or MinReady + timeout)
 	ReadyTimeout = 25, -- once someone is ready, start this long after even if others aren't
-	SledWait = 45, -- after the last core is in, the sled waits this long
+	SledWait = 60, -- after the last core is in, the sled waits this long (horn at 10 s)
+	SledHornAt = 10,
 	ResultsTime = 9,
 	BeaconRadius = 14, -- deliver a core by walking within this distance of the beacon
 	SledRadius = 10,
@@ -163,7 +171,7 @@ GameConfig.Noise = {
 	StepInterval = { StepSneak = 0.7, StepWalk = 0.45, StepSprint = 0.3 },
 	HearThreshold = 0.12,
 	HuntThreshold = 0.55,
-	GustHearing = 0.5, -- blizzard gusts halve what it hears
+	GustHearing = 0.5, -- whiteouts halve what it hears
 }
 
 ---------------------------------------------------------------------------------------------
@@ -182,13 +190,32 @@ GameConfig.Monster = {
 	ListenPause = 2.2,
 	StepInterval = 0.12, -- how often it listens / decides (it moves every frame)
 	ReplanInterval = 0.5, -- it re-plans its path over the ice at most this often (never per frame)
+	TrailLength = 24, -- tiles of cracked ice it leaves behind (cosmetic)
 	StuckTime = 10, -- awake but hasn't got 1.5 tiles from where it was in this long: it dives and resurfaces elsewhere
 }
 
+-- Whiteouts: a blizzard drops visibility hard for 15-20 s. It hears less, but it moves faster.
 GameConfig.Weather = {
-	CalmMin = 55,
-	CalmMax = 85,
-	GustTime = 14,
+	CalmMin = 70,
+	CalmMax = 110,
+	WhiteoutMin = 15,
+	WhiteoutMax = 20,
+	WhiteoutSpeed = 1.3, -- the Antlered's speed multiplier during a whiteout
+}
+
+-- Client-side dread: what you hear / see of the Antlered by distance (see shared/Presence).
+GameConfig.Presence = {
+	FarCall = 70, -- beyond this: an occasional distant call
+	CallGapMin = 18,
+	CallGapMax = 34,
+	Near = 35, -- breathing and crunching footsteps
+	Heartbeat = 30, -- heartbeat + frost vignette
+	SilhouetteMin = 55, -- glimpse its outline through the fog between these distances
+	SilhouetteMax = 120,
+	SilhouetteGap = 25,
+	ScareGraceTime = 60, -- no ambient scares in a round's first minute
+	ScareGapMin = 40,
+	ScareGapMax = 75,
 }
 
 ---------------------------------------------------------------------------------------------

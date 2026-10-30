@@ -84,7 +84,7 @@ test("harder difficulties: more thin ice + holes, fewer braziers", function()
 end)
 
 test("zones look different: Thin Flats thinnest, Boulder Isles rockiest, wreck in Wreck Bay", function()
-	local thin, rock = { 0, 0, 0, 0 }, { 0, 0, 0, 0 }
+	local thin, rock = { 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0 }
 	for seed = 1, 20 do
 		local layout = LakeGen.generate(seed, "Normal")
 		for _, t in ipairs(layout.order) do
@@ -98,10 +98,41 @@ test("zones look different: Thin Flats thinnest, Boulder Isles rockiest, wreck i
 		for _, t in ipairs(layout.wreck) do
 			assert(t.zone == 4, "wreck outside Wreck Bay")
 		end
-		assert(#layout.drifts >= 6, "not enough drifts")
+		assert(#layout.drifts >= 14, "not enough drifts for the bigger lake")
 	end
 	assert(thin[2] > thin[1] and thin[2] > thin[3], "Thin Flats not the thinnest")
-	assert(rock[3] > rock[1] and rock[3] > rock[2] and rock[3] > rock[4], "Boulder Isles not the rockiest")
+	assert(rock[3] > rock[1] and rock[3] > rock[2] and rock[3] > rock[4] and rock[3] > rock[5], "Boulder Isles not the rockiest")
+end)
+
+test("bigger lake: 26 x 50 tiles, 5 zones, 400 studs out", function()
+	assert(#GameConfig.Zones == 5 and GameConfig.Zones[5].Id == "DeepHollow")
+	assert(GameConfig.Lake.Columns >= 24 and GameConfig.Lake.Columns <= 28, "width")
+	assert(LakeGen.Rows == 50 and LakeGen.Rows * GameConfig.Lake.TileSize == 400, "length")
+	local _, zFar = LakeGen.cellToWorld(0, LakeGen.Rows - 1)
+	assert(zFar > 430, "far edge " .. zFar)
+end)
+
+test("The Deep Hollow: half-sunken lighthouse ringed by ice spires, cores out there, the monster sleeps there", function()
+	for seed = 1, 40 do
+		local layout = LakeGen.generate(seed * 31, "Easy")
+		local lc, lr = layout.landmarkCell[1], layout.landmarkCell[2]
+		assert(LakeGen.zoneOfRow(lr) == 5 and LakeGen.zoneOfRow(lr + 1) == 5, "lighthouse outside the Deep Hollow")
+		for dc = 0, 1 do
+			for dr = 0, 1 do
+				assert(layout.tiles[LakeGen.key(lc + dc, lr + dr)].type == "landmark", "lighthouse carved through")
+			end
+		end
+		assert(#layout.spires >= 6, "spires " .. #layout.spires)
+		local deep = 0
+		for _, core in ipairs(layout.cores) do
+			if core.zone == 5 then
+				deep += 1
+			end
+		end
+		assert(deep >= 1, "no core in the Deep Hollow")
+		assert(LakeGen.zoneOfRow(layout.monsterCell[2]) == 5)
+		assert(not LakeGen.walkable(layout.tiles[LakeGen.key(lc, lr)]), "lighthouse walkable")
+	end
 end)
 
 return cases

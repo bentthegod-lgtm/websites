@@ -1,9 +1,11 @@
 --[[
-	WeatherService - blizzard gusts. Every minute or so a gust sweeps the lake for a few
-	seconds: it chills anyone out on the ice faster, but the wind also drowns out sound,
-	so the Antlered hears far less. A risky window to cross the Thin Flats.
+	WeatherService - whiteouts. Every minute or two a blizzard sweeps the lake for 15-20 s:
+	visibility drops hard, anyone out on the ice chills faster, and the wind drowns out
+	sound so the Antlered hears far less - but it also moves faster (Weather.WhiteoutSpeed).
+	A risky window: run for it, or hunker down by a brazier.
 
-	The state is a Workspace attribute (TI_Gust) so clients can thicken the fog and snow.
+	The state is a Workspace attribute (TI_Gust) so clients can close the fog and thicken
+	the snow; TI_GustEnds (server time) lets them show how long it lasts.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,9 +24,10 @@ function WeatherService.init(registry)
 	services = registry
 end
 
-local function set(gust)
+local function set(gust, duration)
 	state.gust = gust
 	workspace:SetAttribute("TI_Gust", gust)
+	workspace:SetAttribute("TI_GustEnds", if gust then workspace:GetServerTimeNow() + (duration or 0) else 0)
 end
 
 function WeatherService.startRun()
@@ -54,13 +57,14 @@ function WeatherService.step()
 	end
 	local now = os.clock()
 	if not state.gust and now >= state.nextAt then
-		set(true)
-		state.endsAt = now + W.GustTime
-		services.Remotes.Announce:FireAllClients("BLIZZARD GUST! It can barely hear you - move now!", { 190, 220, 255 })
+		local duration = rng:NextNumber(W.WhiteoutMin, W.WhiteoutMax)
+		set(true, duration)
+		state.endsAt = now + duration
+		services.Remotes.Announce:FireAllClients("WHITEOUT! It can barely hear you... but it's moving faster.", { 190, 220, 255 })
 	elseif state.gust and now >= state.endsAt then
 		set(false)
 		state.nextAt = now + rng:NextNumber(W.CalmMin, W.CalmMax)
-		services.Remotes.Notify:FireAllClients("The wind dies down. It can hear everything again.", "warn")
+		services.Remotes.Notify:FireAllClients("The whiteout passes. It can hear everything again.", "warn")
 	end
 end
 

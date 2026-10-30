@@ -130,6 +130,9 @@ function LobbyBuilder.build(parent)
 	-- Under the ice: dark water you can wade in (and climb out of) and a lakebed to stand on.
 	local water = part({ Name = "Water", Size = Vector3.new(LAKE_W, 0.4, LAKE_L), CFrame = CFrame.new(0, top - 1.6, L.ShoreZ + LAKE_L / 2), Color = P.Water, Material = M.Glass, Transparency = 0.15, Reflectance = 0.15, Parent = scenery, CastShadow = false })
 	water:SetAttribute("TI_Water", true)
+	-- The Deep Hollow's water is black.
+	local deepLen = L.RowsPerZone * L.TileSize
+	part({ Name = "DeepWater", Size = Vector3.new(LAKE_W, 0.4, deepLen), CFrame = CFrame.new(0, top - 1.55, LAKE_FAR_Z - deepLen / 2), Color = rgb(6, 12, 26), Material = M.Glass, Transparency = 0.05, Reflectance = 0.2, Parent = scenery, CastShadow = false })
 	part({ Name = "Lakebed", Size = Vector3.new(LAKE_W, 2, LAKE_L), CFrame = CFrame.new(0, top - 5, L.ShoreZ + LAKE_L / 2), Color = rgb(30, 40, 52), Material = M.Slate, Parent = scenery, CanCollide = true })
 	-- The shore edge: a low frosted ledge you step down from onto row 0.
 	part({ Name = "ShoreEdge", Size = Vector3.new(LAKE_W + 4, 1, 1.4), CFrame = CFrame.new(0, top - 0.3, L.ShoreZ - 0.7), Color = P.IceLight, Material = M.Ice, Parent = lobby })
@@ -233,7 +236,7 @@ function LobbyBuilder.build(parent)
 		part({ Name = "MountainSnow", Size = Vector3.new(22, h * 0.18, 22), CFrame = CFrame.new(x, h - 2, z), Color = rgb(200, 214, 236), Material = M.Snow, Parent = scenery, CastShadow = false })
 	end
 	for _, side in ipairs({ -1, 1 }) do
-		for i = 0, 7 do
+		for i = 0, 10 do
 			local h = rng:NextNumber(50, 110)
 			local z = -80 + i * 55
 			part({ Name = "Mountain", Size = Vector3.new(50, h, rng:NextNumber(50, 70)), CFrame = CFrame.new(side * rng:NextNumber(200, 240), h / 2 - 4, z), Color = mountainColor:Lerp(rgb(30, 40, 70), rng:NextNumber() * 0.5), Material = M.Slate, Parent = scenery, CastShadow = false })

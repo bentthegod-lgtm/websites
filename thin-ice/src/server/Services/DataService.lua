@@ -43,6 +43,7 @@ local function defaultSettings()
 		Music = 0.6,
 		Effects = 1,
 		Ambient = 0.8,
+		UI = 0.8,
 		ScareEffects = true, -- the catch scare (flash + close-up); off = a gentle fade
 		CameraShake = true,
 		ReducedEffects = false,

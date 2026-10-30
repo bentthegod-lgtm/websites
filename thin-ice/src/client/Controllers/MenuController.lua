@@ -180,9 +180,9 @@ function RENDER.Board(list)
 	end
 end
 
-local SLIDERS = { { "Master", "Master volume" }, { "Music", "Music" }, { "Effects", "Effects" }, { "Ambient", "Wind & ambience" } }
+local SLIDERS = { { "Master", "Master volume" }, { "Music", "Music" }, { "Effects", "Effects & the Antlered" }, { "Ambient", "Wind & ambience" }, { "UI", "Menu clicks" } }
 local TOGGLES = {
-	{ "ScareEffects", "Scare effects (flash + close-up when caught)" },
+	{ "ScareEffects", "Scare effects (close-up, flash + ambient scares)" },
 	{ "CameraShake", "Camera shake" },
 	{ "ReducedEffects", "Reduced effects (less snow and fog)" },
 	{ "ToggleSneak", "C toggles sneak (off = hold C)" },

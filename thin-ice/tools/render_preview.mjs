@@ -11,18 +11,20 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const [jsonPath = "build/preview.json", outDir = "build"] = process.argv.slice(2);
 const data = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
 
-const zoneZ = (k) => 40 + (k - 1) * 64 + 32;
+const zoneZ = (k) => 40 + (k - 1) * 80 + 40; // 5 zones x 10 rows x 8 studs
 export const VIEWS = [
-	{ name: "preview-lobby", groups: ["world", "action"], eye: [16, 15, -66], target: [0, 3, 50], fov: 62 },
-	{ name: "preview-camp", groups: ["world"], eye: [-62, 18, -2], target: [0, 4, 14], fov: 60 },
-	{ name: "preview-lake", groups: ["world", "action"], eye: [-150, 150, -40], target: [0, 0, 170], fov: 52 },
-	{ name: "preview-plan", groups: ["world", "action"], eye: [0, 430, 168], target: [0, 0, 168.01], fov: 38 },
-	{ name: "preview-zone1-pine-shallows", groups: ["world", "action"], eye: [-48, 20, zoneZ(1) - 46], target: [0, 0, zoneZ(1)], fov: 60 },
-	{ name: "preview-zone2-thin-flats", groups: ["world", "action"], eye: [-48, 20, zoneZ(2) - 46], target: [0, 0, zoneZ(2)], fov: 60 },
-	{ name: "preview-zone3-boulder-isles", groups: ["world", "action"], eye: [-48, 20, zoneZ(3) - 46], target: [0, 0, zoneZ(3)], fov: 60 },
-	{ name: "preview-zone4-wreck-bay", groups: ["world", "action"], eye: [-48, 20, zoneZ(4) - 46], target: [0, 0, zoneZ(4)], fov: 60 },
-	{ name: "preview-action", groups: ["world", "action"], eye: [-10, 8, 98], target: [3, 6, 160], fov: 55 },
-	{ name: "preview-characters", groups: ["sheet"], lights: "sheetLights", eye: [2002, 9, -40], target: [2002, 6, 2], fov: 62, sky: 0x1b2a4c, bright: true },
+	{ name: "preview-lobby", groups: ["world", "action"], eye: [16, 15, -66], target: [0, 3, 50], fov: 62, fogNear: 140, fogFar: 520 },
+	{ name: "preview-camp", groups: ["world"], eye: [-62, 18, -2], target: [0, 4, 14], fov: 60, fogNear: 140, fogFar: 520 },
+	{ name: "preview-lake", groups: ["world", "action"], eye: [-230, 220, -60], target: [0, 0, 230], fov: 52, fogNear: 260, fogFar: 900 },
+	{ name: "preview-plan", groups: ["world", "action"], eye: [0, 640, 240], target: [0, 0, 240.01], fov: 42, fogNear: 2000, fogFar: 4000 },
+	{ name: "preview-zone1-pine-shallows", groups: ["world", "action"], eye: [-70, 22, zoneZ(1) - 56], target: [0, 0, zoneZ(1)], fov: 60 },
+	{ name: "preview-zone2-thin-flats", groups: ["world", "action"], eye: [-70, 22, zoneZ(2) - 56], target: [0, 0, zoneZ(2)], fov: 60 },
+	{ name: "preview-zone3-boulder-isles", groups: ["world", "action"], eye: [-70, 22, zoneZ(3) - 56], target: [0, 0, zoneZ(3)], fov: 60 },
+	{ name: "preview-zone4-wreck-bay", groups: ["world", "action"], eye: [-70, 22, zoneZ(4) - 56], target: [0, 0, zoneZ(4)], fov: 60 },
+	{ name: "preview-zone5-deep-hollow", groups: ["world", "action"], eye: [-60, 18, zoneZ(5) - 70], target: [0, 6, zoneZ(5)], fov: 58, fogNear: 50, fogFar: 300, dark: true },
+	{ name: "preview-lighthouse", groups: ["world", "poster"], lights: "posterLights", eye: [-14, 6, 320], target: [12, 12, 384], fov: 55, fogNear: 50, fogFar: 300, dark: true },
+	{ name: "preview-action", groups: ["world", "action"], eye: [-50, 8, 98], target: [-36, 6, 160], fov: 55 },
+	{ name: "preview-characters", groups: ["sheet"], lights: "sheetLights", eye: [2002, 10, -44], target: [2002, 7, 2], fov: 62, sky: 0x1b2a4c, bright: true },
 ];
 
 export function sceneScript(view, W, H) {
@@ -38,15 +40,15 @@ renderer.setSize(W, H);
 renderer.shadowMap.enabled = true;
 renderer.outputEncoding = THREE.sRGBEncoding;
 const scene = new THREE.Scene();
-const sky = ${view.sky ?? 0x0b1633};
+const sky = ${view.sky ?? (view.dark ? 0x070d1e : 0x0b1633)};
 scene.background = new THREE.Color(sky);
-scene.fog = new THREE.Fog(0x14203c, 120, 620);
-scene.add(new THREE.HemisphereLight(0x9fb8e8, 0x1c2234, ${view.bright ? 1.1 : 0.62}));
+scene.fog = new THREE.Fog(${view.dark ? '0x0c1428' : '0x14203c'}, ${view.fogNear ?? 90}, ${view.fogFar ?? 480});
+scene.add(new THREE.HemisphereLight(0x9fb8e8, 0x1c2234, ${view.bright ? 1.1 : view.dark ? 0.3 : 0.56}));
 scene.add(new THREE.AmbientLight(0x30406a, 0.35));
-const moon = new THREE.DirectionalLight(0xbcd0ff, ${view.bright ? 0.9 : 0.55});
+const moon = new THREE.DirectionalLight(0xbcd0ff, ${view.bright ? 0.9 : view.dark ? 0.22 : 0.45});
 moon.position.set(-160, 220, 260); moon.castShadow = true;
 moon.shadow.mapSize.set(4096, 4096);
-const sc = moon.shadow.camera; sc.left = -320; sc.right = 320; sc.top = 320; sc.bottom = -320; sc.far = 1200;
+const sc = moon.shadow.camera; sc.left = -420; sc.right = 420; sc.top = 420; sc.bottom = -420; sc.far = 1200;
 scene.add(moon);
 const target = new THREE.Vector3(${view.target.join(",")});
 const eye = new THREE.Vector3(${view.eye.join(",")});

@@ -119,4 +119,25 @@ test("shore-connected set skips islands; generated lakes always path from the sh
 	end
 end)
 
+test("planning stays cheap on the bigger 26 x 50 lake (whole-lake paths, real layouts)", function()
+	local worst, total, n = 0, 0, 0
+	for seed = 1, 12 do
+		local layout = LakeGen.generate(seed * 101, "Nightmare")
+		local from = pos(layout.monsterCell[1], layout.monsterCell[2])
+		for _, goal in ipairs({ pos(0, 2), pos(LakeGen.Columns - 1, 3), pos(12, 20), pos(20, 40) }) do
+			local t0 = os.clock()
+			IcePath.plan(layout.tiles, from, goal)
+			local dt = os.clock() - t0
+			worst = math.max(worst, dt)
+			total += dt
+			n += 1
+		end
+		-- the lighthouse is never walked through
+		local lc, lr = layout.landmarkCell[1], layout.landmarkCell[2]
+		assert(not IcePath.open(layout.tiles, lc, lr))
+	end
+	print(string.format("        IcePath: worst plan %.2f ms, mean %.2f ms (Lune)", worst * 1000, total / n * 1000))
+	assert(worst < 0.015, string.format("a plan took %.1f ms", worst * 1000))
+end)
+
 return cases

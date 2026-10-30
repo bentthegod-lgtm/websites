@@ -1,10 +1,10 @@
 --[[
 	LakeBuilder - turns a LakeGen layout into parts, a few tiles at a time.
 
-	A round's lake is ~512 tiles plus rocks, braziers, drifts and the wreck. Building it in
-	one go would stall the server for a noticeable moment, so RoundService creates a job
-	and calls job:step(GameConfig.Lake.TilesPerStep) once per Heartbeat while the round
-	"prepares" (about a dozen frames). Previews and tests can call LakeBuilder.buildAll.
+	A round's lake is 1,300 tiles (26 x 50) plus rocks, spires, braziers, drifts, the wreck
+	and the lighthouse. Building it in one go would stall the server for a noticeable
+	moment, so RoundService creates a job and calls job:step(GameConfig.Lake.TilesPerStep)
+	once per Heartbeat while the round "prepares" (about 20 frames). Previews and tests can call LakeBuilder.buildAll.
 
 	Every tile gets one ice part (except open water). IceService recolours / hides / restores
 	that part as the ice cracks, breaks and refreezes (LakeBuilder.applyTile).
@@ -58,6 +58,10 @@ function LakeBuilder.applyTile(tile, damage)
 	local base = THICK_COLOR[tile.thick] or P.Ice
 	if tile.thick >= 2 then
 		base = base:Lerp(zoneTint(tile), 0.35)
+	end
+	if GameConfig.Zones[tile.zone].Dark then
+		-- The Deep Hollow: black, glassy ice over deep water
+		base = base:Lerp(rgb(30, 46, 78), 0.62)
 	end
 	damage = damage or 0
 	p.Color = base:Lerp(rgb(70, 110, 150), damage * 0.6)
@@ -125,13 +129,21 @@ function LakeBuilder:_tile(tile)
 	end
 	local rng = self.rng
 	if tile.type == "rock" then
-		if tile.style == "crystal" then
+		if tile.style == "spire" then
+			Models.spire(ground * CFrame.Angles(0, rng:NextNumber() * 6, 0), self.features, rng)
+		elseif tile.style == "crystal" then
 			Models.crystals(ground * CFrame.Angles(0, rng:NextNumber() * 6, 0), self.features, rng)
 		else
 			Models.boulder(ground * CFrame.Angles(0, rng:NextNumber() * 6, 0), self.features, rng)
 		end
 	elseif tile.type == "brazier" then
 		Models.brazier(ground, self.features)
+	elseif tile.type == "landmark" and not self.landmarkBuilt then
+		self.landmarkBuilt = true
+		local lc, lr = self.layout.landmarkCell[1], self.layout.landmarkCell[2]
+		local x1, z1 = LakeGen.cellToWorld(lc, lr)
+		local x2, z2 = LakeGen.cellToWorld(lc + 1, lr + 1)
+		Models.lighthouse(CFrame.new((x1 + x2) / 2, top, (z1 + z2) / 2), self.features)
 	elseif tile.type == "wreck" and not self.wreckBuilt then
 		self.wreckBuilt = true
 		local wc, wr = self.layout.wreckCell[1], self.layout.wreckCell[2]

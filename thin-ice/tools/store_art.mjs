@@ -22,18 +22,19 @@ const FONT = `'Inter Display','Inter',Arial,sans-serif`;
 const { browser, page } = await openPage(1920, 1080);
 
 // Thumbnail: the team on the Thin Flats, the Antlered listening behind them.
-const scene = await render3d(page, { groups: ["world", "poster"], lights: "posterLights", eye: [-4, 5, 98], target: [-14, 10, 150], fov: 46 }, 1920, 1080);
+const scene = await render3d(page, { groups: ["world", "poster"], lights: "posterLights", eye: [-14, 6, 320], target: [12, 11.5, 384], fov: 46, fogNear: 45, fogFar: 260, dark: true }, 1920, 1080);
 await page.setContent(`<!doctype html><html><body style="margin:0">
 <div style="position:relative;width:1920px;height:1080px;overflow:hidden;background:url(${scene}) center/cover">
   <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,12,32,.92) 0%,rgba(6,12,32,.7) 34%,rgba(6,12,32,0) 58%)"></div>
-  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 70% 45%,rgba(0,0,0,0) 40%,rgba(2,6,20,.55) 100%)"></div>
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 68% 45%,rgba(0,0,0,0) 30%,rgba(2,5,16,.78) 100%)"></div>
   <div style="position:absolute;left:90px;top:150px;width:900px;color:#eef6ff;font-family:${FONT}">
     <div style="display:inline-block;padding:10px 22px;border:3px solid #9ad8ff;border-radius:12px;color:#9ad8ff;font-size:34px;font-weight:800;letter-spacing:4px">CO-OP SURVIVAL HORROR</div>
     <div style="font-size:190px;font-weight:900;white-space:nowrap;line-height:1;margin-top:26px;letter-spacing:2px;text-shadow:0 0 40px rgba(150,220,255,.55),0 8px 0 #2a4f86">THIN ICE</div>
     <div style="font-family:${FONT};font-weight:700;font-size:48px;margin-top:28px;color:#d6e9ff;line-height:1.25">Cross the frozen lake.<br>Don't wake what's listening.</div>
     <div style="font-family:${FONT};font-weight:700;font-size:40px;margin-top:44px;line-height:1.7;color:#fff">
-      <div>&#10052; Every step can crack the ice</div>
+      <div>&#10052; A huge frozen lake &middot; every step can crack</div>
       <div>&#10052; A blind monster hunts by sound</div>
+      <div>&#10052; Dare the black ice of The Deep Hollow</div>
       <div>&#10052; Thaw friends &middot; 1-6 players</div>
     </div>
   </div>
@@ -42,7 +43,7 @@ await page.screenshot({ path: path.join(outDir, "thumbnail-1920x1080.png"), clip
 console.log("wrote thumbnail-1920x1080.png");
 
 // Icon: the Antlered's head and antlers from below, with the title.
-const icon = await render3d(page, { groups: ["world", "poster"], lights: "posterLights", eye: [-14, 6, 132], target: [-18, 12.5, 150], fov: 46 }, 512, 512);
+const icon = await render3d(page, { groups: ["world", "poster"], lights: "posterLights", eye: [-6, 7, 352], target: [3, 14.5, 371], fov: 46, fogNear: 45, fogFar: 260, dark: true }, 512, 512);
 await page.setViewportSize({ width: 512, height: 512 });
 await page.setContent(`<!doctype html><html><body style="margin:0">
 <div style="position:relative;width:512px;height:512px;overflow:hidden;background:url(${icon}) center/cover">

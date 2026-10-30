@@ -12,6 +12,7 @@ local specs = {
 	require("./icepath.spec"),
 	require("./progress.spec"),
 	require("./config.spec"),
+	require("./presence.spec"),
 }
 
 local passed, failed = 0, 0
