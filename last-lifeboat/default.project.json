@@ -1,0 +1,60 @@
+{
+  "name": "LastLifeboat",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "LastLifeboat": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "LastLifeboatServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 16,
+        "CharacterJumpPower": 46,
+        "CameraMaxZoomDistance": 40,
+        "CameraMinZoomDistance": 4,
+        "EnableMouseLockOption": true
+      },
+      "StarterPlayerScripts": {
+        "LastLifeboatClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true,
+        "MaxPlayers": 8
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2,
+        "FallenPartsDestroyHeight": -400
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 1.6,
+        "ClockTime": 18.2,
+        "EnvironmentDiffuseScale": 0.6,
+        "EnvironmentSpecularScale": 0.5
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
