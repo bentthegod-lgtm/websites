@@ -20,7 +20,7 @@ TrackMath.__index = TrackMath
 
 local Y = Vector3.new(0, 1, 0)
 local DENSE = 48 -- spline evaluations per control segment before resampling
-local CELL = 48 -- spatial hash cell size
+local CELL = 32 -- spatial hash cell size
 
 local function lerp(a, b, t)
 	return a + (b - a) * t
@@ -155,6 +155,29 @@ function TrackMath.build(def, closed)
 		samples[k] = s
 	end
 
+	-- banking pivots around the LOW edge: lift the centre so the low side of a banked
+	-- section stays at the spline height (never below the ground)
+	if def.bankLift ~= false then
+		for _, s in ipairs(samples) do
+			local lift = (s.w / 2 + s.sh) * math.sin(math.rad(math.abs(s.bank)))
+			s.pos += Vector3.new(0, lift, 0)
+		end
+	end
+	-- keep the road on or above the ground (Catmull-Rom can dip below between points)
+	if def.minY then
+		for _, s in ipairs(samples) do
+			local exempt = false
+			for _, tag in ipairs(def.minYExempt or {}) do
+				if s.tags[tag] then
+					exempt = true
+				end
+			end
+			if not exempt and s.pos.Y < def.minY then
+				s.pos = Vector3.new(s.pos.X, def.minY, s.pos.Z)
+			end
+		end
+	end
+
 	local self = setmetatable({ samples = samples, n = #samples, length = length, step = step, closed = closed, def = def, grid = {} }, TrackMath)
 	self:_frames()
 	self:_index()
@@ -204,9 +227,37 @@ end
 function TrackMath:_index()
 	local grid = self.grid
 	local last = if self.closed then self.n else self.n - 1
+	local segs = {}
+	self.segs = segs
 	for i = 1, last do
 		local a = self.samples[i]
 		local b = self.samples[self:wrap(i + 1)]
+		local dx, dz = b.pos.X - a.pos.X, b.pos.Z - a.pos.Z
+		local nrm = (a.normal + b.normal).Unit
+		local rgt = a.right + b.right
+		rgt = if rgt.Magnitude > 1e-6 then rgt.Unit else a.right
+		segs[i] = {
+			ax = a.pos.X,
+			ay = a.pos.Y,
+			az = a.pos.Z,
+			dx = dx,
+			dy = b.pos.Y - a.pos.Y,
+			dz = dz,
+			len2 = math.max(1e-9, dx * dx + dz * dz),
+			rx = rgt.X,
+			rz = rgt.Z,
+			nx = nrm.X,
+			ny = nrm.Y,
+			nz = nrm.Z,
+			normal = nrm,
+			right = Vector3.new(rgt.X, 0, rgt.Z),
+			w = (a.w + b.w) / 2,
+			sh = (a.sh + b.sh) / 2,
+			wl = math.min(a.wl, b.wl),
+			wr = math.min(a.wr, b.wr),
+			dist = a.dist,
+			span = if self.closed then self.step else b.dist - a.dist,
+		}
 		local reach = math.max(a.w, b.w) / 2 + math.max(a.sh, b.sh) + 14
 		local x0 = math.min(a.pos.X, b.pos.X) - reach
 		local x1 = math.max(a.pos.X, b.pos.X) + reach
@@ -224,6 +275,37 @@ function TrackMath:_index()
 			end
 		end
 	end
+end
+
+--[[
+	Fast numeric locate on segment i (no allocations): returns t, lateral, planar distance
+	squared from the segment's nearest centre point, and the road-plane height under (x, z).
+]]
+function TrackMath:locate(i, x, z)
+	local g = self.segs[i]
+	local t = ((x - g.ax) * g.dx + (z - g.az) * g.dz) / g.len2
+	if t < 0 then
+		t = 0
+	elseif t > 1 then
+		t = 1
+	end
+	local cx, cz = g.ax + g.dx * t, g.az + g.dz * t
+	local ox, oz = x - cx, z - cz
+	local lateral = ox * g.rx + oz * g.rz
+	local height = g.ay + g.dy * t
+	if g.ny > 1e-4 then
+		height -= (g.nx * ox + g.nz * oz) / g.ny
+	end
+	local planar2 = ox * ox + oz * oz
+	-- past a segment end (t clamped) the point must still be in the joint's wedge, not
+	-- somewhere along the segment's extension
+	local inside = true
+	if t <= 0 or t >= 1 then
+		local along2 = planar2 - lateral * lateral
+		local tol = 1.5 + math.abs(lateral) * 0.14
+		inside = along2 <= tol * tol
+	end
+	return t, lateral, planar2, height, g, inside
 end
 
 -- Segment indices whose road (plus shoulder and walls) may cover world (x, z).
@@ -286,32 +368,37 @@ end
 function TrackMath:project(pos, hint, maxLateral)
 	local best, bestScore = nil, math.huge
 	local limit = maxLateral or math.huge
+	local bestI = nil
 	local function consider(i)
-		local hit = self:onSegment(i, pos)
-		local excess = math.max(0, math.abs(hit.lateral) - (hit.w / 2 + hit.sh))
-		local vertical = math.abs(pos.Y - hit.height)
-		local score = math.abs(hit.lateral) * 0.25 + excess * 2 + vertical * 1.5
+		local _, lateral, planar2, height, g = self:locate(i, pos.X, pos.Z)
+		local planar = math.sqrt(planar2)
+		local excess = math.max(0, planar - (g.w / 2 + g.sh))
+		local vertical = math.abs(pos.Y - height)
+		local score = planar * 0.25 + excess * 2 + vertical * 1.5
 		if hint then
 			local gap = math.abs(i - hint)
 			if self.closed then
 				gap = math.min(gap, self.n - gap)
 			end
-			score += math.max(0, gap - 20) * 0.5
+			score += math.max(0, gap - 40) * 0.5
 		end
-		if score < bestScore and math.abs(hit.lateral) <= limit then
-			best, bestScore = hit, score
+		if score < bestScore and math.abs(lateral) <= limit then
+			bestI, bestScore = i, score
 		end
 	end
 	local list = self:candidates(pos.X, pos.Z)
 	for _, i in ipairs(list) do
 		consider(i)
 	end
-	if not best and maxLateral == nil then
+	if not bestI and maxLateral == nil then
 		-- far from every segment: brute force (rare: only for wildly off-track positions)
 		local last = if self.closed then self.n else self.n - 1
 		for i = 1, last do
 			consider(i)
 		end
+	end
+	if bestI then
+		best = self:onSegment(bestI, pos)
 	end
 	return best
 end

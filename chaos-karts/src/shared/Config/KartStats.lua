@@ -28,7 +28,7 @@ local KartStats = {
 	WheelZ = 3.0,
 
 	-- Engine
-	TopSpeed = 92,
+	TopSpeed = 80,
 	Accel = 70, -- at standstill
 	AccelCurve = 2.2, -- accel = Accel * (1 - (speed / cap) ^ AccelCurve)
 	Brake = 120,
@@ -43,6 +43,7 @@ local KartStats = {
 	TurnFullSpeed = 16, -- below this the turn rate fades in (no spinning on the spot)
 	SteerResponse = 11, -- yaw-rate smoothing (1/s)
 	Grip = 9, -- lateral velocity decay (1/s): a little slide, mostly planted
+	GripTransfer = 0.7, -- share of the killed sideways speed that goes back into forward speed
 	AirGrip = 0.5,
 	AirSteer = 1.2, -- rad/s of air control
 
