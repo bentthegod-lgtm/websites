@@ -165,6 +165,14 @@ end
 
 -- Lobby --------------------------------------------------------------------------------
 
+-- An empty queue stops the auto-start clock: the next player to ready up starts a fresh
+-- AutoStartAfter window instead of inheriting a long-expired one (an instant start).
+local function resetTimerIfEmpty()
+	if next(queue) == nil then
+		firstReadyAt = nil
+	end
+end
+
 function RaceService.setReady(player, ready)
 	if not player.Parent then
 		return false
@@ -194,6 +202,7 @@ function RaceService.setReady(player, ready)
 		if i then
 			table.remove(queueOrder, i)
 		end
+		resetTimerIfEmpty()
 	end
 	player:SetAttribute("CK_Queued", queue[player] ~= nil)
 	RaceService.broadcastState()
@@ -685,6 +694,7 @@ function RaceService.onPlayerRemoving(player)
 	if i then
 		table.remove(queueOrder, i)
 	end
+	resetTimerIfEmpty()
 	respawnLimit[player] = nil
 	readyLimit:forget(player)
 	local racer = race and race.byPlayer[player]
@@ -721,6 +731,10 @@ function RaceService.start()
 		end
 	end)
 	Players.PlayerAdded:Connect(RaceService.onPlayerAdded)
+	-- players who joined before this ran (Studio) still get the respawn-while-racing hook
+	for _, player in ipairs(Players:GetPlayers()) do
+		RaceService.onPlayerAdded(player)
+	end
 end
 
 return RaceService

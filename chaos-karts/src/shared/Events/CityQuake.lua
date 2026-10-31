@@ -16,7 +16,7 @@ return EventBase.stub({
 	duration = 10,
 	warning = 4,
 	tags = { "track-wide", "screen-effect" },
-	conflictsWith = { "KaijuKrunchjaw" },
+	conflictsWith = { "Gorgantor" },
 	minLap = 2,
 	finalLapBoost = 1.8,
 	zoneTags = { "global" },

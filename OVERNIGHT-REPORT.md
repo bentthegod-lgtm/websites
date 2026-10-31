@@ -14,6 +14,7 @@ Everything is on GitHub: `bentthegod-lgtm/websites`, branch `claude/new-game-yhh
 | **THIN ICE** | `thin-ice/` | co-op survival horror on a huge cracking frozen lake, 5 zones (daily idea) | lint 0 · compile 40/40 · unit 40/40 · harness 31/31 |
 | **PHONES AWAY!** | `phones-away/` | high-school test cheating with your phone (Cheating During Testing) | lint 0 · compile 47/47 · unit 53/53 · harness 39/39 |
 | **LAST LIFEBOAT** | `last-lifeboat/` | co-op escape from a sinking, tilting ship to the last lifeboat; 3 ships (daily idea, Oct 30) | lint 0 · compile 43/43 · unit 41/41 · harness 34/34 |
+| **CHAOS KARTS** (Stage 1 of 7) | `chaos-karts/` | chaotic kart racer: driving, Chaos City, race flow, Event Director (35 catalogued, 1 live) (your spec) | lint 0 · compile 94/94 · unit 44/44 · harness 21/21 |
 
 I reran every check myself after each game was built, after its bug review, and after my
 own fixes.

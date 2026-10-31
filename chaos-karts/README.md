@@ -18,14 +18,14 @@ This folder is **Stage 1** of 7: the core race, the driving, the Chaos City trac
 >   - Laps and positions, the skip and wrong-way rules, and rewards.
 >   - Every Event Director rule, and the 35-event catalog.
 >   - Config sanity, the audio-ID whitelist, the shop and the item odds.
-> - **19 harness checks** pass. The harness loads the Rojo-built place and runs the real server and client modules against Lune's Roblox instance model. Engine services are stubbed and the clock is fake. `workspace:Raycast` is answered from the analytic track. It checks:
+> - **21 harness checks** pass. The harness loads the Rojo-built place and runs the real server and client modules against Lune's Roblox instance model. Engine services are stubbed and the clock is fake. `workspace:Raycast` is answered from the analytic track. It checks:
 >   - The timed, chunked world build (about 5,300 parts) and that the built road matches the analytic track.
 >   - Lobby → portal pad / READY → bots fill the grid → countdown → race.
 >   - **6 bots and a client-sim player finish 3 laps** on the real KartPhysics, with laps of **85.0–87.6 s** (target window 80–95 s).
->   - The speed-hack teleport-back, a checkpoint skip, respawn with rate limit and ghost, wrong way, the 30 s DNF timer, and results saved to the profile.
+>   - The speed-hack teleport-back (including small hops farmed at a high send rate, and creeping off the grid), an honest burst after a lag spike, a checkpoint skip, respawn with rate limit and ghost, wrong way, the 30 s DNF timer, and results saved to the profile.
 >   - A late joiner spectating and then racing, and leaving mid-race.
 >   - The reference event end to end: synced, hitting a bot and a player, cleaned up, plus the hard timeout.
->   - The final-lap scheduler, receipt de-dupe, the session lock, junk remotes, settings, daily rewards and codes.
+>   - The final-lap scheduler, the lobby auto-start clock, receipt de-dupe, the session lock, junk remotes, settings, daily rewards and codes.
 >   - **Every client controller running a real race against the real server through bridged remotes**: kart physics on raycasts, start boost, drift sparks, tire marks, HUD, minimap, camera modes, event playback, spectating, results and every menu tab.
 >
 > **Not verified (needs Studio):** how the driving *feels* at 60 fps with real input, how well the camera and network smoothing work over real latency, what Roblox's renderer and lighting make of the city (the previews are three.js approximations), welds and `LocalTransparencyModifier` at runtime, mobile layout on real phones, and real DataStores and purchases. **Follow the Studio test plan below.**
@@ -106,7 +106,7 @@ Late joiners **spectate** (cycle the karts with Q / E) and are queued for the ne
 ```
 
 - **Client-predicted karts.** Each driver's client runs the pure `KartPhysics` for its own kart. The kart is a kinematic CFrame on one invisible, anchored `Chassis`. The cosmetic model is welded on, massless, with CanCollide off.
-  - The server never trusts the result blindly. A move faster than `KartStats.MaxLegalSpeed` (with slack, plus extra right after a KartEffect launch) is rejected. The client is then teleported back to its last accepted state, and further updates are ignored until it comes back.
+  - The server never trusts the result blindly. Every move spends from a travel budget that refills at `KartStats.MaxLegalSpeed` (with slack, plus extra right after a KartEffect launch) and banks at most `AntiCheat.MaxDt` seconds; a move it can't cover is rejected. The Ghost flag is set by the server, never the client. The client is then teleported back to its last accepted state, and further updates are ignored until it comes back.
   - Checkpoints only count in order.
   - Respawns are rate-limited (2.5 s).
 - **One ground interface.** `KartPhysics.step(state, input, ground, dt)` asks `ground:ground(probe)` under its 4 wheel points and `ground:walls(pos, radius)` for walls.
@@ -139,6 +139,38 @@ src/client/   Main.client · Controllers/ (ClientState, Ui, Input, WorldQuery, K
 tests/        run.luau (+ *.spec.luau), compile.luau, harness.luau, loader.luau
 tools/        export_preview.luau, render_preview.mjs, store_art.mjs (three.js previews)
 ```
+
+## The 35-event catalog (all planned; 1 live in Stage 1)
+
+These names were chosen after a per-character IP and policy check (`docs/IP-CHECK.md`). Real brainrot meme names are used only where no owner or filing was found. Characters with registered trademarks or active disputes get a **parody name and a clearly different design**. No real people, politicians, aircraft, flags or places appear.
+
+- **Brainrot and meme (25):**
+  - **Quackaroni's Sneaker Parade** (live)
+  - Bonk Bonk Bonko (a log-drum chaser)
+  - **Bombardiro Crocodilo** (bombing run)
+  - **Lirilì Larilà** (slow-time bubble)
+  - **Bombombini Gusini** (goose dive-bombers)
+  - **Trippi Troppi** (pogo bounce)
+  - **Frigo Camelo** (freeze breath)
+  - **La Vaca Saturno Saturnita** (low gravity)
+  - Squalo Scarpalino (a sneaker shark)
+  - Espressina Piroetta (a pirouette spin-out)
+  - Frr Frr Patapum (root hurdles)
+  - Gorillini Mangini (mango barrage)
+  - Espresso Ninjetto (coffee puddles)
+  - Toaster Downpour, Mega Burger Roll, Cactus Conga, Loaf Cat Spin, Pigeon Mafia, Disco Banana Fever, Rubber Chicken Choir, Spaghetti Tornado, Mime Wall, Sofa Stampede, Pancake Flipper, Turbo Snail
+- **Fiction-style, original characters (5):**
+  - **GORGANTOR** (our own giant monster)
+  - **Blaze: MEGA WAVE** (an anime-style energy beam down one lane)
+  - Mecha Sentinel, Sword Saint Slash, Wizard Duel
+- **Disasters (5):**
+  - **The Mayor's Missile Alert** (a fictional mayor's emergency broadcast plus cartoon missiles)
+  - **Jet Strafing Run** (generic cartoon jets)
+  - **MEGA BOMB** (a cartoon shockwave)
+  - **Giant Meteor Shower**
+  - City Quake
+
+Each event is one module in `src/shared/Events/` with its rules: intensity, weight, warning time, tags, conflicts, minimum lap, final-lap boost, zone tags, lanes blocked and effects. The Event Director already enforces every rule for all 35.
 
 ## How to add …
 
@@ -255,7 +287,7 @@ selene src                                          # lint (custom roblox_min st
 lune run tests/compile                              # every .lua compiles
 lune run tests/run                                  # 44 unit tests
 rojo build -o build/ChaosKarts.rbxlx
-lune run tests/harness build/ChaosKarts.rbxlx       # 19 harness checks (~1 min)
+lune run tests/harness build/ChaosKarts.rbxlx       # 21 harness checks (~1 min)
 # previews (Playwright + Chromium; set PLAYWRIGHT_MODULE if it isn't local)
 lune run tools/export_preview build/ChaosKarts.rbxlx build/preview.json
 node tools/render_preview.mjs build/preview.json build/     # VIEW=name renders one view

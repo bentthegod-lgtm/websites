@@ -111,9 +111,12 @@ function LeaderboardService.rows()
 end
 
 function LeaderboardService.onPlayerRemoving(player)
-	write(player)
-	lastWrite[player] = nil
-	written[player] = nil
+	-- in its own thread: the SetAsync calls must not hold up the profile's leave save
+	task.spawn(function()
+		write(player)
+		lastWrite[player] = nil
+		written[player] = nil
+	end)
 end
 
 function LeaderboardService.start()

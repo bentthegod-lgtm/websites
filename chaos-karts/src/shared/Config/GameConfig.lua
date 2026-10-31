@@ -64,9 +64,9 @@ GameConfig.Net = {
 }
 
 GameConfig.AntiCheat = {
-	SpeedSlack = 1.25, -- allowed distance = MaxLegalSpeed * dt * slack + flat slack
+	SpeedSlack = 1.25, -- the travel budget refills at MaxLegalSpeed * slack (+ flat slack once)
 	FlatSlack = 14,
-	MaxDt = 0.6, -- gaps longer than this are measured as this (lag spikes)
+	MaxDt = 0.6, -- the speed budget banks at most this many seconds of travel (lag-spike bursts)
 	StrikesBeforeTeleport = 1, -- an impossible move is rejected and teleported back
 	RespawnCooldown = 2.5, -- seconds between respawn requests
 	VerticalSlack = 60,

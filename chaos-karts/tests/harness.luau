@@ -835,6 +835,17 @@ check("lobby -> queue (portal pad + READY) -> grid with bots -> countdown -> rac
 	local before = count("KartCorrect", nil, alice)
 	remotes.KartState.OnServerEvent:Fire(alice, race1.byPlayer[alice].kart.pos + V3.new(0, 0, -20), V3.new(), 0, 0, 10 ^ 6)
 	assert(count("KartCorrect", nil, alice) == before + 1, "creeping off the grid wasn't corrected")
+	-- ... and so is creeping a little per update (measured from the slot, not the last update)
+	tick(DT)
+	local bobRacer = race1.byPlayer[bob]
+	local side = world.data.grid[bobRacer.slot].RightVector
+	local creepBefore = count("KartCorrect", nil, bob)
+	for i = 1, 4 do
+		remotes.KartState.OnServerEvent:Fire(bob, world.data.grid[bobRacer.slot].Position + side * (2.5 * i), V3.new(), 0, 0, 10 ^ 6 + i)
+	end
+	assert(count("KartCorrect", nil, bob) > creepBefore, "creeping 2.5 studs per update wasn't corrected")
+	assert((bobRacer.kart.pos - world.data.grid[bobRacer.slot].Position).Magnitude <= 3, "Bob crept off his slot")
+	sims[bob].seq = 10 ^ 6 + 10
 	sims[alice].seq = 10 ^ 6
 	untilPhase("Racing", 10)
 	assert(math.abs(workspaceService:GetServerTimeNow() - race1.goAt) < 0.1, "GO late")
@@ -858,6 +869,61 @@ check("speed hack rejected: an impossible jump is refused and teleported back", 
 	assert((racer.kart.pos - good).Magnitude < 1e-6, "junk moved the kart")
 	tick(1)
 	assert(sims[alice].corrections >= 1 and (racer.kart.pos - good).Magnitude > 1, "the client didn't recover after the correction")
+end)
+
+check("speed budget: no per-update slack farming; a burst after a lag spike is accepted; the ghost flag is the server's", function()
+	local racer = race1.byPlayer[alice]
+	local s = sims[alice]
+	-- an honest client whose updates stalled for 1 s: they all arrive in one frame
+	local corrections = count("KartCorrect", nil, alice)
+	local queued = {}
+	local acc, sendAcc = 0, 0
+	for _ = 1, math.floor(1 / DT + 0.5) do
+		advance(DT)
+		acc += DT
+		while acc >= KartStats.FixedStep - 1e-9 do
+			acc -= KartStats.FixedStep
+			KP.step(s.state, BotBrain.think(s.brain, s.state, world.data.main, KartStats.FixedStep), world.query, KartStats.FixedStep)
+		end
+		sendAcc += DT
+		if sendAcc >= SEND then
+			sendAcc -= SEND
+			s.seq += 1
+			table.insert(queued, { s.state.pos, s.state.vel, s.state.yaw, KP.flags(s.state), s.seq })
+		end
+	end
+	local moved = (s.state.pos - racer.kart.pos).Magnitude
+	for _, args in ipairs(queued) do
+		remotes.KartState.OnServerEvent:Fire(alice, table.unpack(args))
+	end
+	-- (the rate limiter drops the tail of the burst; the next live update covers the gap)
+	tick(SEND * 2)
+	assert(moved > 40 and count("KartCorrect", nil, alice) == corrections, "an honest burst after a stall was rubber-banded")
+	assert((racer.kart.pos - s.state.pos).Magnitude < 12, "the client's updates weren't accepted after the burst")
+	-- the client can't mark itself as a ghost (other clients skip bumps against ghosts)
+	s.seq += 1
+	assert(KS.onState(alice, s.state.pos, s.state.vel, s.state.yaw, KP.Flags.Ghost + KP.Flags.Boost, s.seq), "update refused")
+	assert(not KP.hasFlag(racer.kart.flags, KP.Flags.Ghost) and KP.hasFlag(racer.kart.flags, KP.Flags.Boost), "client-set ghost flag kept")
+	-- farming the flat slack: 40 updates a second, each a "small" 15 stud hop (600 studs/s)
+	s.mode = "idle"
+	local fwd = KP.forward(s.state.yaw)
+	local p = s.state.pos
+	local farmed = nil
+	for i = 1, 40 do
+		advance(1 / 40)
+		s.seq += 1
+		p += fwd * 15
+		local ok, why = KS.onState(alice, p, fwd * 90, s.state.yaw, 0, s.seq)
+		if not ok then
+			farmed = { i, why }
+			break
+		end
+	end
+	assert(farmed and farmed[2] == "speed" and farmed[1] <= 30, "600 studs/s in small hops was accepted")
+	s.mode = "drive"
+	local accepted = KS.accepted
+	tick(1)
+	assert(KS.accepted > accepted + 10, "the client didn't recover after the correction")
 end)
 
 check("late joiner spectates (queued for the next race), bots + players race 3 laps, DNF timer after the first finisher", function()
@@ -1143,6 +1209,22 @@ check("leaving mid-race is clean: positions recomputed; the last human leaving a
 	tick(DT)
 	assert(RSv.phase() == "Lobby" and RSv.race() == nil, "not aborted: " .. RSv.phase())
 	assert(next(ED.instances()) == nil, "events left running")
+end)
+
+check("lobby: an emptied queue resets the auto-start clock (no instant start for the next ready)", function()
+	assert(RSv.phase() == "Lobby" and #playerList >= 2, "needs the lobby with 2+ players")
+	for _, p in ipairs(playerList) do
+		RSv.setReady(p, false)
+	end
+	RSv.setReady(alice, true)
+	advance(GameConfig.Race.AutoStartAfter + 5) -- (no server step: nobody else readies)
+	RSv.setReady(alice, false)
+	assert(RSv.state().autoStartIn == nil, "auto-start countdown still shown with nobody queued")
+	RSv.setReady(bob, true)
+	tick(DT * 3)
+	assert(RSv.phase() == "Lobby", "a stale auto-start timer started the race at once")
+	assert(RSv.state().autoStartIn == GameConfig.Race.AutoStartAfter, "fresh window " .. tostring(RSv.state().autoStartIn))
+	RSv.setReady(bob, false)
 end)
 
 check("daily streak once a day, codes RELEASE / CHAOS once each", function()
@@ -1454,6 +1536,19 @@ check("every client controller initialises and runs a real race against the real
 	local b2 = bot.snaps[#bot.snaps]
 	local mid = Remote.sample(bot, (a.t + b2.t) / 2)
 	assert((mid - (a.pos + b2.pos) / 2).Magnitude < 3, "interpolation off the path")
+	-- jitter: a late snapshot slots in by server time, a duplicate is dropped, a teleport jumps
+	local t0 = workspaceService:GetServerTimeNow()
+	local function snapAt(t, x)
+		return { t = t, k = { { id = "x1", p = V3.new(x, 0, 0), v = V3.new(10, 0, 0), y = 0, f = 0 } } }
+	end
+	for _, sn in ipairs({ snapAt(t0, 0), snapAt(t0 + 0.2, 2), snapAt(t0 + 0.1, 1), snapAt(t0 + 0.1, 1) }) do
+		Remote.onSnapshot(sn)
+	end
+	local x1 = Remote.get("x1")
+	assert(#x1.snaps == 3 and x1.snaps[1].t < x1.snaps[2].t and x1.snaps[2].t < x1.snaps[3].t, "snapshot buffer out of order")
+	assert(math.abs(Remote.sample(x1, t0 + 0.15).X - 1.5) < 0.2, "out-of-order snapshot interpolated wrong")
+	Remote.onSnapshot(snapAt(t0 + 0.3, 900))
+	assert(Remote.sample(x1, t0 + 0.25).X < 10, "a teleport streaked across the map")
 	-- drift: hop + steer, charge sparks, tire marks, then the boost on release
 	heldKeys[roblox.Enum.KeyCode.LeftShift] = true
 	heldKeys[roblox.Enum.KeyCode.D] = true

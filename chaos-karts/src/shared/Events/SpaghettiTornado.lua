@@ -16,7 +16,7 @@ return EventBase.stub({
 	duration = 12,
 	warning = 3,
 	tags = { "area", "chase" },
-	conflictsWith = { "TwisterAlley" },
+	conflictsWith = { "EspressinaPiroetta" },
 	minLap = 1,
 	finalLapBoost = 1.5,
 	zoneTags = { "open", "park", "plaza" },

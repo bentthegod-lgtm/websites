@@ -16,7 +16,7 @@ return EventBase.stub({
 	duration = 10,
 	warning = 2,
 	tags = { "screen-effect", "track-wide" },
-	conflictsWith = { "SunglassesSun", "NeonBlackout" },
+	conflictsWith = { "MegaBomb" },
 	minLap = 1,
 	finalLapBoost = 1.2,
 	zoneTags = { "global" },

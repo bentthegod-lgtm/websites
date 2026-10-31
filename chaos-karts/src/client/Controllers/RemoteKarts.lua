@@ -4,7 +4,8 @@
 	The server broadcasts a Karts snapshot ~15 times a second (stamped with the server
 	time). Each kart keeps a small buffer of snapshots and is rendered INTERP_DELAY (~100 ms)
 	in the past, Hermite-interpolated between the two snapshots around that time (positions
-	+ velocities), yaw along the shortest arc. If the buffer runs dry (packet loss) it
+	+ velocities), yaw along the shortest arc. The buffer is kept sorted by server time
+	(late snapshots slot in, duplicates are dropped); a teleport jumps instead of streaking. If the buffer runs dry (packet loss) it
 	extrapolates briefly from the last velocity, then holds.
 
 	Models are built from each racer's vehicle (cosmetic only) with a name tag; drift sparks,
@@ -67,11 +68,21 @@ function RemoteKarts.onSnapshot(snapshot)
 		if k.id ~= mine then
 			seen[k.id] = true
 			local entry = karts[k.id] or build(k.id)
-			table.insert(entry.snaps, { t = snapshot.t, pos = k.p, vel = k.v, yaw = k.y, flags = k.f, ghost = k.g })
-			if #entry.snaps > 12 then
-				table.remove(entry.snaps, 1)
+			-- keep the buffer sorted by server time: a late (out-of-order) snapshot is slotted
+			-- in where it belongs, a duplicate or one older than the whole buffer is dropped
+			local snaps = entry.snaps
+			local at = #snaps + 1
+			while at > 1 and snaps[at - 1].t > snapshot.t do
+				at -= 1
 			end
-			entry.lastSeen = snapshot.t
+			local duplicate = at > 1 and snaps[at - 1].t == snapshot.t
+			if not duplicate and not (at == 1 and #snaps >= 12) then
+				table.insert(snaps, at, { t = snapshot.t, pos = k.p, vel = k.v, yaw = k.y, flags = k.f, ghost = k.g })
+				if #snaps > 12 then
+					table.remove(snaps, 1)
+				end
+			end
+			entry.lastSeen = math.max(entry.lastSeen or snapshot.t, snapshot.t)
 		end
 	end
 	for id, entry in pairs(karts) do
@@ -111,6 +122,11 @@ function RemoteKarts.sample(entry, t)
 		if t >= a.t and t <= b.t then
 			local span = math.max(1e-3, b.t - a.t)
 			local u = (t - a.t) / span
+			if (b.pos - a.pos).Magnitude > 60 + span * 250 then
+				-- a teleport (respawn / correction): jump, don't streak across the map
+				local s = if u < 1 then a else b
+				return s.pos, s.vel, s.yaw, s.flags
+			end
 			local pos = hermite(a.pos, a.vel, b.pos, b.vel, u, span)
 			return pos, a.vel:Lerp(b.vel, u), lerpAngle(a.yaw, b.yaw, u), if u < 0.5 then a.flags else b.flags
 		end

@@ -114,12 +114,14 @@ local function stepBot(racer, race, phase, query, others)
 		s.vel = Vector3.new(0, s.vel.Y, 0)
 		s.pos = Vector3.new(from.X, s.pos.Y, from.Z)
 	end
+	local t = workspace:GetServerTimeNow()
 	for _, o in ipairs(others) do
-		if o ~= racer and not o.left then
+		-- ghosted karts (just respawned) don't collide
+		if o ~= racer and not o.left and t >= (o.ghostUntil or 0) then
 			KartPhysics.bump(s, o.kart.pos, o.kart.vel)
 		end
 	end
-	racer.kart = { pos = s.pos, vel = s.vel, yaw = s.yaw, flags = KartPhysics.flags(s), at = workspace:GetServerTimeNow() }
+	racer.kart = { pos = s.pos, vel = s.vel, yaw = s.yaw, flags = KartPhysics.flags(s), at = t }
 	services.RaceService.onMoved(racer, from, s.pos, s.vel, dt)
 	if phase == "Racing" and not racer.progress.finished then
 		local R = GameConfig.Respawn
