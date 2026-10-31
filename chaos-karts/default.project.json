@@ -1,0 +1,60 @@
+{
+  "name": "ChaosKarts",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "ChaosKarts": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "ChaosKartsServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterWalkSpeed": 18,
+        "CharacterJumpPower": 50,
+        "CameraMaxZoomDistance": 60,
+        "CameraMinZoomDistance": 6,
+        "EnableMouseLockOption": false
+      },
+      "StarterPlayerScripts": {
+        "ChaosKartsClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": true,
+        "MaxPlayers": 12
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "Gravity": 196.2,
+        "FallenPartsDestroyHeight": -500
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "Brightness": 2.2,
+        "ClockTime": 17.6,
+        "EnvironmentDiffuseScale": 0.7,
+        "EnvironmentSpecularScale": 0.6
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
